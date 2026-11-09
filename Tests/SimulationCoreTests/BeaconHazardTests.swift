@@ -43,10 +43,12 @@ final class BeaconHazardTests: XCTestCase {
         while run.damageCooldown > 1 {
             try run.advance(horizontal: 0, jump: false)
         }
+        try run.paint(.fire, at: .init(x: 130, y: 0))
         try run.advance(horizontal: 1, jump: false, pulse: true)
         XCTAssertEqual(run.character.position.x, 126)
         XCTAssertEqual(run.health, 0)
         XCTAssertEqual(run.outcome, .exhausted)
+        XCTAssertEqual(run.lastDamageSource, .fire)
         XCTAssertEqual(run.pulseCooldown, 0)
         let snapshot = run.simulation.snapshot
         try run.advance(horizontal: 1, jump: true, pulse: true)
@@ -60,6 +62,22 @@ final class BeaconHazardTests: XCTestCase {
         XCTAssertEqual(run.ventCooling, 0)
         XCTAssertEqual(run.outcome, .playing)
         XCTAssertEqual(run.simulation.snapshot.tick, 0)
+    }
+
+    func testVentThenFireShareCooldownAndFireWinsSimultaneousContact() throws {
+        var run = try reachVent()
+        XCTAssertEqual(run.lastDamageSource, .vent)
+        let body = CellPosition(x: run.character.position.x, y: 1)
+        try run.paint(.fire, at: body)
+        for _ in 1..<BeaconRun.damageIntervalTicks {
+            try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
+            XCTAssertEqual(run.health, 2)
+            XCTAssertEqual(run.lastDamageSource, .vent)
+        }
+        try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
+        XCTAssertEqual(run.health, 1)
+        XCTAssertEqual(run.damageCooldown, BeaconRun.damageIntervalTicks)
+        XCTAssertEqual(run.lastDamageSource, .fire)
     }
 
     func testWaterCoolsAfterPhysicsAndVentRecovers() throws {
@@ -132,18 +150,20 @@ final class BeaconHazardTests: XCTestCase {
         XCTAssertEqual(try run.simulation.snapshot.material(at: water), .water)
     }
 
-    func testOrdinaryFireExpiresWithoutDamageEvenWhenFrozen() throws {
+    func testFireDamagesWhenFrozenAndExpiresWhenThawed() throws {
         var run = try BeaconRun()
         let body = run.character.position
         try run.paint(.fire, at: body)
         try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
         XCTAssertEqual(try run.simulation.snapshot.material(at: body), .fire)
-        XCTAssertEqual(run.health, BeaconRun.maximumHealth)
+        XCTAssertEqual(run.health, 2)
+        XCTAssertEqual(run.lastDamageSource, .fire)
         try run.advance(horizontal: 0, jump: false)
         XCTAssertEqual(try run.simulation.snapshot.material(at: body), .fire)
         for _ in 0..<31 { try run.advance(horizontal: 0, jump: false) }
         XCTAssertEqual(try run.simulation.snapshot.material(at: body), .empty)
-        XCTAssertEqual(run.health, BeaconRun.maximumHealth)
+        XCTAssertEqual(run.health, 1)
+        XCTAssertEqual(run.lastDamageSource, .fire)
     }
 
     func testJumpAvoidsVentAndCompletesCourseUnhurt() throws {

@@ -44,6 +44,7 @@ public struct HUDGuide: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(HUDGuideText.objective(outcome: outcome, collected: collected))
             ForEach(HUDGuideText.controls(controls), id: \.self) { Text($0) }
+            Text("Black/white marks: burning contact")
         }
         .fixedSize(horizontal: false, vertical: true)
     }

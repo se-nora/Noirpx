@@ -258,6 +258,15 @@ its heat and burn age travel with each cell. It reuses liquid movement and
 flammable reactions, with no new scene hazard: paint it near fire or pitch to
 experiment. Its lower 80 heat threshold, 48-turn burnout, water priority and
 reaction-before-movement ordering are defined in the interface contract.
+Fire and burning oil now hurt on body overlap, and blocking burning pitch also
+hurts at shared edges. Only post-physics, post-movement cells count, so water
+can prevent a hit by quenching first; all hazards share one shield and the HUD
+reports the source. These optional brush interactions do not add fire to the
+unedited seeded route. Contact-cell boundaries contrast with visible neighbors
+where possible, enclosed cells form a black/white checkerboard, and the bell retains
+phase-colored pixels; rendering does not change simulation state.
+The contact rule changes gameplay replay outcomes, not
+the material digest format; see [INTERFACES.md](INTERFACES.md).
 This changes replay results and consumes an old retired identifier, without
 providing old-data migration.
 The fixture does not obstruct the normal standing course; a bounded-width,

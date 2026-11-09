@@ -1,3 +1,4 @@
+import Foundation
 import SimulationCore
 
 /// Rasterizes the camera with RGBA rows ordered from top to bottom.
@@ -15,7 +16,17 @@ public enum FixturePixels {
         func wardenColor(_ warden: ChimeWarden) -> UInt32 {
             warden.threatening ? 0xff4b4dff : (warden.warning ? 0xff3bbaff : 0xffa65e91)
         }
+        func luminance(_ base: UInt32) -> Double {
+            func linear(_ component: UInt32) -> Double {
+                let value = Double(component) / 255
+                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * linear(base & 0xff)
+                + 0.7152 * linear((base >> 8) & 0xff)
+                + 0.0722 * linear((base >> 16) & 0xff)
+        }
         var pixels = [UInt32](repeating: UInt32(0xff1f140f).littleEndian, count: width * height)
+        var hazardMarks: [(index: Int, parity: Int)] = []
         var renderedChunks = 0
         let visibleChunks = viewport.visibleChunks
         for chunk in snapshot.chunks where visibleChunks.contains(chunk.position) {
@@ -38,6 +49,20 @@ public enum FixturePixels {
                 case .oil: color = chunk.thermalStates[index].isBurning ? 0xff37aaff : 0xff438c9b
                 }
                 pixels[y * width + x] = color.littleEndian
+                if let character {
+                    let p = character.position
+                    let inside = character.contains(.init(x: worldX, y: worldY))
+                    let pitchEdge = material == .pitch
+                        && ((worldX >= p.x && worldX < p.x + FixtureCharacter.width
+                             && (worldY == p.y - 1 || worldY == p.y + FixtureCharacter.height))
+                            || (worldY >= p.y && worldY < p.y + FixtureCharacter.height
+                                && (worldX == p.x - 1 || worldX == p.x + FixtureCharacter.width)))
+                    if (inside && material == .fire)
+                        || ((inside || pitchEdge) && (material == .oil || material == .pitch)
+                            && chunk.thermalStates[index].isBurning) {
+                        hazardMarks.append((y * width + x, (worldX ^ worldY) & 1))
+                    }
+                }
             }
             if chunkVisible { renderedChunks += 1 }
         }
@@ -116,12 +141,35 @@ public enum FixturePixels {
                         pixels[y * width + x] = wardenColor(warden).littleEndian
                     }
                 }
-                for (dx, dy) in [(1, 0), (2, 0), (3, 0), (2, 1)] {
+                for (dx, dy) in [(1, 0), (2, 0), (3, 0), (1, 1), (2, 1), (3, 1)] {
                     let x = character.position.x + dx - viewport.center.x + width / 2
                     let y = height / 2 - 1 - (character.position.y + FixtureCharacter.height + dy) + viewport.center.y
                     guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
-                    pixels[y * width + x] = (dy == 1 ? UInt32(0xfff5faff) : wardenColor(warden)).littleEndian
+                    pixels[y * width + x] = (dy == 1 && dx == 2 ? UInt32(0xfff5faff)
+                                             : wardenColor(warden)).littleEndian
                 }
+            }
+            // Give boundary cells contrast against visible non-hazard neighbors; checker the interior.
+            let marked = Set(hazardMarks.map(\.index))
+            for mark in hazardMarks {
+                let x = mark.index % width
+                let y = mark.index / width
+                var neighbors: [Int] = []
+                if x > 0 { neighbors.append(mark.index - 1) }
+                if x + 1 < width { neighbors.append(mark.index + 1) }
+                if y > 0 { neighbors.append(mark.index - width) }
+                if y + 1 < height { neighbors.append(mark.index + width) }
+                let color: UInt32
+                let visible = neighbors.filter { !marked.contains($0) }
+                if !visible.isEmpty {
+                    let values = visible.map { luminance(UInt32(littleEndian: pixels[$0])) }
+                    let black = values.map { ($0 + 0.05) / 0.05 }.min() ?? 1
+                    let white = values.map { 1.05 / ($0 + 0.05) }.min() ?? 1
+                    color = white >= black ? 0xffffffff : 0xff000000
+                } else {
+                    color = mark.parity == 0 ? 0xff000000 : 0xffffffff
+                }
+                pixels[mark.index] = color.littleEndian
             }
         }
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)

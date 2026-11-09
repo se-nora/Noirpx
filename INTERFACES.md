@@ -130,8 +130,9 @@ liquid move; quenching consumes the turn, and burnout removes the cell without
 moving. Otherwise its updated thermal state follows it to its destination.
 Heating or quenching an oil target claims it for the tick and prevents its
 movement or own reaction in that tick; if it already moved it cannot be heated.
-Newly ignited cells never spread on their ignition tick. No diagonals, random
-thermal choices, or character damage are involved. Frozen chunks neither
+Newly ignited cells never spread on their ignition tick. No diagonals or random
+thermal choices are involved. Beacon Run separately samples the completed
+material state for character damage as described below. Frozen chunks neither
 cool nor age, and cannot exchange heat across the active boundary.
 
 ## Resident-world mode
@@ -363,9 +364,12 @@ set; visiting early does not automatically win later. Markers are not cells and
 cannot be painted away. The renderer draws the vent, uncollected amber outlines,
 gray locked or green unlocked gate, warden, pulse flash and player over the
 materials, in that order. While the living warden overlaps the player, a bar
-on the player's top visible row and a bell icon above it are drawn last in the warden's
+on the player's top visible row and a bell icon above it are drawn in the warden's
 current warning/danger/recovery color, so the opaque player cannot hide the
-encounter phase; the rest of the player retains its protection color. A win or failure freezes ticks and ignores paint until
+encounter phase; the rest of the player retains its protection color. The bell's
+upper row includes two phase-colored pixels that remain visible even if the
+lower icon and entire phase bar are covered by hazards, provided that row is
+within the viewport. A win or failure freezes ticks and ignores paint until
 restart. Other than body protection, brushes remain unrestricted, so players
 can bridge or erase obstacles.
 
@@ -384,13 +388,36 @@ out of the sensor, be erased or react with fire according to normal rules. The
 fixture and sensor are evaluated every gameplay tick, including if their chunk
 is frozen; frozen material itself still obeys the active-region rules.
 
-The character starts with three health. Hot vent or threatening warden contact deals one damage immediately
-when the global protection timer is zero, setting it to 30 ticks. It decrements
+The character starts with three health. Fire cells and burning oil damage when
+they overlap the 5 × 9 body. Burning pitch damages on overlap or when it shares
+a horizontal or vertical cell edge with the body; corner-only contact is safe.
+This additional pitch boundary makes the blocking material dangerous without
+requiring penetration. Nonburning hot pitch or oil and ordinary water are safe.
+After commands, all material movement and reactions, and character movement,
+only the final cell positions and burning flags are sampled, including in frozen
+chunks; intermediate crossings, cells quenched, removed or burned out that
+tick do not damage. Out-of-world cells are ignored. Newly ignited material
+can hurt immediately. Overlapping fire and burning oil or pitch, and every
+edge-adjacent burning pitch cell, receive black or white marks at their exact
+cells. Every boundary mark chooses black or white to maximize its minimum
+contrast against visible, unmarked orthogonal neighbors; fully surrounded
+interior marks use a world-anchored checkerboard. A one-cell-wide region can
+therefore be a solid contrasting band. A single pixel cannot achieve high
+contrast against both black and white neighbors simultaneously; the choice is
+the best of the two colors, not a 4.5:1 guarantee for every boundary.
+This replaces the pitch's orange only at contact.
+Cold or merely hot fuel has no mark. The HUD identifies the last hit while the shield is active;
+Help explains the contact rules. Display callbacks can still skip hazard states.
+
+Fire, hot vent or threatening warden contact deals one damage immediately
+when the global protection timer is zero, setting it to 30 ticks. Simultaneous
+contacts produce only one hit, identified in priority order fire, vent, warden.
+The timer decrements
 on each subsequent playing tick, including outside the vent or while cooled;
 contact can damage again on the tick it reaches zero. A pink character and the
 HUD show the remaining protection; health does not regenerate. Zero health
-ends the run as `exhausted`. Restart restores all health and timers. None of
-ordinary water, fire or oil damages the character, including while frozen.
+ends the run as `exhausted`. Restart restores all health and timers and clears
+the last-hit source.
 The vent does not itself alter material rules or the material snapshot digest.
 
 The Chime Warden is a single 5 × 6-cell, non-material rectangle; it does not

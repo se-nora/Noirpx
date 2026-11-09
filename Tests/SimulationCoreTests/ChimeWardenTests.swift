@@ -176,6 +176,7 @@ final class ChimeWardenTests: XCTestCase {
             for _ in 0..<100 where run.health == BeaconRun.maximumHealth && run.outcome == .playing {
                 try run.advance(horizontal: 0, jump: false)
             }
+
             return run
         }
         var run = try play()
@@ -194,6 +195,37 @@ final class ChimeWardenTests: XCTestCase {
         XCTAssertEqual(fresh.warden.position, fresh.course.patrolSpawn)
         XCTAssertTrue(fresh.warden.alive)
         XCTAssertEqual(fresh.warden.phase, 0)
+    }
+
+    func testFireAndThreateningWardenUseOneSharedHit() throws {
+        var run = try approach()
+        while run.character.position.x < 101 {
+            try run.advance(horizontal: 1, jump: false)
+        }
+        for _ in 0..<180 where !(run.warden.threatening && run.warden.position.x == 106
+                                  && run.warden.phase % 6 != 5) {
+            try run.advance(horizontal: 0, jump: false)
+        }
+        XCTAssertTrue(run.warden.threatening)
+        XCTAssertEqual(run.warden.position.x, 106)
+        XCTAssertFalse(run.touchesWarden(run.character.position))
+        XCTAssertEqual(run.health, BeaconRun.maximumHealth)
+        XCTAssertEqual(run.damageCooldown, 0)
+        let fire = CellPosition(x: 106, y: 1)
+        try run.paint(.fire, at: fire)
+        try run.advance(horizontal: 1, jump: false, activeChunks: frozen)
+        XCTAssertTrue(run.warden.threatening)
+        XCTAssertTrue(run.touchesWarden(run.character.position))
+        XCTAssertTrue(run.character.contains(fire))
+        XCTAssertEqual(try run.simulation.snapshot.material(at: fire), .fire)
+        XCTAssertEqual(run.health, 2)
+        XCTAssertEqual(run.lastDamageSource, .fire)
+        XCTAssertEqual(run.damageCooldown, BeaconRun.damageIntervalTicks)
+        try run.paint(.empty, at: fire)
+        try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
+        XCTAssertTrue(run.warden.threatening)
+        XCTAssertEqual(run.health, 2)
+        XCTAssertEqual(run.damageCooldown, BeaconRun.damageIntervalTicks - 1)
     }
 
     func testExhaustionFreezesEncounterAndRestartRestoresIt() throws {

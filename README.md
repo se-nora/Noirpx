@@ -40,10 +40,18 @@ Paint fire next to one; after several heat transfers it ignites orange. Paint
 water directly above a hot or burning cell to quench it back to cold pitch.
 Burning pitch spreads heat to one neighbor at a time and burns away after 64
 processed turns (about 1.07 seconds at 60 Hz). Water may move or be consumed
-before it can quench, depending on tick order. This is optional and ordinary fire remains harmless to the
-character. Painting
+before it can quench, depending on tick order. Fire and burning oil hurt when
+inside the character; orange burning pitch also hurts when directly beside,
+above or below the body, but not at a corner. Hot fuel that is not burning is
+safe. Only the final positions after material reactions and movement count, so
+water can quench a hazard before it hits. Fire, vent and warden share the same
+shield; the HUD shows the last hit source while protected. Hazardous material
+touching the player is shown at its exact cells in black and white; boundary
+marks contrast with their visible surroundings where possible, and enclosed
+marks alternate in a checkerboard. Burning pitch
+away from the body remains orange. Painting
 can bridge the gap or alter the course: this is an open-ended tool, not a
-restricted scoring challenge. Ordinary fire and water do not hurt the character.
+restricted scoring challenge. Water does not hurt the character.
 
 The app shows a view following the character with 200 simulation cells along the
 long edge of the drawable. The other dimension follows

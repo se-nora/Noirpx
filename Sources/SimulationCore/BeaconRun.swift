@@ -4,6 +4,10 @@ public struct BeaconRun {
         case playing, won, fell, exhausted
     }
 
+    public enum DamageSource: String, Equatable, Sendable {
+        case fire, vent, warden
+    }
+
     /// Positions from the original fixed course, not necessarily this run's beacons.
     /// Use `run.course.beacons` for generated gameplay positions.
     @available(*, deprecated, message: "Legacy fixed-course positions; use run.course.beacons")
@@ -41,6 +45,7 @@ public struct BeaconRun {
     public private(set) var pulseFlashRemaining = 0
     public private(set) var health = maximumHealth
     public private(set) var damageCooldown = 0
+    public private(set) var lastDamageSource: DamageSource?
     public private(set) var ventCooling = 0
     public private(set) var warden: ChimeWarden
 
@@ -84,7 +89,10 @@ public struct BeaconRun {
         warden.advance(bounds: course.patrolX) { simulation.materialForGameplay(at: $0) }
         if horizontal != 0 { facing = horizontal.signum() }
         if pulseCooldown > 0 { pulseCooldown -= 1 }
-        if damageCooldown > 0 { damageCooldown -= 1 }
+        if damageCooldown > 0 {
+            damageCooldown -= 1
+            if damageCooldown == 0 { lastDamageSource = nil }
+        }
         if ventCooling > 0 { ventCooling -= 1 }
         if course.ventX.contains(where: { x in
             Self.ventSensorY.contains(where: { y in
@@ -101,10 +109,26 @@ public struct BeaconRun {
             outcome = .fell
             return
         }
-        if damageCooldown == 0 && ((ventCooling == 0 && touchesVent(character.position))
-                                   || (warden.threatening && touchesWarden(character.position))) {
+        let damageSource: DamageSource?
+        if damageCooldown != 0 {
+            damageSource = nil
+        } else if Self.touchesFire(character.position, materialAt: {
+            simulation.materialForGameplay(at: $0)
+        }, burningAt: {
+            (try? simulation.thermalState(at: $0).isBurning) ?? false
+        }) {
+            damageSource = .fire
+        } else if ventCooling == 0 && touchesVent(character.position) {
+            damageSource = .vent
+        } else if warden.threatening && touchesWarden(character.position) {
+            damageSource = .warden
+        } else {
+            damageSource = nil
+        }
+        if let damageSource {
             health -= 1
             damageCooldown = Self.damageIntervalTicks
+            lastDamageSource = damageSource
             if health == 0 {
                 outcome = .exhausted
                 return
@@ -119,6 +143,35 @@ public struct BeaconRun {
         if outcome == .playing && pulse && pulseCooldown == 0 {
             firePulse()
         }
+    }
+
+    /// Fire and burning oil overlap the body; blocking burning pitch also hurts on shared edges.
+    static func touchesFire(_ position: CellPosition, materialAt: (CellPosition) -> Material,
+                            burningAt: (CellPosition) -> Bool) -> Bool {
+        func dangerous(_ x: Int, _ y: Int, body: Bool) -> Bool {
+            guard Simulation.coordinateBounds.contains(x), Simulation.coordinateBounds.contains(y) else {
+                return false
+            }
+            let cell = CellPosition(x: x, y: y)
+            switch materialAt(cell) {
+            case .fire: return body
+            case .oil: return body && burningAt(cell)
+            case .pitch: return burningAt(cell)
+            default: return false
+            }
+        }
+        for y in position.y..<(position.y + FixtureCharacter.height) {
+            for x in position.x..<(position.x + FixtureCharacter.width) {
+                if dangerous(x, y, body: true) { return true }
+            }
+            if dangerous(position.x - 1, y, body: false)
+                || dangerous(position.x + FixtureCharacter.width, y, body: false) { return true }
+        }
+        for x in position.x..<(position.x + FixtureCharacter.width) {
+            if dangerous(x, position.y - 1, body: false)
+                || dangerous(x, position.y + FixtureCharacter.height, body: false) { return true }
+        }
+        return false
     }
 
     func touchesVent(_ position: CellPosition) -> Bool {

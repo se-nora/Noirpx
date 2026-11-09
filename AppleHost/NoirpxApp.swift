@@ -184,6 +184,9 @@ private struct HostView: View {
                          controls: hudGuideControls)
                 Text("Seed \(model.challenge?.seed ?? 0)")
                 Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
+                if let source = model.challenge?.lastDamageSource {
+                    Text("Hit: \(source.rawValue)").foregroundStyle(.orange)
+                }
                 Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
                         "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
                 Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
@@ -244,6 +247,7 @@ private struct HostView: View {
                         Text("Collect two amber beacons, then reach the green gate. Jump the gap and pulse through sand.")
                         Text("Violet pitch above the start: paint fire beside it; water quenches the orange cell.")
                         Text("Lamp oil brush: flowing oil catches fire; water quenches hot oil.")
+                        Text("Fire and burning oil hurt inside you; orange burning pitch hurts on contact, even beside it. Black/white marks show contact cells. Water quenches flames. All hits share the shield.")
                         Text("Jump the red vent or paint water at its base. The Chime Warden warns in amber and hurts in red.")
                         Text("macOS: A/D or arrows move, W/up/space jumps, F pulses. iOS: use the on-screen controls.")
                     }

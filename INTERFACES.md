@@ -218,7 +218,9 @@ through y=14...16.
 
 The first beacon is at x=22...25, the second at x=92...97, both at y=0.
 The seven-cell-wide vent starts at x=123...128; the gate begins immediately
-after it. These separated ranges leave stable floor before and after the gap,
+after it. The Chime Warden spawns at (107...109, -1), chosen with index 8
+of the same seed function, and patrols lower-left x=104...112. Its five-cell
+width stays clear of the second marker and vent. These separated ranges leave stable floor before and after the gap,
 keep the low step climbable, keep sand away from the gap and markers, and
 provide an unobstructed route past the vent. A grounded jump from five cells
 before the gap crosses every allowed width; moving right while pulsing after
@@ -233,10 +235,14 @@ takes precedence over a simultaneous goal. If alive,
 overlap of the 5 × 9 body with each generated 5 × 12 marker collects it.
 Overlap with the generated gate wins only once both flags are
 set; visiting early does not automatically win later. Markers are not cells and
-cannot be painted away. The renderer draws uncollected amber outlines and a
-gray locked or green unlocked gate over materials, then the character. A win
-or failure freezes ticks and ignores paint until restart. Brushes otherwise remain
-unrestricted, so players can bridge or erase obstacles.
+cannot be painted away. The renderer draws the vent, uncollected amber outlines,
+gray locked or green unlocked gate, warden, pulse flash and player over the
+materials, in that order. While the living warden overlaps the player, a bar
+on the player's top visible row and a bell icon above it are drawn last in the warden's
+current warning/danger/recovery color, so the opaque player cannot hide the
+encounter phase; the rest of the player retains its protection color. A win or failure freezes ticks and ignores paint until
+restart. Other than body protection, brushes remain unrestricted, so players
+can bridge or erase obstacles.
 
 The heat vent is a non-material course fixture occupying the generated vent x
 range and y=0...6, just before the gate. Its striped red area is hot; blue means cooled.
@@ -253,7 +259,7 @@ out of the sensor, be erased or react with fire according to normal rules. The
 fixture and sensor are evaluated every gameplay tick, including if their chunk
 is frozen; frozen material itself still obeys the active-region rules.
 
-The character starts with three health. Hot contact deals one damage immediately
+The character starts with three health. Hot vent or threatening warden contact deals one damage immediately
 when the global protection timer is zero, setting it to 30 ticks. It decrements
 on each subsequent playing tick, including outside the vent or while cooled;
 contact can damage again on the tick it reaches zero. A pink character and the
@@ -262,6 +268,26 @@ ends the run as `exhausted`. Restart restores all health and timers. Neither
 ordinary water nor ordinary fire damages the character: active fire expires in
 the material tick, before gameplay checks, and frozen fire is also harmless.
 No material rule or material snapshot digest is changed.
+
+The Chime Warden is a single 5 × 6-cell, non-material rectangle; it does not
+block the player or materials. After material physics and player movement it
+checks that every body cell is free of rock and sand and every cell directly
+under its width has rock or sand support. If not, it is removed permanently for
+that run, including if moving sand buries it or its support is erased. It does
+not fall, climb, teleport, respawn or search for a new floor. Otherwise its
+60-tick phase advances modulo 60. Phases 0...23 are amber warning, 24...35
+red contact danger, and 36...59 purple recovery; phase zero is the initial
+state. Every sixth phase (including zero), it attempts one horizontal cell,
+initially left. It reverses without moving when its next full rectangle lacks
+clearance or support, or would leave the patrol lower-left bounds. Water and
+fire are passable. This update runs every gameplay tick regardless of frozen
+chunks, against the post-physics material state. A threatening half-open body
+overlap uses the same global 30-tick damage protection as the vent; simultaneous
+contact cannot deal two hits. Damage is checked before pulse and goal, and
+lethal damage wins over either. Direct painting of rock or sand into a living
+warden is ignored, but commands queued before it moved or material physics
+can still change the area; the next validation applies the removal rule.
+This intentionally bounded terrain response is not general enemy navigation.
 
 The Silt Pulse fires in the last nonzero horizontal movement direction (initially
 right), even if movement is blocked. Holding F on macOS or the iOS bolt button
@@ -284,10 +310,21 @@ paint commands applied this tick affect occlusion; removed sand affects physics
 on the next tick. Like painting, this explicit action can modify frozen chunks.
 The completed material snapshot includes removals. A cyan flash of the traced
 cells, including hits, lasts four gameplay ticks (the firing tick included);
-the renderer only reads it. Restart recreates the initial facing, cooldown and
+the renderer only reads it. If any traced cell reaches the living warden, the
+warden is removed after tracing; rock and the first sand per lane shield it,
+and sand excavation still occurs normally in every lane. The pulse is not
+stopped by the warden. For an overlapping warden, a separate near-field check
+walks each of the same five lanes across the player body, from the facing edge
+inward, stopping before the first rock, sand, or world boundary. A warden cell
+reached in that check also counts as a hit, even when it is entirely inside the
+player; empty, water and fire are transparent. This check neither excavates
+material nor extends the external range or flash. Both checks use pre-excavation
+material, so a pulse cannot hit through sand it removes on that tick.
+Restart recreates the warden, initial facing, cooldown and
 empty flash.
 
-Course layout, character, health, vent, pulse and progression state and queued input are separate from
+Course layout, warden position/direction/phase/alive state, character, health,
+vent, pulse and progression state and queued input are separate from
 `SimulationSnapshot` and its digest, so the digest does not represent a
 complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance

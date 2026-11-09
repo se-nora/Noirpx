@@ -7,6 +7,8 @@ public struct BeaconCourse: Equatable, Sendable {
     public let beacons: [CellPosition]
     public let ventX: ClosedRange<Int>
     public let goal: CellPosition
+    public let patrolX: ClosedRange<Int>
+    public let patrolSpawn: CellPosition
 
     public init(seed: UInt64) {
         func mix(_ value: UInt64) -> UInt64 {
@@ -30,6 +32,8 @@ public struct BeaconCourse: Equatable, Sendable {
         let ventStart = 123 + choice(7, 6)
         ventX = ventStart...(ventStart + 6)
         goal = .init(x: ventStart + 7, y: 0)
+        patrolX = 104...112
+        patrolSpawn = .init(x: 107 + choice(8, 3), y: -1)
     }
 }
 

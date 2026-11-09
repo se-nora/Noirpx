@@ -12,6 +12,9 @@ public enum FixturePixels {
         -> (pixels: [UInt8], renderedChunks: Int) {
         let width = viewport.columns
         let height = viewport.rows
+        func wardenColor(_ warden: ChimeWarden) -> UInt32 {
+            warden.threatening ? 0xff4b4dff : (warden.warning ? 0xff3bbaff : 0xffa65e91)
+        }
         var pixels = [UInt32](repeating: UInt32(0xff1f140f).littleEndian, count: width * height)
         var renderedChunks = 0
         let visibleChunks = viewport.visibleChunks
@@ -63,12 +66,27 @@ public enum FixturePixels {
                         pixels[y * width + x] = color.littleEndian
                     }
                 }
-                for cell in challenge.pulseFlash {
-                    let x = cell.x - viewport.center.x + width / 2
-                    let y = height / 2 - 1 - cell.y + viewport.center.y
-                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
-                    pixels[y * width + x] = UInt32(0xfff9f56a).littleEndian
+            }
+            let warden = challenge.warden
+            if warden.alive {
+                for dy in 0..<ChimeWarden.height {
+                    for dx in 0..<ChimeWarden.width {
+                        // Bell silhouette with a bright eye and feet.
+                        guard (dy != 5 || (1...3).contains(dx)),
+                              (dy != 0 || dx == 0 || dx == 4) else { continue }
+                        let x = warden.position.x + dx - viewport.center.x + width / 2
+                        let y = height / 2 - 1 - warden.position.y - dy + viewport.center.y
+                        guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                        let color: UInt32 = dy == 3 && dx == 2 ? 0xfff5faff : wardenColor(warden)
+                        pixels[y * width + x] = color.littleEndian
+                    }
                 }
+            }
+            for cell in challenge.pulseFlash {
+                let x = cell.x - viewport.center.x + width / 2
+                let y = height / 2 - 1 - cell.y + viewport.center.y
+                guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                pixels[y * width + x] = UInt32(0xfff9f56a).littleEndian
             }
         }
         if let character {
@@ -80,6 +98,27 @@ public enum FixturePixels {
                     let color: UInt32 = (challenge?.damageCooldown ?? 0) > 0
                         ? 0xffa4a4ff : 0xffe6e2b4
                     pixels[y * width + x] = color.littleEndian
+                }
+            }
+            if let warden = challenge?.warden, warden.alive,
+               character.position.x < warden.position.x + ChimeWarden.width,
+               character.position.x + FixtureCharacter.width > warden.position.x,
+               character.position.y < warden.position.y + ChimeWarden.height,
+               character.position.y + FixtureCharacter.height > warden.position.y {
+                let top = height / 2 - 1 - (character.position.y + FixtureCharacter.height - 1) + viewport.center.y
+                if top < height && top + FixtureCharacter.height > 0 {
+                    let y = max(0, top)
+                    for dx in 0..<FixtureCharacter.width {
+                        let x = character.position.x + dx - viewport.center.x + width / 2
+                        guard (0..<width).contains(x) else { continue }
+                        pixels[y * width + x] = wardenColor(warden).littleEndian
+                    }
+                }
+                for (dx, dy) in [(1, 0), (2, 0), (3, 0), (2, 1)] {
+                    let x = character.position.x + dx - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - (character.position.y + FixtureCharacter.height + dy) + viewport.center.y
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    pixels[y * width + x] = (dy == 1 ? UInt32(0xfff5faff) : wardenColor(warden)).littleEndian
                 }
             }
         }

@@ -85,6 +85,7 @@ final class BeaconCourseTests: XCTestCase {
         XCTAssertEqual(first.health, replay.health)
         XCTAssertEqual(first.damageCooldown, replay.damageCooldown)
         XCTAssertEqual(first.ventCooling, replay.ventCooling)
+        XCTAssertEqual(first.warden, replay.warden)
         XCTAssertEqual(first.facing, replay.facing)
         XCTAssertEqual(first.pulseCooldown, replay.pulseCooldown)
         XCTAssertEqual(first.pulseFlash, replay.pulseFlash)

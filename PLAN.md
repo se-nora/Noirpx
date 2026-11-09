@@ -249,7 +249,12 @@ new runs. A visible heat vent before the goal can be jumped or cooled with water
 health, hit protection and cooling run on fixed ticks.
 The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
 cooldown and visible feedback; rock shields sand and is never destroyed.
-Painting remains unrestricted and can change or bypass obstacles. The fixed-tick
+One original Chime Warden patrols the supported floor after the second marker,
+telegraphing a periodic contact attack; the pulse can defeat it through clear
+lanes. It reverses at terrain and disappears if buried or unsupported rather
+than navigating or falling through changed terrain.
+Painting can change or bypass obstacles, apart from blocking material placed
+directly inside the player or living warden. The fixed-tick
 character and course state live in the platform-independent core; the material
 snapshot digest does not include them. There is no save or automatic respawn.
 The generator uses constrained variations of a single route, not a general

@@ -42,10 +42,12 @@ public struct BeaconRun {
     public private(set) var health = maximumHealth
     public private(set) var damageCooldown = 0
     public private(set) var ventCooling = 0
+    public private(set) var warden: ChimeWarden
 
     public init(seed: UInt64 = 42) throws {
         self.seed = seed
         course = BeaconCourse(seed: seed)
+        warden = ChimeWarden(position: course.patrolSpawn)
         simulation = Simulation(seed: seed)
         for x in -40...160 where !course.gap.contains(x) {
             try place(.solid, x: x, y: -2)
@@ -64,7 +66,8 @@ public struct BeaconRun {
 
     /// Painting is disabled after an outcome; blocking material cannot be painted into the body.
     public mutating func paint(_ material: Material, at position: CellPosition) throws {
-        guard outcome == .playing, !(material.blocksCharacter && character.contains(position)) else { return }
+        guard outcome == .playing,
+              !(material.blocksCharacter && (character.contains(position) || warden.contains(position))) else { return }
         let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
         guard !overflow else { throw SimulationError.tickOverflow }
         try simulation.enqueue(.init(tick: tick, position: position, material: material))
@@ -75,6 +78,7 @@ public struct BeaconRun {
         guard outcome == .playing else { return }
         try simulation.advance(activeChunks: activeChunks)
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
+        warden.advance(bounds: course.patrolX) { simulation.materialForGameplay(at: $0) }
         if horizontal != 0 { facing = horizontal.signum() }
         if pulseCooldown > 0 { pulseCooldown -= 1 }
         if damageCooldown > 0 { damageCooldown -= 1 }
@@ -94,7 +98,8 @@ public struct BeaconRun {
             outcome = .fell
             return
         }
-        if ventCooling == 0 && damageCooldown == 0 && touchesVent(character.position) {
+        if damageCooldown == 0 && ((ventCooling == 0 && touchesVent(character.position))
+                                   || (warden.threatening && touchesWarden(character.position))) {
             health -= 1
             damageCooldown = Self.damageIntervalTicks
             if health == 0 {
@@ -118,14 +123,42 @@ public struct BeaconRun {
             && position.y <= Self.ventY.upperBound && position.y + FixtureCharacter.height > Self.ventY.lowerBound
     }
 
+    func touchesWarden(_ position: CellPosition) -> Bool {
+        let enemy = warden.position
+        return warden.alive && position.x < enemy.x + ChimeWarden.width
+            && position.x + FixtureCharacter.width > enemy.x
+            && position.y < enemy.y + ChimeWarden.height
+            && position.y + FixtureCharacter.height > enemy.y
+    }
+
     private mutating func firePulse() {
         let trace = Self.tracePulse(from: character.position, facing: facing) {
             simulation.materialForGameplay(at: $0)
         }
+        let closeHit = Self.pulseTouchesOverlap(from: character.position, facing: facing,
+                                                materialAt: { simulation.materialForGameplay(at: $0) },
+                                                targetContains: { warden.contains($0) })
         for cell in trace.sand { simulation.excavateSand(at: cell) }
+        if closeHit || trace.cells.contains(where: { warden.contains($0) }) { warden.remove() }
         pulseFlash = trace.cells
         pulseFlashRemaining = Self.pulseFlashTicks
         pulseCooldown = Self.pulseCooldownTicks
+    }
+
+    static func pulseTouchesOverlap(from p: CellPosition, facing: Int,
+                                    materialAt: (CellPosition) -> Material,
+                                    targetContains: (CellPosition) -> Bool) -> Bool {
+        let edge = facing > 0 ? p.x + FixtureCharacter.width - 1 : p.x
+        for dy in 2...6 {
+            for distance in 0..<FixtureCharacter.width {
+                let cell = CellPosition(x: edge - facing * distance, y: p.y + dy)
+                guard Simulation.coordinateBounds.contains(cell.x),
+                      Simulation.coordinateBounds.contains(cell.y),
+                      !materialAt(cell).blocksCharacter else { break }
+                if targetContains(cell) { return true }
+            }
+        }
+        return false
     }
 
     static func tracePulse(from p: CellPosition, facing: Int,

@@ -30,7 +30,12 @@ below the course or losing all health ends the run; win and failure freeze the w
 The beacons and gate are nonphysical markers, not materials. They are collected
 by touching them with the character, in either order. The gate can be visited
 early, but only wins when both beacons have been collected and the character
-touches it again. There is no overall time limit, enemy, score, or save. Painting
+touches it again. A Chime Warden patrols the floor after the second beacon:
+amber warns, red is dangerous on contact, and purple is recovery. Jump past it
+or hit it with the Silt Pulse; rock and sand shield it. When it overlaps you,
+a matching colored bar and bell icon appear on and above the player. It shares the vent's
+hit protection. It disappears if buried or its floor is removed. There is no
+overall time limit, score, or save. Painting
 can bridge the gap or alter the course: this is an open-ended tool, not a
 restricted scoring challenge. Ordinary fire and water do not hurt the character.
 
@@ -67,14 +72,19 @@ button for the pulse; controls can be used together. A cyan flash shows its
 path and the overlay shows readiness or remaining cooldown ticks. The pulse
 reaches 18 cells ahead in five horizontal lanes, removing the first sand in
 each lane. Rock stops it without damage; water and fire let it pass. It can
-open a route through sand but cannot break the floor or rock step. It fires at
+defeat the warden when a traced lane reaches it, and open a route through sand
+but cannot break the floor or rock step. At point-blank range the same five
+lanes also check inside the player, from the facing edge inward: an overlapping
+warden is hit only if no rock or sand blocks that lane. This close-range check
+does not excavate material. It fires at
 most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
 collides with rock, sand, and world bounds, but not water or fire. It advances after
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), and can jump only while grounded.
 Painting rock or sand directly inside the character is
 ignored. A queued edit or moving sand can still overlap it: the character does
-not block material movement.
+not block material movement. Rock and sand cannot be painted directly into a
+living warden; falling sand can bury and remove it.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,

@@ -3,6 +3,80 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testWardenOverlapIndicatorSurvivesPlayerRasterAtExactTick() throws {
+        var run = try BeaconRun(seed: 42)
+        var jumped = false
+        while run.simulation.snapshot.tick < 144 && run.outcome == .playing {
+            let x = run.character.position.x
+            let jump = !jumped && x >= run.course.gap.lowerBound - 5 && run.character.grounded
+            if jump { jumped = true }
+            try run.advance(horizontal: x < 106 ? 1 : 0, jump: jump, pulse: x > 48 && x < 80)
+        }
+        XCTAssertEqual(run.simulation.snapshot.tick, 144)
+        XCTAssertEqual(run.character.position, .init(x: 106, y: -1))
+        XCTAssertEqual(run.warden.position, run.character.position)
+        XCTAssertTrue(run.warden.threatening)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 106, y: 0), longEdgeCells: 200))
+        func pixel(_ run: BeaconRun, dy: Int) -> [UInt8] {
+            let p = CellPosition(x: run.character.position.x + 2, y: run.character.position.y + dy)
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
+                                                character: run.character, challenge: run)
+            let offset = ((viewport.rows / 2 - 1 - p.y + viewport.center.y) * viewport.columns
+                          + p.x - viewport.center.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        let snapshot = run.simulation.snapshot
+        XCTAssertEqual(pixel(run, dy: 8), [255, 77, 75, 255])
+        XCTAssertEqual(pixel(run, dy: 9), [255, 77, 75, 255])
+        XCTAssertEqual(pixel(run, dy: 10), [255, 250, 245, 255])
+        XCTAssertEqual(pixel(run, dy: 4), [255, 164, 164, 255])
+        XCTAssertEqual(run.simulation.snapshot, snapshot)
+        let clipped = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                    center: .init(x: 106, y: -54), longEdgeCells: 200))
+        let clippedFrame = FixturePixels.rasterize(snapshot: snapshot, viewport: clipped,
+                                                   character: run.character, challenge: run)
+        let clippedOffset = (run.character.position.x + 2 - clipped.center.x + clipped.columns / 2) * 4
+        XCTAssertEqual(Array(clippedFrame.pixels[clippedOffset..<clippedOffset + 4]), [255, 77, 75, 255])
+        var defeated = run
+        try defeated.advance(horizontal: 0, jump: false, pulse: true)
+        XCTAssertFalse(defeated.warden.alive)
+        XCTAssertEqual(pixel(defeated, dy: 8), [255, 164, 164, 255])
+
+        while run.simulation.snapshot.tick < 156 { try run.advance(horizontal: 0, jump: false) }
+        XCTAssertFalse(run.warden.warning)
+        XCTAssertFalse(run.warden.threatening)
+        XCTAssertEqual(pixel(run, dy: 8), [145, 94, 166, 255])
+        while run.simulation.snapshot.tick < 180 {
+            try run.advance(horizontal: run.character.position.x < 112 ? 1 : 0, jump: false)
+        }
+        XCTAssertTrue(run.warden.warning)
+        XCTAssertEqual(run.character.position, run.warden.position)
+        XCTAssertEqual(pixel(run, dy: 8), [255, 186, 59, 255])
+    }
+
+    func testWardenTelegraphChangesAndRenderingIsReadOnly() throws {
+        var run = try BeaconRun()
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 105, y: 0), longEdgeCells: 200))
+        func bodyPixel() -> [UInt8] {
+            let p = CellPosition(x: run.warden.position.x + 1, y: run.warden.position.y + 2)
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
+                                                character: run.character, challenge: run)
+            let offset = ((viewport.rows / 2 - 1 - p.y + viewport.center.y) * viewport.columns
+                          + p.x - viewport.center.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        try run.advance(horizontal: 0, jump: false)
+        let before = run.simulation.snapshot
+        XCTAssertEqual(bodyPixel(), [255, 186, 59, 255])
+        XCTAssertEqual(run.simulation.snapshot, before)
+        while !run.warden.threatening { try run.advance(horizontal: 0, jump: false) }
+        XCTAssertEqual(bodyPixel(), [255, 77, 75, 255])
+        while run.warden.threatening { try run.advance(horizontal: 0, jump: false) }
+        XCTAssertEqual(bodyPixel(), [145, 94, 166, 255])
+    }
+
     func testGeneratedFixturesRenderAtGameplayPositions() throws {
         let initial = BeaconCourse(seed: 42)
         let seed = try XCTUnwrap((0..<100).map(UInt64.init).first {

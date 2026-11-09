@@ -176,6 +176,7 @@ private struct HostView: View {
                 Text("Collect 2 amber beacons, then reach the green gate.")
                 Text("Jump the gap; pulse through sand.")
                 Text("Red vent: jump or paint water at base (blue = cool).")
+                Text("Chime Warden: amber warns, red hurts, purple rests. Overlap shows an icon above you.")
                 Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
                 Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
                         "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")

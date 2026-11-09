@@ -22,6 +22,14 @@ public struct ResidentSnapshot: Equatable, Sendable {
         let (chunk, index) = ResidentSimulation.locate(position, width: chunkWidth)
         return chunks.first(where: { $0.position == chunk })?.cells[index] ?? .empty
     }
+
+    public func thermalState(at position: CellPosition) throws -> ThermalCellState {
+        guard ResidentSimulation.contains(position) else {
+            throw ResidentSimulationError.positionOutOfBounds(position)
+        }
+        let (chunk, index) = ResidentSimulation.locate(position, width: chunkWidth)
+        return chunks.first(where: { $0.position == chunk })?.thermalStates[index] ?? .zero
+    }
 }
 
 public struct ResidentTickReport: Equatable, Sendable {
@@ -38,6 +46,7 @@ public struct ResidentSimulation {
     private let seed: UInt64
     private var tick: UInt64 = 0
     private var chunks: [ChunkPosition: [Material]] = [:]
+    private var thermalChunks: [ChunkPosition: [ThermalCellState]] = [:]
     private var active: Set<ChunkPosition> = []
     private var lastProcessed: [ChunkPosition: UInt64] = [:]
     private var commands: [UInt64: [SimulationCommand]] = [:]
@@ -53,7 +62,7 @@ public struct ResidentSimulation {
 
     public var snapshot: ResidentSnapshot {
         let published = chunks.keys.sorted(by: Self.chunkOrder).map {
-            ChunkSnapshot(position: $0, cells: chunks[$0]!)
+            ChunkSnapshot(position: $0, cells: chunks[$0]!, thermalStates: thermalChunks[$0]!)
         }
         return ResidentSnapshot(tick: tick, seed: seed, chunkWidth: chunkWidth, chunks: published)
     }
@@ -121,61 +130,30 @@ public struct ResidentSimulation {
             }
             for proposal in proposals {
                 if moved.contains(proposal.source) {
-                    if material(at: proposal.source).isBurningPitch {
+                    if thermalUnchecked(at: proposal.source) != .zero {
                         active.insert(Self.locate(proposal.source, width: chunkWidth).0)
                     }
                     continue
                 }
                 guard material(at: proposal.source) == proposal.material else { continue }
-                switch proposal.material {
-                case .sand, .water:
-                    for destination in proposal.destinations {
-                        if destination.x != proposal.source.x && destination.y != proposal.source.y {
-                            let side = CellPosition(x: destination.x, y: proposal.source.y)
-                            guard material(at: side) == .empty else { continue }
-                        }
-                        let target = material(at: destination)
-                        var displaced: CellPosition?
-                        if proposal.material == .sand && target == .water && !moved.contains(destination) {
-                            displaced = MaterialMovement.displacedWaterDestination(
-                                source: proposal.source, destination: destination, direction: proposal.direction,
-                                maximumY: Self.yBounds.upperBound,
-                                canVisit: Self.contains, material: { material(at: $0) }
-                            )
-                        } else if target != .empty {
-                            continue
-                        }
-                        guard target == .empty || displaced != nil else { continue }
-                        set(.empty, at: proposal.source)
-                        set(proposal.material, at: destination)
-                        moved.insert(destination)
-                        if let displaced {
-                            set(.water, at: displaced)
-                            moved.insert(displaced)
-                        }
-                        break
-                    }
-                case .fire:
-                    if let water = proposal.destinations.first(where: { material(at: $0) == .water }) {
-                        set(.empty, at: water)
-                    } else if let pitch = proposal.destinations.first(where: {
-                        !moved.contains($0) && material(at: $0) == .pitch
-                    }) {
-                        set(.burningPitch, at: pitch)
-                        moved.insert(pitch)
-                    }
-                    set(.empty, at: proposal.source)
-                case .empty, .solid, .pitch:
-                    break
-                default:
-                    if let water = proposal.destinations.first(where: { material(at: $0) == .water }) {
-                        set(.empty, at: water)
-                        set(.pitch, at: proposal.source)
-                    } else {
-                        set(proposal.material.nextBurnStage, at: proposal.source)
-                    }
-                    moved.insert(proposal.source)
+                let action = MaterialBehavior.forMaterial(proposal.material).resolve(
+                    source: proposal.source, current: proposal.material,
+                    destinations: proposal.destinations, direction: proposal.direction,
+                    maximumY: Self.yBounds.upperBound, canVisit: Self.contains,
+                    material: { material(at: $0) }, moved: moved,
+                    thermal: { thermalUnchecked(at: $0) }
+                )
+                let transfers = Dictionary(uniqueKeysWithValues: action.thermalTransfers.map {
+                    ($0.destination, thermalUnchecked(at: $0.source))
+                })
+                for (position, material) in action.writes {
+                    let state = transfers[position] ?? thermalUnchecked(at: position)
+                    set(material, at: position, thermal: state)
                 }
+                for (position, state) in action.thermalWrites {
+                    set(material(at: position), at: position, thermal: state)
+                }
+                moved.formUnion(action.moved)
             }
             index = end
             batchesProcessed += 1
@@ -218,16 +196,44 @@ public struct ResidentSimulation {
         return chunks[chunk]?[index] ?? .empty
     }
 
-    private mutating func set(_ material: Material, at position: CellPosition) {
+    func thermalState(at position: CellPosition) throws -> ThermalCellState {
+        guard Self.contains(position) else {
+            throw ResidentSimulationError.positionOutOfBounds(position)
+        }
+        return thermalUnchecked(at: position)
+    }
+
+    @discardableResult
+    mutating func setThermalState(_ state: ThermalCellState, at position: CellPosition) throws -> Bool {
+        guard Self.contains(position) else {
+            throw ResidentSimulationError.positionOutOfBounds(position)
+        }
+        guard material(at: position) != .empty else { return false }
+        set(material(at: position), at: position, thermal: state)
+        return true
+    }
+
+    private func thermalUnchecked(at position: CellPosition) -> ThermalCellState {
+        let (chunk, index) = Self.locate(position, width: chunkWidth)
+        return thermalChunks[chunk]?[index] ?? .zero
+    }
+
+    private mutating func set(_ material: Material, at position: CellPosition,
+                              thermal: ThermalCellState = .zero) {
         let (chunk, index) = Self.locate(position, width: chunkWidth)
         let previous = chunks[chunk]?[index] ?? .empty
-        guard previous != material else { return }
+        let newThermal = material == .empty ? ThermalCellState.zero : thermal
+        let oldThermal = thermalChunks[chunk]?[index] ?? .zero
+        guard previous != material || oldThermal != newThermal else { return }
         if chunks[chunk] == nil {
             chunks[chunk] = Array(repeating: .empty, count: chunkWidth * chunkWidth)
+            thermalChunks[chunk] = Array(repeating: .zero, count: chunkWidth * chunkWidth)
         }
         chunks[chunk]![index] = material
+        thermalChunks[chunk]![index] = newThermal
         if material == .empty && chunks[chunk]!.allSatisfy({ $0 == .empty }) {
             chunks.removeValue(forKey: chunk)
+            thermalChunks.removeValue(forKey: chunk)
         }
         for dy in -1...1 {
             for dx in -1...1 {
@@ -255,33 +261,15 @@ public struct ResidentSimulation {
             return world[coordinate]?[index] ?? .empty
         }
         var proposals: [ResidentProposal] = []
-        for (index, cell) in cells.enumerated() where cell != .empty && cell != .solid && cell != .pitch {
+        for (index, cell) in cells.enumerated() where cell != .empty {
+            let behavior = MaterialBehavior.forMaterial(cell)
+            guard behavior.acts else { continue }
             let source = CellPosition(x: chunk.x * width + index % width, y: chunk.y * width + index / width)
             let random = randomValue(seed: seed, tick: tick, position: source)
             let direction = random & 1 == 0 ? -1 : 1
-            var destinations: [CellPosition] = []
-            if cell == .fire || cell.isBurningPitch {
-                for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
-                    let target = CellPosition(x: source.x + dx, y: source.y + dy)
-                    if contains(target) && (material(target) == .water
-                        || (cell == .fire && material(target) == .pitch)) { destinations.append(target) }
-                }
-            } else {
-                var offsets = [(0, -1), (direction, -1), (-direction, -1)]
-                if cell == .water { offsets += [(direction, 0), (-direction, 0)] }
-                for (dx, dy) in offsets {
-                    let target = CellPosition(x: source.x + dx, y: source.y + dy)
-                    guard contains(target) else { continue }
-                    if dx != 0 && dy != 0 {
-                        let side = CellPosition(x: source.x + dx, y: source.y)
-                        guard contains(side) && material(side) == .empty else { continue }
-                    }
-                    let targetMaterial = material(target)
-                    if targetMaterial == .empty || (cell == .sand && targetMaterial == .water) {
-                        destinations.append(target)
-                    }
-                }
-            }
+            let destinations = behavior.destinations(
+                source: source, direction: direction, canVisit: contains, material: material
+            )
             proposals.append(ResidentProposal(source: source, material: cell,
                                               destinations: destinations, direction: direction))
         }

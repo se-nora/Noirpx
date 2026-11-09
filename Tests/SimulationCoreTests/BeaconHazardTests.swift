@@ -140,6 +140,8 @@ final class BeaconHazardTests: XCTestCase {
         XCTAssertEqual(try run.simulation.snapshot.material(at: body), .fire)
         XCTAssertEqual(run.health, BeaconRun.maximumHealth)
         try run.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: body), .fire)
+        for _ in 0..<31 { try run.advance(horizontal: 0, jump: false) }
         XCTAssertEqual(try run.simulation.snapshot.material(at: body), .empty)
         XCTAssertEqual(run.health, BeaconRun.maximumHealth)
     }

@@ -34,9 +34,7 @@ public enum FixturePixels {
                 case .sand: color = 0xff6dc1eb
                 case .water: color = 0xffe09c42
                 case .fire: color = 0xff3269ff
-                case .pitch: color = 0xffad5983
-                default:
-                    color = 0xff44baff
+                case .pitch: color = chunk.thermalStates[index].isBurning ? 0xff44baff : 0xffad5983
                 }
                 pixels[y * width + x] = color.littleEndian
             }

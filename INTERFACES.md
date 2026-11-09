@@ -21,6 +21,21 @@ and removes it when the count reaches zero. Boundary chunks include empty paddin
 the world. The change from 16 to 64 increases the memory and scanning cost of
 individual chunks; it has not been performance-tested on target devices. Chunk
 size, layout, allocation and snapshot costs need measurement before being permanent.
+Both worlds additionally store a row-major `ThermalCellState` value for every
+cell in each allocated chunk. Its `UInt16` heat, burn elapsed age and fire
+elapsed age, plus a burning flag, initially equal zero/false.
+The eager sidecar increases allocated-chunk and snapshot memory; its cost has
+not been measured.
+Empty cells always have zero thermal state. Internal checked world accessors
+`thermalState(at:)` and `setThermalState(_:at:)` reject out-of-bounds positions;
+the setter returns false for empty cells and otherwise true. Resident thermal
+changes wake the cell's chunk and allocated neighboring chunks as material
+changes do. A no-op thermal write does not wake them.
+
+Explicit material replacement resets thermal state even when replacing a
+material with itself. Moving material carries its thermal state, including
+both participants in sand/water displacement; removing material clears it.
+Deleting a chunk deletes its sidecar.
 There is no chunk or command-queue budget, streaming, or recoverable
 out-of-memory API; Swift allocation failure is not caught. Callers must bound
 their workloads, especially on iOS.
@@ -28,7 +43,8 @@ their workloads, especially on iOS.
 ## Materials, commands, and tick rules
 
 The enum raw identifiers are empty 0, solid 1, sand 2, water 3, fire 4,
-pitch 5, and 64 consecutive burning-pitch stages 6...69.
+and pitch 5. Former burning-stage identifiers 6...69 are removed and rejected;
+there is no automatic conversion or replay compatibility with the previous rules.
 The typed API accepts only these cases; external decoding must reject unknown
 identifiers. There is no material definition or persistence format yet.
 
@@ -64,32 +80,48 @@ destination is rejected. Both relocated water and sand are marked moved.
 Otherwise the first empty in-bounds destination wins. The left/right
 preference for both diagonal and horizontal choices comes from one SplitMix64
 draw per processed sand or water cell, even when blocked or falling straight
-down. Seed initializes the state; all arithmetic wraps modulo 2^64. Fire checks
-down, left, right, then up, removes the first adjacent water if present, and
-always expires to empty on its turn. If it found no water, it instead ignites
-the first adjacent pitch in that same down, left, right, up order. Pitch is a
-stationary blocking solid; ignition changes it to burning stage 6, marked
-updated so it cannot advance in the same tick. Burning pitch checks adjacent
-water in the same order: it consumes the first and returns to pitch. Otherwise
-it advances 6→7→...→69→fire, one stage per processed tick. Ignition on tick T
-publishes stage 6 without advancing it; absent quenching and deferral, stages
-6...69 are published on T...T+63, and it becomes fire on T+64. Water is checked
-first on every burning turn, including T+64, giving 64 subsequent processed
-ticks in which to quench. Fire then acts no earlier than T+65. All stages
-render the same orange color; at 60 ticks/second this is about 1.07 seconds of
-simulation time, not a guarantee of display frames, wall-clock time or human
-reaction. Water must actually remain adjacent until the burning turn: painting
-one cell directly above the fixture is one way to do that.
-Fire can spread to another pitch only when its own subsequent turn runs.
-Each actor affects at most one neighbor; there is no random ignition, diagonal
-reaction, heat radius, timer, or damage. Water may be consumed even if it
-already moved that tick, as with existing fire. Fire and burning pitch check
-the current world in traversal order: first claim wins, a consumed water is
-unavailable to later actors, and a newly ignited or quenched cell cannot change
-again on that tick. Pitch and burning pitch block movement, liquid, player and warden;
-the pulse stops at them without removing them. A water cell
-may move before or be consumed by fire according to the same traversal order.
-These deliberately simple rules are prototype behavior, not a balance promise.
+down. Seed initializes the state; all arithmetic wraps modulo 2^64.
+
+Immutable shared per-material behavior classes calculate movement and thermal
+actions; cell state is never stored in them. Pitch is the only currently
+flammable material, always ID 5 and blocking, even while orange/burning.
+Heat is an abstract UInt16 quantity. A heat transfer adds 40 with saturation
+at 65535; at 100 or above pitch ignites, with burn age zero. An unburning,
+heated pitch cell cools by 1 on each of its processed turns, to a minimum of
+zero. Fire and burning pitch increment their respective UInt16 ages saturating
+at 65535. Starting with age zero, they can transfer heat starting at age 2.
+Fire expires to empty after its 32nd processed turn; burning pitch burns away
+to empty after its 64th processed turn, with the last turn still able to
+transfer. Ignition does not advance burn age that tick. Fire is thus able to
+ignite pitch from a single paint, and burning cells can independently spread.
+
+Each source checks down, left, right, up for water first. Fire consumes the
+first water and extinguishes; hot or burning pitch consumes the first water and
+resets its thermal state to zero, remaining pitch. Cold pitch ignores water.
+Water can have moved earlier in the tick. Without quenching, a source transfers
+to at most one eligible adjacent nonburning flammable cell per tick. Eligible
+targets are sorted in down/left/right/up order, rotated by source age modulo
+eligible count; the warmest target is selected, using the first rotated target
+for equal heat. Completing warmer targets avoids endlessly diluting heat, while
+excluding burning targets permits branches to be served. This is bounded
+fairness for stable neighborhoods with sufficient source lifetime, not a
+promise under moving water, competing sources, deferral, or changing terrain.
+Before applying heat to the selected pitch, the pitch checks its own currently
+adjacent accessible water in down/left/right/up order. If present, it consumes
+the first water and resets to zero instead of receiving heat, even if it was
+cold before this attempt. This still spends the source's one target for the
+tick; the source does not try another target and does not extinguish. That
+water may already have moved. A source's own adjacent water still takes
+priority and extinguishes or quenches the source before it selects a target.
+The target-side check observes only the active region in deterministic mode;
+water in a frozen chunk cannot be consumed.
+The first source in traversal/commit order claims a target per global tick.
+A heated or quenched target cannot subsequently act or be heated that tick;
+a target that already had its own turn may be heated after cooling on that
+turn, but cannot act again. A quenched target cannot reignite that tick.
+Newly ignited cells never spread on their ignition tick. No diagonals, random
+thermal choices, or character damage are involved. Frozen chunks neither
+cool nor age, and cannot exchange heat across the active boundary.
 
 ## Resident-world mode
 
@@ -130,8 +162,8 @@ more slowly and interact with current neighbors.
 
 Within a batch, chunk proposals are calculated in parallel from the same
 immutable world state. Sand and water propose their normal movement preferences
-using a seed/tick/position-derived direction; fire proposes adjacent water
-and pitch, and burning pitch proposes adjacent water. Destinations empty, water for sand, or water or pitch for fire
+using a seed/tick/position-derived direction; fire and pitch propose adjacent
+water and flammable materials. Destinations empty, water for sand, or water or flammable for flames
 at the start of the batch are proposed, subject to the same diagonal corner
 rule. Proposals commit in world y/x order; each source must still hold its
 original material, and destinations and diagonal side cells must still be
@@ -142,21 +174,24 @@ including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
 not record schedules or promise reproducible replay across runs or devices.
 
-Fire proposes all adjacent water and pitch visible at batch start; burning
-pitch proposes adjacent water. Commit first checks still-present proposed
-water in down/left/right/up order, then (for fire only) still-present proposed
-pitch in that order. New neighbors created since proposal are not considered.
-An ignition marks its target updated for the global tick even across batches.
-Burn stages and quenching use the deterministic transitions above, but only
-when the owning chunk is processed; a deferred chunk does not advance. A
+Flames propose all adjacent water and flammable materials visible at batch
+start. Commit checks still-present candidates and current thermal state using
+the thermal rules above. New direct neighbors of the source created since
+proposal are not considered. The selected target's water check instead reads
+the committed world at that instant, including water moved or created since the
+batch proposal; this avoids skipping a quench when the target is claimed.
+The source can quench a target in a deferred chunk; consuming water wakes
+affected allocated chunks under the ordinary cross-batch rules.
+A heat attempt marks its target updated for the global tick even when quenched
+and across batches.
+Ages and cooling advance only when the owning chunk is processed; a deferred chunk does not advance. A
 processed fire may interact across a chunk boundary even if the neighbor chunk
 is deferred; changed cells wake allocated neighboring chunks, which wait for
-the next tick if absent from the original candidate list. A changed burning
+the next tick if absent from the original candidate list. A changed hot or burning
 cell keeps its chunk active; inert pitch can sleep until a nearby edit wakes it.
-If a later batch clears the wake for a newly ignited, already-updated burning
-cell, processing that skipped proposal restores its chunk's wake for the next
-global tick. It does not update twice. Deferred processing can extend the
-duration in global ticks, but cannot shorten the 64 processed opportunities.
+If a later batch clears the wake for an already-heated cell, its skipped
+proposal restores the wake. Deferred processing extends durations in global
+ticks rather than catching up.
 
 Chunks with no resulting changes sleep. A changed cell wakes its own chunk and
 any allocated chunk containing a neighboring cell, including diagonals. Newly
@@ -173,23 +208,32 @@ snapshot; absence of a previously seen chunk means removal, even when revisions
 were skipped. There are no deltas or dirty notifications. The renderer must
 retain or copy any storage used by asynchronous GPU work until completion;
 concrete GPU upload buffering and synchronization are not implemented.
+Each `ChunkSnapshot.thermalStates` array uses the same indices and length as
+`cells`. `SimulationSnapshot.thermalState(at:)` and
+`ResidentSnapshot.thermalState(at:)` provide checked lookups, returning
+`.zero` for an empty position; snapshot equality includes thermal data. Arrays
+have value semantics and do not share mutable per-cell objects with the world.
 
 The `digest` is FNV-1a 64-bit, wrapping modulo 2^64. It hashes little-endian
-64-bit words: digest version 2, seed, completed tick, RNG state, chunk count,
+64-bit words: digest version 3, seed, completed tick, RNG state, chunk count,
 then for each sorted chunk signed two's-complement x and y as 64-bit words,
-followed by 4,096 material identifier bytes in row-major order. Version 2
-distinguishes the 64-wide layout from version 1's 16-wide layout, so prior
-digests are not compatible. It includes the
+followed by 4,096 material identifier bytes in row-major order, then 4,096
+thermal records in the same order. Each record is seven bytes: heat as a
+little-endian UInt16, burning as 0 or 1, burn elapsed as a little-endian UInt16,
+and fire elapsed as a little-endian UInt16. Version 3 differs from version 2
+even for zero-thermal worlds; version 2 distinguished the 64-wide layout from
+version 1's 16-wide layout. The stage-3 physics change keeps the stage-2 v3
+byte layout but changes the simulation rules and therefore is not replay
+compatible; old digests are not comparable as evidence of equal future behavior.
+The later target-side water-priority correction also changes replay outcomes
+without changing the v3 byte layout.
+Prior digest versions are not compatible. It includes the
 completed world and RNG state, **not queued future commands**; equal digests
 alone do not establish equal future inputs. It is not a cryptographic hash,
 save format, or cross-device determinism certification.
-The digest algorithm and version remain unchanged for this addition, preserving
-digests of pitch-free worlds given identical inputs. Pitch and its stages hash
-as their new identifier bytes; old software cannot decode those identifiers.
-The longer burn changes outcomes and future digests for existing pitch-containing
-states, including stages 6...9, but not material-only worlds without pitch.
-The Beacon Run fixture itself now contains pitch, so its snapshots and digests
-intentionally differ from earlier releases. There is no save migration.
+Resident snapshots have no digest; their equality includes thermal data but
+their deadline-dependent scheduling still precludes a replay guarantee.
+There is no save migration.
 
 ## Host and future work
 
@@ -244,7 +288,7 @@ cell is attempted per tick; vertical velocity uses quarter-cell integer units,
 with gravity and a bounded fall speed. When grounded horizontal movement is
 blocked, the character can step up at most three cells, provided the upward and
 horizontal paths are clear and the destination has support. Movement checks each newly entered edge,
-including intermediate vertical cells, against rock, sand, pitch, burning pitch, and world bounds.
+including intermediate vertical cells, against rock, sand, pitch, and world bounds.
 Empty space, water, and fire do not block the character; the character does not affect
 material rules. Jump presses are buffered until the next tick and only take
 effect while grounded. Simultaneous opposite directions cancel. Controls reset
@@ -286,8 +330,8 @@ The finite generator does not reject or repair layouts.
 Five pitch cells at x=6...10, y=13 form a small floating experimental fixture
 above the start, clear of the standing route. It does not ignite by itself:
 paint fire beside it and water beside the orange cell to quench it. The host
-applies paint before physics, so fire can expire immediately while leaving a
-visible burning-pitch snapshot; display callbacks may still skip states under
+applies paint before physics, and ignition requires multiple heat transfers;
+display callbacks may still skip states under
 load. At a 1000×600 host size after settling, the shared HUD geometry keeps
 these cells and the cells directly above and below them outside the HUD;
 320×300 and portrait 600×1000 layouts are also covered by geometry tests.
@@ -332,8 +376,7 @@ on each subsequent playing tick, including outside the vent or while cooled;
 contact can damage again on the tick it reaches zero. A pink character and the
 HUD show the remaining protection; health does not regenerate. Zero health
 ends the run as `exhausted`. Restart restores all health and timers. Neither
-ordinary water nor ordinary fire damages the character: active fire expires in
-the material tick, before gameplay checks, and frozen fire is also harmless.
+ordinary water nor ordinary fire damages the character, including while frozen.
 The vent does not itself alter material rules or the material snapshot digest.
 
 The Chime Warden is a single 5 × 6-cell, non-material rectangle; it does not
@@ -370,7 +413,7 @@ fall/damage/goal checks, a playing run may fire. Thus a winning or failing tick 
 fire; terminal runs freeze cooldown and flash until restart. Five horizontal
 lanes at character lower-left y+2...y+6 start immediately outside the facing
 edge, extending at most 18 cells each. Each lane stops at the world boundary,
-the first rock, pitch, burning pitch, or sand. Rock and pitch are unchanged; the first sand is removed;
+the first rock, pitch, or sand. Rock and pitch are unchanged; the first sand is removed;
 empty, water and fire are transparent and unchanged. Each pulse inspects at
 most 90 cells and removes at most five. It uses the post-physics snapshot, so
 paint commands applied this tick affect occlusion; removed sand affects physics

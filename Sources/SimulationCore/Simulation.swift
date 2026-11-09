@@ -4,6 +4,7 @@ private func ordered(_ left: ChunkPosition, _ right: ChunkPosition) -> Bool {
 
 private struct SimulationChunk {
     var cells = [Material](repeating: .empty, count: SimulationGrid.cellCount)
+    var thermalStates = [ThermalCellState](repeating: .zero, count: SimulationGrid.cellCount)
     var occupiedCount = 0
 }
 
@@ -25,7 +26,7 @@ public struct Simulation {
 
     public var snapshot: SimulationSnapshot {
         let published = chunks.keys.sorted(by: ordered).map {
-            ChunkSnapshot(position: $0, cells: chunks[$0]!.cells)
+            ChunkSnapshot(position: $0, cells: chunks[$0]!.cells, thermalStates: chunks[$0]!.thermalStates)
         }
         return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published)
     }
@@ -70,84 +71,34 @@ public struct Simulation {
         positions.sort { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
         var moved: Set<CellPosition> = []
         for position in positions where !moved.contains(position) {
-            switch material(at: position) {
-            case .empty, .solid, .pitch:
-                break
-            case .sand, .water:
-                let material = material(at: position)
-                let direction = nextRandom() & 1 == 0 ? -1 : 1
-                var offsets = [(0, -1), (direction, -1), (-direction, -1)]
-                if material == .water {
-                    offsets += [(direction, 0), (-direction, 0)]
-                }
-                for (dx, dy) in offsets {
-                    let destination = CellPosition(x: position.x + dx, y: position.y + dy)
-                    guard isInBounds(destination) && isActive(destination, in: activeChunks) else { continue }
-                    if dx != 0 && dy != 0 {
-                        let side = CellPosition(x: position.x + dx, y: position.y)
-                        guard isInBounds(side), isActive(side, in: activeChunks),
-                              self.material(at: side) == .empty else { continue }
-                    }
-                    let target = self.material(at: destination)
-                    var displaced: CellPosition?
-                    if material == .sand && target == .water && !moved.contains(destination) {
-                        displaced = MaterialMovement.displacedWaterDestination(
-                            source: position, destination: destination, direction: direction,
-                            maximumY: Self.coordinateBounds.upperBound,
-                            canVisit: { isInBounds($0) && isActive($0, in: activeChunks) },
-                            material: { self.material(at: $0) }
-                        )
-                    } else if target != .empty {
-                        continue
-                    }
-                    guard target == .empty || displaced != nil else { continue }
-                    set(.empty, at: position)
-                    set(material, at: destination)
-                    moved.insert(destination)
-                    if let displaced {
-                        set(.water, at: displaced)
-                        moved.insert(displaced)
-                    }
-                    break
-                }
-            case .fire:
-                var quenched = false
-                for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
-                    let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
-                    if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
-                        && material(at: neighbor) == .water {
-                        set(.empty, at: neighbor)
-                        quenched = true
-                        break
-                    }
-                }
-                if !quenched {
-                    for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
-                        let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
-                        if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
-                            && !moved.contains(neighbor) && material(at: neighbor) == .pitch {
-                            set(.burningPitch, at: neighbor)
-                            moved.insert(neighbor)
-                            break
-                        }
-                    }
-                }
-                set(.empty, at: position)
-            default:
-                let current = material(at: position)
-                var quenched = false
-                for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
-                    let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
-                    if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
-                        && material(at: neighbor) == .water {
-                        set(.empty, at: neighbor)
-                        quenched = true
-                        break
-                    }
-                }
-                set(quenched ? .pitch : current.nextBurnStage, at: position)
-                moved.insert(position)
+            let current = material(at: position)
+            let behavior = MaterialBehavior.forMaterial(current)
+            guard behavior.acts else { continue }
+            let direction = behavior.usesDirection ? (nextRandom() & 1 == 0 ? -1 : 1) : 0
+            let canVisit: (CellPosition) -> Bool = {
+                Self.coordinateBounds.contains($0.x) && Self.coordinateBounds.contains($0.y)
+                    && (activeChunks?.contains(SimulationGrid.locate($0).0) ?? true)
             }
+            let destinations = behavior.destinations(
+                source: position, direction: direction, canVisit: canVisit, material: { material(at: $0) }
+            )
+            let action = behavior.resolve(
+                source: position, current: current, destinations: destinations,
+                direction: direction, maximumY: Self.coordinateBounds.upperBound,
+                canVisit: canVisit, material: { material(at: $0) }, moved: moved,
+                thermal: { thermalUnchecked(at: $0) }
+            )
+            let transfers = Dictionary(uniqueKeysWithValues: action.thermalTransfers.map {
+                ($0.destination, thermalUnchecked(at: $0.source))
+            })
+            for (position, material) in action.writes {
+                let state = transfers[position] ?? thermalUnchecked(at: position)
+                set(material, at: position, thermal: state)
+            }
+            for (position, state) in action.thermalWrites {
+                set(material(at: position), at: position, thermal: state)
+            }
+            moved.formUnion(action.moved)
         }
         tick = nextTick
     }
@@ -156,22 +107,39 @@ public struct Simulation {
         Self.coordinateBounds.contains(position.x) && Self.coordinateBounds.contains(position.y)
     }
 
-    private func isActive(_ position: CellPosition, in region: ChunkRegion?) -> Bool {
-        region?.contains(SimulationGrid.locate(position).0) ?? true
-    }
-
     private func material(at position: CellPosition) -> Material {
         let (chunk, index) = SimulationGrid.locate(position)
         return chunks[chunk]?.cells[index] ?? .empty
     }
 
-    private mutating func set(_ material: Material, at position: CellPosition) {
+    func thermalState(at position: CellPosition) throws -> ThermalCellState {
+        try SimulationGrid.validate(position)
+        return thermalUnchecked(at: position)
+    }
+
+    @discardableResult
+    mutating func setThermalState(_ state: ThermalCellState, at position: CellPosition) throws -> Bool {
+        try SimulationGrid.validate(position)
+        guard material(at: position) != .empty else { return false }
+        let (chunk, index) = SimulationGrid.locate(position)
+        chunks[chunk]!.thermalStates[index] = state
+        return true
+    }
+
+    private func thermalUnchecked(at position: CellPosition) -> ThermalCellState {
+        let (chunk, index) = SimulationGrid.locate(position)
+        return chunks[chunk]?.thermalStates[index] ?? .zero
+    }
+
+    private mutating func set(_ material: Material, at position: CellPosition,
+                              thermal: ThermalCellState = .zero) {
         let (chunk, index) = SimulationGrid.locate(position)
         if chunks[chunk] == nil {
             guard material != .empty else { return }
             chunks[chunk] = SimulationChunk()
         }
         let previous = chunks[chunk]!.cells[index]
+        chunks[chunk]!.thermalStates[index] = material == .empty ? .zero : thermal
         guard previous != material else { return }
         chunks[chunk]!.cells[index] = material
         if previous == .empty {

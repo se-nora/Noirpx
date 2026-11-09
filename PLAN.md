@@ -249,8 +249,9 @@ health, hit protection and cooling run on fixed ticks.
 The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
 cooldown and visible feedback; rock shields sand and is never destroyed.
 Five suspended pitch cells near the start provide an optional brush experiment:
-fire ignites them into a 64-processed-tick orange burning state, and adjacent water
-quenches the burning cell. Pitch is blocking and can be burned away; see
+fire heats them until they ignite into a 64-processed-turn orange burning state;
+burning cells transfer heat to adjacent pitch, and water quenches hot pitch.
+Pitch retains its identity and is blocking until burned away; see
 the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
 The fixture does not obstruct the normal standing course; a bounded-width,
 scrollable HUD leaves it and its paint targets clear in tested host geometries.

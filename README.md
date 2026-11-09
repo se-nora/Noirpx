@@ -36,12 +36,11 @@ or hit it with the Silt Pulse; rock, sand and pitch shield it. When it overlaps 
 a matching colored bar and bell icon appear on and above the player. It shares the vent's
 hit protection. It disappears if buried or its floor is removed. There is no
 overall time limit, score, or save. Above the start are five violet pitch cells.
-Paint fire next to one to ignite it orange; paint water directly above a burning
-cell to quench it back to pitch. A burning cell remains orange for 64 processed
-ticks (about 1.07 seconds of simulation at 60 Hz), and checks water once more
-on the tick it would otherwise turn to fire. Water may move or be consumed
-before it can quench, depending on tick order. Unquenched pitch burns away and can ignite an
-adjacent pitch cell. This is optional and ordinary fire remains harmless to the
+Paint fire next to one; after several heat transfers it ignites orange. Paint
+water directly above a hot or burning cell to quench it back to cold pitch.
+Burning pitch spreads heat to one neighbor at a time and burns away after 64
+processed turns (about 1.07 seconds at 60 Hz). Water may move or be consumed
+before it can quench, depending on tick order. This is optional and ordinary fire remains harmless to the
 character. Painting
 can bridge the gap or alter the course: this is an open-ended tool, not a
 restricted scoring challenge. Ordinary fire and water do not hurt the character.
@@ -84,14 +83,14 @@ hold the on-screen left and right controls, tap jump, and tap or hold the bolt
 button for the pulse; controls can be used together. A cyan flash shows its
 path and the overlay shows readiness or remaining cooldown ticks. The pulse
 reaches 18 cells ahead in five horizontal lanes, removing the first sand in
-each lane. Rock, pitch and burning pitch stop it without damage; water and fire let it pass. It can
+each lane. Rock and pitch (including while burning) stop it without damage; water and fire let it pass. It can
 defeat the warden when a traced lane reaches it, and open a route through sand
 but cannot break the floor or rock step. At point-blank range the same five
 lanes also check inside the player, from the facing edge inward: an overlapping
 warden is hit only if no blocking material obstructs that lane. This close-range check
 does not excavate material. It fires at
 most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
-collides with rock, sand, pitch, burning pitch, and world bounds, but not water or fire. It advances after
+collides with rock, sand, pitch, and world bounds, but not water or fire. It advances after
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), and can jump only while grounded.
 Painting blocking materials directly inside the character is
@@ -110,9 +109,10 @@ displace water into an empty side cell, or upward if both sides are occupied;
 the upward search may pass occupied cells. The displaced water does not move
 again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
 resident-mode ordering.
-Fire prioritizes adjacent water over pitch; burning pitch consumes adjacent
-water and reverts to pitch, or advances through 64 orange stages before
-becoming ordinary fire. Processed ticks are not necessarily displayed frames.
+Fire prioritizes adjacent water over heating; hot pitch consumes adjacent
+water and cools, while unquenched burning pitch eventually disappears.
+Fire lasts 32 processed turns and transfers 40 heat starting at age 2;
+pitch ignites at 100 and cools by 1 when not burning. Processed ticks are not necessarily displayed frames.
 Fire and water have no effect across a frozen boundary.
 
 `ResidentSimulation` is a separate experimental mode for a larger sparse,

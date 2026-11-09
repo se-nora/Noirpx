@@ -2,248 +2,400 @@ import XCTest
 @testable import SimulationCore
 
 final class PitchTests: XCTestCase {
-    private let focus = CellPosition(x: 0, y: 0)
+    let focus = CellPosition(x: 0, y: 0)
+    func p(_ x: Int, _ y: Int = 0) -> CellPosition { .init(x: x, y: y) }
 
-    private func enqueue(_ material: Material, _ x: Int, _ y: Int, tick: UInt64 = 1,
-                         into simulation: inout Simulation) throws {
-        try simulation.enqueue(.init(tick: tick, position: .init(x: x, y: y), material: material))
-    }
-
-    private func enqueue(_ material: Material, _ x: Int, _ y: Int, tick: UInt64 = 1,
-                         into simulation: inout ResidentSimulation) throws {
-        try simulation.enqueue(.init(tick: tick, position: .init(x: x, y: y), material: material))
-    }
-
-    private func cell(_ simulation: Simulation, _ x: Int, _ y: Int) throws -> Material {
-        try simulation.snapshot.material(at: .init(x: x, y: y))
-    }
-
-    private func cell(_ simulation: ResidentSimulation, _ x: Int, _ y: Int) throws -> Material {
-        try simulation.snapshot.material(at: .init(x: x, y: y))
-    }
-
-    func testIdentifiersCollisionAndDeterministicBurnStages() throws {
-        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...69))
-        for material in [Material.pitch] + Material.allCases.filter(\.isBurningPitch) {
-            XCTAssertTrue(material.blocksCharacter)
-        }
+    func testIdentifiersThresholdAndReplay() throws {
+        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...5))
+        XCTAssertNil(Material(rawValue: 6))
+        XCTAssertTrue(Material.pitch.blocksCharacter)
         func run() throws -> [UInt64] {
-            var simulation = Simulation(seed: 42)
-            try enqueue(.fire, 0, 0, into: &simulation)
-            try enqueue(.pitch, 1, 0, into: &simulation)
-            var digests: [UInt64] = []
-            let stages = Material.allCases.filter(\.isBurningPitch)
-            for expected in stages + [.fire, .empty] {
-                try simulation.advance()
-                XCTAssertEqual(try cell(simulation, 1, 0), expected)
-                digests.append(simulation.snapshot.digest)
+            var s = Simulation(seed: 42)
+            for (material, position) in [(Material.fire, p(0)), (.pitch, p(1))] {
+                try s.enqueue(.init(tick: 1, position: position, material: material))
             }
-            XCTAssertEqual(digests[0], 4_944_858_394_357_168_593)
+            var digests: [UInt64] = []
+            for tick in 1...8 {
+                try s.advance()
+                let state = try s.snapshot.thermalState(at: p(1))
+                if tick == 1 { XCTAssertEqual(state.heat, 0) }
+                if tick == 2 { XCTAssertEqual(state.heat, 40); XCTAssertFalse(state.isBurning) }
+                if tick == 3 { XCTAssertEqual(state.heat, 80); XCTAssertFalse(state.isBurning) }
+                if tick == 4 { XCTAssertTrue(state.isBurning); XCTAssertEqual(state.burnElapsed, 0) }
+                XCTAssertEqual(try s.snapshot.material(at: p(1)), .pitch)
+                digests.append(s.snapshot.digest)
+            }
             return digests
         }
         XCTAssertEqual(try run(), try run())
     }
 
-    func testWaterWinsEvenWhenPitchIsEarlierAndBurnCanBeQuenched() throws {
-        var simulation = Simulation(seed: 0)
-        try enqueue(.pitch, -1, 0, into: &simulation)
-        try enqueue(.fire, 0, 0, into: &simulation)
-        try enqueue(.water, 1, 0, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, -1, 0), .pitch)
-        XCTAssertEqual(try cell(simulation, 1, 0), .empty)
-        try enqueue(.fire, 0, 0, tick: 2, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, -1, 0), .burningPitch)
-        try enqueue(.water, -1, 1, tick: 3, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, -1, 0), .pitch)
-        XCTAssertEqual(try cell(simulation, -1, 1), .empty)
-    }
-
-    func testConflictOrderingAndNoSameTickChain() throws {
-        var simulation = Simulation(seed: 0)
-        try enqueue(.fire, -1, 0, into: &simulation)
-        try enqueue(.pitch, 0, 0, into: &simulation)
-        try enqueue(.pitch, 1, 0, into: &simulation)
-        try enqueue(.fire, 2, 0, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, 0, 0), .burningPitch)
-        XCTAssertEqual(try cell(simulation, 1, 0), .burningPitch)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, 0, 0), .burningPitch2)
-        XCTAssertEqual(try cell(simulation, 1, 0), .burningPitch2)
-    }
-
-    func testFrozenBoundaryAndReactivation() throws {
-        var simulation = Simulation(seed: 0)
-        let left = ChunkRegion(x: 0...0, y: 0...0)
-        try enqueue(.fire, 63, 0, into: &simulation)
-        try enqueue(.pitch, 64, 0, into: &simulation)
-        try simulation.advance(activeChunks: left)
-        XCTAssertEqual(try cell(simulation, 64, 0), .pitch)
-        try enqueue(.fire, 63, 0, tick: 2, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, 64, 0), .burningPitch)
-        try simulation.advance(activeChunks: left)
-        XCTAssertEqual(try cell(simulation, 64, 0), .burningPitch)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, 64, 0), .burningPitch2)
-    }
-
-    func testResidentStagesBudgetAndCrossChunkWake() throws {
-        var simulation = try ResidentSimulation(seed: 0, chunkWidth: 16)
-        try enqueue(.pitch, 15, 0, into: &simulation)
-        try simulation.advance(focus: focus) { true }
-        XCTAssertEqual(try simulation.advance(focus: focus) { true }.chunksConsidered, 0)
-        try enqueue(.fire, 16, 0, tick: 3, into: &simulation)
-        try simulation.advance(focus: focus) { false }
-        XCTAssertEqual(try cell(simulation, 15, 0), .pitch)
-        try simulation.advance(focus: focus, batchSize: 1) { true }
-        XCTAssertEqual(try cell(simulation, 15, 0), .burningPitch)
-        for expected in Array(Material.allCases.filter(\.isBurningPitch).dropFirst()) + [.fire, .empty] {
-            try simulation.advance(focus: focus, batchSize: 1) { true }
-            XCTAssertEqual(try cell(simulation, 15, 0), expected)
-        }
-        XCTAssertEqual(try simulation.advance(focus: focus) { true }.chunksConsidered, 0)
-    }
-
-    func testResidentWaterPriorityAndSameBatchConflictRepeat() throws {
-        func run() throws -> ResidentSnapshot {
-            var simulation = try ResidentSimulation(seed: 11, chunkWidth: 16)
-            try enqueue(.pitch, -1, 0, into: &simulation)
-            try enqueue(.fire, 0, 0, into: &simulation)
-            try enqueue(.water, 1, 0, into: &simulation)
-            try enqueue(.fire, -2, 0, into: &simulation)
-            try simulation.advance(focus: focus, batchSize: 8) { true }
-            XCTAssertEqual(try cell(simulation, -1, 0), .burningPitch)
-            XCTAssertEqual(try cell(simulation, 1, 0), .empty)
-            try enqueue(.water, -1, 1, tick: 2, into: &simulation)
-            try simulation.advance(focus: focus, batchSize: 8) { true }
-            XCTAssertEqual(try cell(simulation, -1, 0), .pitch)
-            return simulation.snapshot
-        }
-        let expected = try run()
-        for _ in 0..<5 { XCTAssertEqual(try run(), expected) }
-    }
-
-    func testWaterMotionBeforeFireAndPitchIsAnObstacle() throws {
-        var simulation = Simulation(seed: 0)
-        try enqueue(.water, 0, 0, into: &simulation)
-        try enqueue(.fire, 0, 1, into: &simulation)
-        try enqueue(.pitch, 1, 1, into: &simulation)
-        try enqueue(.sand, 1, 2, into: &simulation)
-        try simulation.advance()
-        XCTAssertEqual(try cell(simulation, 0, -1), .water)
-        XCTAssertEqual(try cell(simulation, 1, 1), .burningPitch)
-        XCTAssertNotEqual(try cell(simulation, 1, 1), .sand)
-    }
-
-    func testOneFireIgnitesOnlyFirstPitchAndConflictsDoNotAdvanceIt() throws {
-        var deterministic = Simulation(seed: 0)
-        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
-        for (material, x, y) in [(Material.fire, -1, 0), (.pitch, 0, 0), (.fire, 1, 0), (.pitch, 1, 1)] {
-            try enqueue(material, x, y, into: &deterministic)
-            try enqueue(material, x, y, into: &resident)
-        }
-        try deterministic.advance()
-        try resident.advance(focus: focus, batchSize: 8) { true }
-        XCTAssertEqual(try cell(deterministic, 0, 0), .burningPitch)
-        XCTAssertEqual(try cell(resident, 0, 0), .burningPitch)
-        XCTAssertEqual(try cell(deterministic, 1, 1), .burningPitch)
-        XCTAssertEqual(try cell(resident, 1, 1), .burningPitch)
-    }
-
-    func testResidentLiquidCanMoveBeforeFireAndPitchBlocksMovement() throws {
-        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
-        for (material, x, y) in [(Material.water, 0, 0), (.fire, 0, 1),
-                                 (.pitch, 1, 1), (.sand, 1, 2)] {
-            try enqueue(material, x, y, into: &resident)
-        }
-        try resident.advance(focus: focus, batchSize: 8) { true }
-        XCTAssertEqual(try cell(resident, 0, -1), .water)
-        XCTAssertEqual(try cell(resident, 1, 1), .burningPitch)
-    }
-
-    func testPulseAndWardenTreatPitchAsBlocking() {
-        let origin = CellPosition(x: 0, y: 0)
-        let obstacle = CellPosition(x: 6, y: 2)
-        let trace = BeaconRun.tracePulse(from: origin, facing: 1) {
-            $0 == obstacle ? .pitch : .empty
-        }
-        XCTAssertTrue(trace.cells.contains(obstacle))
-        XCTAssertFalse(trace.cells.contains(.init(x: 7, y: 2)))
-        XCTAssertTrue(trace.sand.isEmpty)
-        XCTAssertFalse(BeaconRun.pulseTouchesOverlap(from: origin, facing: 1,
-                      materialAt: { $0 == .init(x: 4, y: 2) ? .burningPitch : .empty },
-                      targetContains: { $0 == .init(x: 3, y: 2) }))
-    }
-
-    func testQuenchedPitchCannotBeReignitedInSameTickAcrossBatches() throws {
-        var deterministic = Simulation(seed: 0)
-        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
-        for (material, x, y) in [(Material.burningPitch, 15, 0), (.water, 15, 1), (.fire, 16, 0)] {
-            try enqueue(material, x, y, into: &deterministic)
-            try enqueue(material, x, y, into: &resident)
-        }
-        try deterministic.advance()
-        try resident.advance(focus: .init(x: 15, y: 0), batchSize: 1) { true }
-        XCTAssertEqual(try cell(deterministic, 15, 0), .pitch)
-        XCTAssertEqual(try cell(resident, 15, 0), .pitch)
-    }
-
-    func testBurnedPitchSpreadsOnlyOnFollowingFireTurn() throws {
-        var deterministic = Simulation(seed: 0)
-        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
-        for (material, x) in [(Material.fire, -1), (.pitch, 0), (.pitch, 1)] {
-            try enqueue(material, x, 0, into: &deterministic)
-            try enqueue(material, x, 0, into: &resident)
-        }
-        for tick in 1...66 {
-            try deterministic.advance()
-            try resident.advance(focus: focus, batchSize: 1) { true }
-            let expected: Material = tick < 66 ? .pitch : .burningPitch
-            XCTAssertEqual(try cell(deterministic, 1, 0), expected, "tick \(tick)")
-            XCTAssertEqual(try cell(resident, 1, 0), expected, "tick \(tick)")
-        }
-    }
-
-    func testResidentCrossBatchIgnitionKeepsBothSchedulingOrdersAwake() throws {
-        for (fireX, pitchX) in [(15, 16), (16, 15)] {
-            var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
-            try enqueue(.fire, fireX, 0, into: &resident)
-            try enqueue(.pitch, pitchX, 0, into: &resident)
-            let first = try resident.advance(focus: .init(x: 15, y: 0), batchSize: 1) { true }
-            XCTAssertEqual(first.batchesProcessed, 2)
-            XCTAssertEqual(try cell(resident, pitchX, 0), .burningPitch)
-            for tick in 2...3 {
-                let report = try resident.advance(focus: .init(x: 15, y: 0), batchSize: 1) { true }
-                XCTAssertGreaterThan(report.chunksProcessed, 0)
-                XCTAssertEqual(try cell(resident, pitchX, 0).rawValue, UInt8(tick + 5))
+    func testSingleFireSpreadsThroughBranchesAndBurnsOut() throws {
+        var s = Simulation(seed: 1)
+        let pitches = [p(0), p(1), p(2), p(1, 1), p(1, -1), p(3)]
+        try s.enqueue(.init(tick: 1, position: p(-1), material: .fire))
+        for position in pitches { try s.enqueue(.init(tick: 1, position: position, material: .pitch)) }
+        var ignited = Set<CellPosition>()
+        var digestAtEnd: UInt64 = 0
+        for _ in 1...250 {
+            try s.advance()
+            for position in pitches where try s.snapshot.thermalState(at: position).isBurning {
+                ignited.insert(position)
             }
+            digestAtEnd = s.snapshot.digest
+        }
+        XCTAssertEqual(ignited, Set(pitches))
+        for position in pitches { XCTAssertEqual(try s.snapshot.material(at: position), .empty) }
+        XCTAssertEqual(try s.snapshot.material(at: p(-1)), .empty)
+        XCTAssertNotEqual(digestAtEnd, 0)
+    }
+
+    func testOneNeighborPerTickAndIndependentHeat() throws {
+        var s = Simulation(seed: 0)
+        for (m, position) in [(Material.fire, p(0)), (.pitch, p(-1)), (.pitch, p(1)), (.pitch, p(0, 1))] {
+            try s.enqueue(.init(tick: 1, position: position, material: m))
+        }
+        try s.advance()
+        try s.advance()
+        let states = try [p(-1), p(1), p(0, 1)].map { try s.snapshot.thermalState(at: $0) }
+        XCTAssertEqual(states.filter { $0.heat == 40 }.count, 1)
+        XCTAssertEqual(states.filter { $0.heat == 0 }.count, 2)
+        for _ in 0..<20 { try s.advance() }
+        for position in [p(-1), p(1), p(0, 1)] {
+            XCTAssertTrue(try s.snapshot.thermalState(at: position).isBurning)
         }
     }
 
-    func testLastBurnTickStillAcceptsWaterInBothModes() throws {
-        var deterministic = Simulation(seed: 1)
-        var resident = try ResidentSimulation(seed: 1, chunkWidth: 16)
-        for (material, x, y) in [(Material.fire, 0, 0), (.pitch, 1, 0)] {
-            try enqueue(material, x, y, into: &deterministic)
-            try enqueue(material, x, y, into: &resident)
+    func testQuenchAndSaturation() throws {
+        let behavior = MaterialBehavior.forMaterial(.pitch)
+        let saturated = behavior.heated(.init(heat: .max - 1), amount: 40)
+        XCTAssertEqual(saturated.heat, .max)
+        XCTAssertTrue(saturated.isBurning)
+        var s = Simulation(seed: 1)
+        try s.enqueue(.init(tick: 1, position: p(0), material: .pitch))
+        try s.advance()
+        try s.setThermalState(.init(heat: 120, isBurning: true, burnElapsed: 63), at: p(0))
+        try s.enqueue(.init(tick: 2, position: p(0, 1), material: .water))
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.material(at: p(0)), .pitch)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0)), .zero)
+        XCTAssertEqual(try s.snapshot.material(at: p(0, 1)), .empty)
+    }
+
+    func testHeatingQuenchesAdjacentWaterBeforePitchIsSkipped() throws {
+        var deterministic = Simulation(seed: 0)
+        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
+        for (material, position) in [(Material.fire, p(0)), (.pitch, p(1))] {
+            let command = SimulationCommand(tick: 1, position: position, material: material)
+            try deterministic.enqueue(command)
+            try resident.enqueue(command)
         }
-        for _ in 1...64 {
+        for _ in 0..<2 {
             try deterministic.advance()
             try resident.advance(focus: focus) { true }
         }
-        XCTAssertEqual(try cell(deterministic, 1, 0), .burningPitch64)
-        XCTAssertEqual(try cell(resident, 1, 0), .burningPitch64)
-        try enqueue(.water, 1, 1, tick: 65, into: &deterministic)
-        try enqueue(.water, 1, 1, tick: 65, into: &resident)
+        XCTAssertEqual(try deterministic.snapshot.thermalState(at: p(1)).heat, 40)
+        XCTAssertEqual(try resident.snapshot.thermalState(at: p(1)).heat, 40)
+        let water = SimulationCommand(tick: 3, position: p(1, 1), material: .water)
+        try deterministic.enqueue(water)
+        try resident.enqueue(water)
         try deterministic.advance()
         try resident.advance(focus: focus) { true }
-        XCTAssertEqual(try cell(deterministic, 1, 0), .pitch)
-        XCTAssertEqual(try cell(resident, 1, 0), .pitch)
-        XCTAssertEqual(try cell(deterministic, 1, 1), .empty)
-        XCTAssertEqual(try cell(resident, 1, 1), .empty)
+        for snapshot in [deterministic.snapshot.material, resident.snapshot.material] {
+            XCTAssertEqual(try snapshot(p(1)), .pitch)
+            XCTAssertEqual(try snapshot(p(1, 1)), .empty)
+            XCTAssertEqual(try snapshot(p(2)), .empty)
+            XCTAssertEqual(try snapshot(p(0)), .fire)
+        }
+        for state in [deterministic.snapshot.thermalState, resident.snapshot.thermalState] {
+            XCTAssertEqual(try state(p(1)), .zero)
+        }
+        try deterministic.advance()
+        try resident.advance(focus: focus) { true }
+        XCTAssertEqual(try deterministic.snapshot.thermalState(at: p(1)).heat, 40)
+        XCTAssertEqual(try resident.snapshot.thermalState(at: p(1)).heat, 40)
+        XCTAssertFalse(try deterministic.snapshot.thermalState(at: p(1)).isBurning)
+        XCTAssertFalse(try resident.snapshot.thermalState(at: p(1)).isBurning)
+    }
+
+    func testColdPitchQuenchesOnFirstHeatAttempt() throws {
+        var s = Simulation(seed: 0)
+        try s.enqueue(.init(tick: 1, position: p(0), material: .fire))
+        try s.enqueue(.init(tick: 1, position: p(1), material: .pitch))
+        try s.advance()
+        try s.enqueue(.init(tick: 2, position: p(1, 1), material: .water))
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(1)), .zero)
+        XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .empty)
+        XCTAssertEqual(try s.snapshot.material(at: p(0)), .fire)
+    }
+
+    func testHeatQuenchConsumesOneWaterAndClaimsOnlyOneTarget() throws {
+        for source in [Material.fire, .pitch] {
+            var s = Simulation(seed: 0)
+            let frozen = ChunkRegion(x: 10...10, y: 10...10)
+            for (material, position) in [(source, p(0)), (.pitch, p(1)), (.pitch, p(0, 1)),
+                                         (.water, p(2)), (.water, p(1, 1)), (.solid, p(2, 1))] {
+                try s.enqueue(.init(tick: 1, position: position, material: material))
+            }
+            try s.advance(activeChunks: frozen)
+            if source == .pitch {
+                try s.setThermalState(.init(heat: 100, isBurning: true, burnElapsed: 1), at: p(0))
+            } else {
+                try s.setThermalState(.init(fireElapsed: 1), at: p(0))
+            }
+            try s.setThermalState(.init(heat: 40), at: p(1))
+            try s.advance()
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(1)), .zero)
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(0, 1)), .zero)
+            XCTAssertEqual(try s.snapshot.material(at: p(2)), .empty)
+            XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .water)
+            XCTAssertEqual(try s.snapshot.material(at: p(0)), source)
+        }
+    }
+
+    func testHeatQuenchCannotSeeWaterAcrossFrozenBoundary() throws {
+        var s = Simulation(seed: 0)
+        for (material, position) in [(Material.fire, p(62)), (.pitch, p(63)), (.water, p(64))] {
+            try s.enqueue(.init(tick: 1, position: position, material: material))
+        }
+        let active = ChunkRegion(x: 0...0, y: 0...0)
+        try s.advance(activeChunks: active)
+        try s.advance(activeChunks: active)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(63)).heat, 40)
+        XCTAssertEqual(try s.snapshot.material(at: p(64)), .water)
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(63)), .zero)
+        XCTAssertEqual(try s.snapshot.material(at: p(64)), .empty)
+    }
+
+    func testQuenchedTargetCannotBeClaimedBySecondFlame() throws {
+        var deterministic = Simulation(seed: 0)
+        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
+        for (material, position) in [(Material.fire, p(0)), (.pitch, p(1)), (.fire, p(2))] {
+            let command = SimulationCommand(tick: 1, position: position, material: material)
+            try deterministic.enqueue(command)
+            try resident.enqueue(command)
+        }
+        for _ in 0..<2 {
+            try deterministic.advance()
+            try resident.advance(focus: focus) { true }
+        }
+        let water = SimulationCommand(tick: 3, position: p(1, 1), material: .water)
+        try deterministic.enqueue(water)
+        try resident.enqueue(water)
+        try deterministic.advance()
+        try resident.advance(focus: focus) { true }
+        for state in [deterministic.snapshot.thermalState, resident.snapshot.thermalState] {
+            XCTAssertEqual(try state(p(1)), .zero)
+        }
+        for material in [deterministic.snapshot.material, resident.snapshot.material] {
+            XCTAssertEqual(try material(p(1, 1)), .empty)
+            XCTAssertEqual(try material(p(0)), .fire)
+            XCTAssertEqual(try material(p(2)), .fire)
+        }
+    }
+
+    func testHeatQuenchSeesWaterMovedEarlierInSameBatch() throws {
+        var deterministic = Simulation(seed: 0)
+        var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
+        let positions: [(Material, CellPosition)] = [
+            (.fire, p(15, 2)), (.pitch, p(16, 2)), (.water, p(17, 1)),
+            (.solid, p(16, 0)), (.solid, p(17, 0)), (.solid, p(18, 1))
+        ]
+        for (material, position) in positions {
+            let command = SimulationCommand(tick: 1, position: position, material: material)
+            try deterministic.enqueue(command)
+            try resident.enqueue(command)
+        }
+        try deterministic.advance(activeChunks: .init(x: 10...10, y: 10...10))
+        try resident.advance(focus: focus) { false }
+        try deterministic.setThermalState(.init(fireElapsed: 1), at: p(15, 2))
+        try resident.setThermalState(.init(fireElapsed: 1), at: p(15, 2))
+        try deterministic.setThermalState(.init(heat: 40), at: p(16, 2))
+        try resident.setThermalState(.init(heat: 40), at: p(16, 2))
+        try deterministic.advance()
+        try resident.advance(focus: p(15, 2), batchSize: 8) { true }
+        for material in [deterministic.snapshot.material, resident.snapshot.material] {
+            XCTAssertEqual(try material(p(17, 1)), .empty)
+            XCTAssertEqual(try material(p(16, 1)), .empty)
+        }
+        for state in [deterministic.snapshot.thermalState, resident.snapshot.thermalState] {
+            XCTAssertEqual(try state(p(16, 2)), .zero)
+        }
+    }
+
+    func testMultipleSourcesConflictAndCoolingOrdering() throws {
+        var s = Simulation(seed: 0)
+        for (m, position) in [(Material.fire, p(-1)), (.pitch, p(0)), (.fire, p(1))] {
+            try s.enqueue(.init(tick: 1, position: position, material: m))
+        }
+        try s.advance()
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0)).heat, 40)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(-1)).fireElapsed, 2)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(1)).fireElapsed, 2)
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0)).heat, 80)
+    }
+
+    func testBurnedSourceWaitsAndTransfersOnlyAfterDelay() throws {
+        var s = Simulation(seed: 0)
+        let frozen = ChunkRegion(x: 10...10, y: 10...10)
+        for (m, position) in [(Material.pitch, p(0)), (.pitch, p(1)), (.pitch, p(0, 1))] {
+            try s.enqueue(.init(tick: 1, position: position, material: m))
+        }
+        try s.advance(activeChunks: frozen)
+        try s.setThermalState(.init(heat: 100, isBurning: true), at: p(0))
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(1)).heat, 0)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0, 1)).heat, 0)
+        try s.advance()
+        let heats = try [p(1), p(0, 1)].map { try s.snapshot.thermalState(at: $0).heat }
+        XCTAssertEqual(heats.sorted(), [0, 40])
+    }
+
+    func testFrozenBoundaryAndCooling() throws {
+        var s = Simulation(seed: 0)
+        try s.enqueue(.init(tick: 1, position: p(63), material: .fire))
+        try s.enqueue(.init(tick: 1, position: p(64), material: .pitch))
+        for _ in 0..<8 { try s.advance(activeChunks: .init(x: 0...0, y: 0...0)) }
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(64)), .zero)
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(64)).heat, 40)
+        try s.enqueue(.init(tick: 10, position: p(63), material: .empty))
+        try s.advance()
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(64)).heat, 39)
+    }
+
+    func testResidentCrossBatchDeferredWakeAndNoDoubleUpdate() throws {
+        for (fireX, pitchX) in [(15, 16), (16, 15)] {
+            var s = try ResidentSimulation(seed: 0, chunkWidth: 16)
+            try s.enqueue(.init(tick: 1, position: p(fireX), material: .fire))
+            try s.enqueue(.init(tick: 1, position: p(pitchX), material: .pitch))
+            try s.advance(focus: p(fireX), batchSize: 1) { false }
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(fireX)), .zero)
+            for _ in 0..<20 { try s.advance(focus: p(fireX), batchSize: 1) { true } }
+            XCTAssertTrue(try s.snapshot.thermalState(at: p(pitchX)).isBurning)
+            XCTAssertLessThan(try s.snapshot.thermalState(at: p(pitchX)).burnElapsed, 20)
+            for _ in 0..<80 { try s.advance(focus: p(fireX), batchSize: 1) { true } }
+            XCTAssertEqual(try s.snapshot.material(at: p(pitchX)), .empty)
+        }
+    }
+
+    func testResidentCrossBatchHeatingWakesDeferredChunk() throws {
+        var s = try ResidentSimulation(seed: 0, chunkWidth: 16)
+        try s.enqueue(.init(tick: 1, position: p(15), material: .fire))
+        try s.enqueue(.init(tick: 1, position: p(16), material: .pitch))
+        try s.advance(focus: p(15), batchSize: 1) { true }
+        var starts = 0
+        try s.advance(focus: p(15), batchSize: 1) { starts += 1; return starts == 1 }
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(16)).heat, 40)
+        let before = try s.snapshot.thermalState(at: p(16))
+        try s.advance(focus: p(16), batchSize: 1) { false }
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(16)), before)
+        let report = try s.advance(focus: p(16), batchSize: 1) { true }
+        XCTAssertGreaterThan(report.chunksProcessed, 0)
+        XCTAssertGreaterThan(try s.snapshot.thermalState(at: p(16)).heat, 0)
+    }
+
+    func testResidentHeatQuenchAcrossDeferredBatchAndNoDoubleUpdate() throws {
+        for (fireX, pitchX) in [(15, 16), (16, 15)] {
+            var s = try ResidentSimulation(seed: 0, chunkWidth: 16)
+            for (material, position) in [(Material.fire, p(fireX)), (.pitch, p(pitchX))] {
+                try s.enqueue(.init(tick: 1, position: position, material: material))
+            }
+            try s.advance(focus: p(fireX), batchSize: 1) { true }
+            try s.advance(focus: p(fireX), batchSize: 1) { true }
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(pitchX)).heat, 40)
+            try s.enqueue(.init(tick: 3, position: p(pitchX, 1), material: .water))
+            var starts = 0
+            let report = try s.advance(focus: p(fireX), batchSize: 1) {
+                starts += 1
+                return starts == 1
+            }
+            XCTAssertEqual(report.chunksProcessed, 1)
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(pitchX)), .zero)
+            XCTAssertEqual(try s.snapshot.material(at: p(pitchX, 1)), .empty)
+            XCTAssertEqual(try s.snapshot.material(at: p(fireX)), .fire)
+            try s.advance(focus: p(pitchX), batchSize: 1) { true }
+            let after = try s.snapshot.thermalState(at: p(pitchX))
+            XCTAssertFalse(after.isBurning)
+            XCTAssertLessThanOrEqual(after.heat, 40)
+        }
+    }
+
+    func testResidentHeatQuenchAcrossBothBatchOrders() throws {
+        for fireFirst in [true, false] {
+            var s = try ResidentSimulation(seed: 0, chunkWidth: 16)
+            for (material, position) in [(Material.fire, p(15)), (.pitch, p(16))] {
+                try s.enqueue(.init(tick: 1, position: position, material: material))
+            }
+            try s.advance(focus: p(15), batchSize: 1) { true }
+            try s.advance(focus: p(15), batchSize: 1) { true }
+            try s.enqueue(.init(tick: 3, position: p(16, 1), material: .water))
+            let report = try s.advance(focus: fireFirst ? p(15) : p(16), batchSize: 1) { true }
+            XCTAssertEqual(report.batchesProcessed, 2)
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(16)), .zero)
+            XCTAssertEqual(try s.snapshot.material(at: p(16, 1)), .empty)
+            XCTAssertEqual(try s.snapshot.material(at: p(15)), .fire)
+        }
+    }
+
+    func testResidentCrossBatchIgnitionDoesNotAdvanceOrReigniteAfterQuench() throws {
+        for (fireX, pitchX) in [(15, 16), (16, 15)] {
+            var s = try ResidentSimulation(seed: 0, chunkWidth: 16)
+            try s.enqueue(.init(tick: 1, position: p(fireX), material: .fire))
+            try s.enqueue(.init(tick: 1, position: p(pitchX), material: .pitch))
+            try s.advance(focus: p(fireX)) { false }
+            try s.setThermalState(.init(fireElapsed: 1), at: p(fireX))
+            try s.setThermalState(.init(heat: 80), at: p(pitchX))
+            try s.advance(focus: p(fireX), batchSize: 1) { true }
+            let ignition = try s.snapshot.thermalState(at: p(pitchX))
+            XCTAssertTrue(ignition.isBurning)
+            XCTAssertEqual(ignition.burnElapsed, 0)
+            try s.enqueue(.init(tick: 3, position: p(pitchX, 1), material: .water))
+            try s.advance(focus: p(pitchX), batchSize: 1) { true }
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(pitchX)), .zero)
+            XCTAssertEqual(try s.snapshot.material(at: p(pitchX)), .pitch)
+        }
+    }
+
+    func testResidentSameBatchConflictHasStableSingleHeatClaim() throws {
+        func run() throws -> ResidentSnapshot {
+            var s = try ResidentSimulation(seed: 7, chunkWidth: 16)
+            for (material, position) in [(Material.fire, p(-1)), (.pitch, p(0)), (.fire, p(1))] {
+                try s.enqueue(.init(tick: 1, position: position, material: material))
+            }
+            try s.advance(focus: focus) { true }
+            try s.advance(focus: focus) { true }
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(0)).heat, 40)
+            return s.snapshot
+        }
+        let expected = try run()
+        for _ in 0..<4 { XCTAssertEqual(try run(), expected) }
+    }
+
+    func testResidentBranchSpreadAcrossChunks() throws {
+        var s = try ResidentSimulation(seed: 2, chunkWidth: 16)
+        let pitches = [p(15), p(16), p(17), p(16, 1), p(16, -1), p(18)]
+        try s.enqueue(.init(tick: 1, position: p(14), material: .fire))
+        for position in pitches { try s.enqueue(.init(tick: 1, position: position, material: .pitch)) }
+        var ignited = Set<CellPosition>()
+        for _ in 0..<250 {
+            try s.advance(focus: p(15), batchSize: 1) { true }
+            for position in pitches where try s.snapshot.thermalState(at: position).isBurning {
+                ignited.insert(position)
+            }
+        }
+        XCTAssertEqual(ignited, Set(pitches))
+        for position in pitches { XCTAssertEqual(try s.snapshot.material(at: position), .empty) }
+    }
+    func testPulseStillTreatsPitchAsBlocking() {
+        let obstacle = p(6, 2)
+        let trace = BeaconRun.tracePulse(from: p(0), facing: 1) { $0 == obstacle ? .pitch : .empty }
+        XCTAssertTrue(trace.cells.contains(obstacle))
+        XCTAssertFalse(trace.cells.contains(p(7, 2)))
+        XCTAssertTrue(trace.sand.isEmpty)
     }
 }

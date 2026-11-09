@@ -62,13 +62,14 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(pixel(), [131, 89, 173, 255])
         try run.paint(MaterialBrush.fire.material, at: .init(x: 6, y: 12))
         XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
-        try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
-        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .burningPitch)
+        for _ in 0..<4 { try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks) }
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
+        XCTAssertTrue(try run.simulation.snapshot.thermalState(at: p).isBurning)
         XCTAssertEqual(pixel(), [255, 186, 68, 255])
-        for _ in 0..<59 {
+        for _ in 0..<10 {
             try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
         }
-        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .burningPitch60)
+        XCTAssertTrue(try run.simulation.snapshot.thermalState(at: p).isBurning)
         XCTAssertEqual(pixel(), [255, 186, 68, 255])
         try run.paint(MaterialBrush.water.material, at: .init(x: 6, y: 14))
         try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)

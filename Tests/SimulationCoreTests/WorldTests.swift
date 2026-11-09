@@ -77,6 +77,8 @@ final class WorldTests: XCTestCase {
     func testFireExpiresWithoutWater() throws {
         var simulation = Simulation(seed: 0)
         try place(.fire, 0, 0, in: &simulation)
+        for _ in 0..<31 { try simulation.advance() }
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .fire)
         try simulation.advance()
         XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
     }
@@ -166,7 +168,8 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .fire)
         try simulation.advance()
         XCTAssertEqual(try cell(simulation.snapshot, 64, 9), .sand)
-        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .empty)
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .fire)
+        XCTAssertEqual(try simulation.snapshot.thermalState(at: .init(x: -1, y: 10)).fireElapsed, 1)
         XCTAssertEqual(try cell(first, 64, 10), .sand)
     }
 
@@ -180,7 +183,8 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(try cell(simulation.snapshot, 10, 0), .sand)
         XCTAssertEqual(try cell(simulation.snapshot, 10, -1), .empty)
         XCTAssertEqual(try cell(simulation.snapshot, 64, 10), .water)
-        XCTAssertEqual(try cell(simulation.snapshot, 63, 10), .empty)
+        XCTAssertEqual(try cell(simulation.snapshot, 63, 10), .fire)
+        XCTAssertEqual(try simulation.snapshot.thermalState(at: .init(x: 63, y: 10)).fireElapsed, 1)
     }
 
     func testFrozenChunksDoNotConsumeRandomNumbers() throws {
@@ -290,7 +294,7 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(try cell(first.snapshot, -1, -1), .sand)
         XCTAssertEqual(try cell(first.snapshot, 0, -1), .water)
         XCTAssertEqual(try cell(first.snapshot, 1, -1), .sand)
-        XCTAssertEqual(first.snapshot.digest, 9_325_503_850_943_149_782)
+        XCTAssertEqual(first.snapshot.digest, 10_877_365_639_965_846_776)
     }
 
     func testEquivalentWorldsIgnoreChunkInsertionOrder() throws {

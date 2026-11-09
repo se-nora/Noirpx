@@ -8,7 +8,7 @@ public enum FixturePixels {
 
     /// Counts chunks with at least one nonempty cell in the camera.
     public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport,
-                                 character: FixtureCharacter? = nil)
+                                 character: FixtureCharacter? = nil, challenge: BeaconRun? = nil)
         -> (pixels: [UInt8], renderedChunks: Int) {
         let width = viewport.columns
         let height = viewport.rows
@@ -35,6 +35,25 @@ public enum FixturePixels {
                 pixels[y * width + x] = color.littleEndian
             }
             if chunkVisible { renderedChunks += 1 }
+        }
+        if let challenge {
+            let markers = BeaconRun.beaconPositions.enumerated().compactMap { index, position in
+                challenge.collected[index] ? nil : position
+            }
+            for marker in markers + [BeaconRun.goalPosition] {
+                let color: UInt32 = marker == BeaconRun.goalPosition
+                    ? (challenge.collected.allSatisfy { $0 } ? 0xff70ec76 : 0xff727980)
+                    : 0xff50d8ff
+                for dy in 0..<BeaconRun.markerHeight {
+                    for dx in 0..<BeaconRun.markerWidth where dx == 0 || dx == BeaconRun.markerWidth - 1
+                        || dy == 0 || dy == BeaconRun.markerHeight - 1 {
+                        let x = marker.x + dx - viewport.center.x + width / 2
+                        let y = height / 2 - 1 - marker.y - dy + viewport.center.y
+                        guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                        pixels[y * width + x] = color.littleEndian
+                    }
+                }
+            }
         }
         if let character {
             for dy in 0..<FixtureCharacter.height {

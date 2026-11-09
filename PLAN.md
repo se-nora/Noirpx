@@ -236,12 +236,14 @@ than hiding the result. Simulator results do not replace device measurements.
 
 ### 4. Small playable vertical slice
 
-**First increment:** The deterministic fixture host now has a fixed-tick,
-5 × 9-cell character, rock and sand collision, three-cell step-up, jumping, Mac keyboard controls, and
-iPhone touch controls. It remains a diagnostic scene with a following camera;
-character state is not part of the material snapshot or digest. There is no
-level generation, damage, tool/weapon, goal, failure loop, or automatic respawn.
-See [INTERFACES.md](INTERFACES.md) for the provisional collision and input rules.
+**Current increment:** Beacon Run is an original fixed course with a gap, a
+sand pile, two collectible markers, a locked goal, fall failure and restart.
+Painting remains unrestricted and can change or bypass obstacles. The fixed-tick
+character and course state live in the platform-independent core; the material
+snapshot digest does not include them. There is no generation, damage, weapon,
+save or automatic respawn. See [INTERFACES.md](INTERFACES.md) for exact rules.
+Enjoyment, mobile readability, physical touch behavior and performance are not
+established by automated tests; milestone exit remains open.
 
 Add a controllable character, a compact generated level, basic collision and
 damage, one original tool/weapon, material interactions, a goal/failure loop,

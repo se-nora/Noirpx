@@ -21,8 +21,8 @@ private final class GameModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
-    @Published private(set) var character = FixtureCharacter()
-    private var simulation: Simulation?
+    @Published private(set) var challenge: BeaconRun?
+    var character: FixtureCharacter { challenge?.character ?? FixtureCharacter() }
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
@@ -37,13 +37,9 @@ private final class GameModel: ObservableObject {
 
     func restart() {
         do {
-            var fixture = try HeadlessFixture.make(seed: 42)
-            for x in -120...120 where !(-4...4).contains(x) {
-                try fixture.enqueue(.init(tick: 1, position: .init(x: x, y: -2), material: .solid))
-            }
-            simulation = fixture
-            snapshot = fixture.snapshot
-            character = FixtureCharacter()
+            let run = try BeaconRun()
+            challenge = run
+            snapshot = run.simulation.snapshot
             updateActiveChunks()
             clearControls()
             errorMessage = nil
@@ -52,10 +48,10 @@ private final class GameModel: ObservableObject {
             renderedChunks = nil
             renderGeneration += 1
         } catch {
-            simulation = nil
+            challenge = nil
             snapshot = nil
             renderedChunks = nil
-            errorMessage = "Could not create fixture: \(error)"
+            errorMessage = "Could not create challenge: \(error)"
         }
     }
 
@@ -111,39 +107,40 @@ private final class GameModel: ObservableObject {
     private func updateActiveChunks() {
         guard let drawableSize,
               let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                             center: character.cameraCenter) else { return }
+                                             center: character.cameraCenter, longEdgeCells: 200) else { return }
         activeChunks = viewport.activeChunks
     }
 
     func paint(_ position: CellPosition) {
-        guard simulation != nil, let snapshot, errorMessage == nil else { return }
-        if selectedMaterial.blocksCharacter && character.contains(position) { return }
+        guard var run = challenge, errorMessage == nil else { return }
         do {
-            let (tick, overflow) = snapshot.tick.addingReportingOverflow(1)
-            guard !overflow else { throw SimulationError.tickOverflow }
-            try simulation?.enqueue(.init(tick: tick, position: position, material: selectedMaterial))
+            try run.paint(selectedMaterial, at: position)
+            challenge = run
         } catch {
             errorMessage = "Could not apply input: \(error)"
         }
     }
 
     func update(at time: Double) {
-        guard simulation != nil, errorMessage == nil, activeChunks != nil else { return }
+        guard var run = challenge, run.outcome == .playing, errorMessage == nil, activeChunks != nil else { return }
         do {
             let steps = scheduler.steps(at: time)
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 guard let activeChunks else { return }
-                try simulation?.advance(activeChunks: activeChunks)
-                guard let completed = simulation?.snapshot else { return }
                 let heldHorizontal = (keyboard.right || touch.right ? 1 : 0)
                     - (keyboard.left || touch.left ? 1 : 0)
                 let horizontal = heldHorizontal == 0 ? accessibilityHorizontal : heldHorizontal
-                try character.advance(snapshot: completed, horizontal: horizontal, jump: pendingJump)
+                try run.advance(horizontal: horizontal, jump: pendingJump, activeChunks: activeChunks)
+                challenge = run
                 updateActiveChunks()
                 pendingJump = false
                 accessibilityHorizontal = 0
-                snapshot = completed
+                snapshot = run.simulation.snapshot
+                if run.outcome != .playing {
+                    clearControls()
+                    break
+                }
             }
         } catch {
             errorMessage = "Simulation stopped: \(error)"
@@ -170,6 +167,7 @@ private extension FixtureCharacter {
 private struct HostView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = GameModel()
+    @State private var showingDiagnostics = false
     private let timer = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
     private let device = MTLCreateSystemDefaultDevice()
 
@@ -184,6 +182,7 @@ private struct HostView: View {
                     device: device,
                     snapshot: snapshot,
                     character: model.character,
+                    challenge: model.challenge,
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },
@@ -199,12 +198,23 @@ private struct HostView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
-                Text("FPS  \(model.framesPerSecond, specifier: "%.1f")")
-                Text("Tick  \(model.snapshot?.tick ?? 0)")
-                Text("Chunks rendered  \(model.renderedChunks.map(String.init) ?? "unavailable")")
-                Text("Chunks allocated  \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
-                Text("Character  \(model.character.position.x), \(model.character.position.y)")
-                Button("Restart fixture") { model.restart() }
+                Text("BEACON RUN").fontWeight(.bold)
+                Text("Collect 2 amber beacons, then reach the green gate.")
+                Text("Jump the gap; erase or climb the sand.")
+                Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
+                if model.challenge?.outcome == .won {
+                    Text("You made it!").foregroundStyle(.green).fontWeight(.bold)
+                } else if model.challenge?.outcome == .fell {
+                    Text("You fell. Try again!").foregroundStyle(.orange).fontWeight(.bold)
+                }
+                HStack {
+                    Button("Restart") { model.restart() }
+                    Button("Diagnostics") {
+                        model.resetClock()
+                        showingDiagnostics = true
+                    }
+                    .accessibilityLabel("Show diagnostics")
+                }
                 HStack(spacing: 6) {
                     materialButton("Erase", material: .empty, key: "1")
                     materialButton("Rock", material: .solid, key: "2")
@@ -212,7 +222,7 @@ private struct HostView: View {
                     materialButton("Water", material: .water, key: "4")
                     materialButton("Fire", material: .fire, key: "5")
                 }
-                Text("Paint: click or touch and drag (keys 1–5)")
+                Text("Paint: drag; keys 1–5")
                 #if os(macOS)
                 Text("Move: A/D or arrows; jump: W, up or space")
                 #endif
@@ -248,6 +258,9 @@ private struct HostView: View {
                 model.update(at: ProcessInfo.processInfo.systemUptime)
             }
         }
+        .sheet(isPresented: $showingDiagnostics, onDismiss: { model.resetClock() }) {
+            DiagnosticsView(model: model, dismiss: { showingDiagnostics = false })
+        }
     }
 
     private func materialButton(_ title: String, material: SimulationCore.Material, key: KeyEquivalent) -> some View {
@@ -277,10 +290,35 @@ private struct HostView: View {
     #endif
 }
 
+private struct DiagnosticsView: View {
+    @ObservedObject var model: GameModel
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Diagnostics").font(.headline)
+            Text("Submitted FPS: \(model.framesPerSecond, specifier: "%.1f")")
+            Text("Tick: \(model.snapshot.map { String($0.tick) } ?? "unavailable")")
+            Text("Chunks rendered: \(model.renderedChunks.map(String.init) ?? "unavailable")")
+            Text("Chunks allocated: \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
+            if let character = model.challenge?.character {
+                Text("Character: \(character.position.x), \(character.position.y)")
+            } else {
+                Text("Character: unavailable")
+            }
+            Button("Done", action: dismiss)
+        }
+        .font(.system(.body, design: .monospaced))
+        .padding(24)
+        .frame(minWidth: 280, alignment: .leading)
+    }
+}
+
 private struct MetalSurface {
     let device: MTLDevice
     let snapshot: SimulationSnapshot
     let character: FixtureCharacter
+    let challenge: BeaconRun?
     let onFPS: (Double) -> Void
     let onRenderedChunks: (Int) -> Void
     let onError: (String) -> Void
@@ -289,7 +327,7 @@ private struct MetalSurface {
     let onKeyboard: (CharacterControls) -> Void
 
     func makeCoordinator() -> MetalRenderer {
-        MetalRenderer(device: device, snapshot: snapshot, character: character, onFPS: onFPS,
+        MetalRenderer(device: device, snapshot: snapshot, character: character, challenge: challenge, onFPS: onFPS,
                       onRenderedChunks: onRenderedChunks, onError: onError, onViewport: onViewport)
     }
 
@@ -374,6 +412,7 @@ extension MetalSurface: NSViewRepresentable {
     func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.challenge = challenge
         view.onPaint = onPaint
         view.onKeyboard = onKeyboard
         view.cameraCenter = character.cameraCenter
@@ -431,6 +470,7 @@ extension MetalSurface: UIViewRepresentable {
     func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.challenge = challenge
         view.onPaint = onPaint
         view.cameraCenter = character.cameraCenter
     }
@@ -441,7 +481,8 @@ private extension InputMetalView {
     func paintPoint(x: CGFloat, y: CGFloat) {
         guard bounds.width > 0, bounds.height > 0,
               let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
-                                             drawableHeight: Double(drawableSize.height), center: cameraCenter),
+                                             drawableHeight: Double(drawableSize.height), center: cameraCenter,
+                                             longEdgeCells: 200),
               let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
                                        y: Double(y / bounds.height * drawableSize.height)) else {
             lastCell = nil
@@ -472,14 +513,16 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private var frameCount = 0
     var snapshot: SimulationSnapshot
     var character: FixtureCharacter
+    var challenge: BeaconRun?
 
-    init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
+    init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter, challenge: BeaconRun?,
          onFPS: @escaping (Double) -> Void,
          onRenderedChunks: @escaping (Int) -> Void,
          onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void) {
         self.device = device
         self.snapshot = snapshot
         self.character = character
+        self.challenge = challenge
         self.onFPS = onFPS
         self.onRenderedChunks = onRenderedChunks
         self.onError = onError
@@ -506,7 +549,7 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
                                              drawableHeight: Double(view.drawableSize.height),
-                                             center: character.cameraCenter) else { return }
+                                             center: character.cameraCenter, longEdgeCells: 200) else { return }
         if lastDrawableSize != view.drawableSize {
             lastDrawableSize = view.drawableSize
             DispatchQueue.main.async { [onViewport] in onViewport(viewport) }
@@ -524,7 +567,8 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character)
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
+                                           challenge: challenge)
         frame.pixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,

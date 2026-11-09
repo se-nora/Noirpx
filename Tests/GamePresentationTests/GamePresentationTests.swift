@@ -3,6 +3,51 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testChallengeMarkersAndZoomedMapping() throws {
+        var run = try BeaconRun()
+        try run.advance(horizontal: 0, jump: false)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     longEdgeCells: 200))
+        XCTAssertEqual(viewport.columns, 200)
+        func pixel(_ position: CellPosition) -> [UInt8] {
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
+                                                character: run.character, challenge: run)
+            let offset = ((viewport.rows / 2 - 1 - position.y) * viewport.columns
+                          + position.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        XCTAssertEqual(pixel(BeaconRun.beaconPositions[0]), [255, 216, 80, 255])
+        let p = BeaconRun.beaconPositions[0]
+        XCTAssertEqual(viewport.cell(atX: (Double(p.x + viewport.columns / 2) + 0.5) * viewport.width / Double(viewport.columns),
+                                    y: (Double(viewport.rows / 2 - 1 - p.y) + 0.5) * viewport.height / Double(viewport.rows)), p)
+        XCTAssertNil(FixtureViewport(drawableWidth: 100, drawableHeight: 100, longEdgeCells: 0))
+        for _ in 0..<40 where !run.collected[0] {
+            try run.advance(horizontal: 1, jump: false)
+        }
+        XCTAssertTrue(run.collected[0])
+        XCTAssertNotEqual(pixel(p), [255, 216, 80, 255])
+    }
+
+    func testChallengeProgressAtDifferentDisplayRates() throws {
+        func play(rate: Int) throws -> BeaconRun {
+            var run = try BeaconRun()
+            var scheduler = FixedTickScheduler()
+            for frame in 0...rate * 2 {
+                for _ in 0..<scheduler.steps(at: Double(frame) / Double(rate)) {
+                    let tick = run.simulation.snapshot.tick
+                    try run.advance(horizontal: 1, jump: tick == 33 || tick == 62)
+                }
+            }
+            return run
+        }
+        let slow = try play(rate: 30)
+        let fast = try play(rate: 120)
+        XCTAssertEqual(slow.simulation.snapshot, fast.simulation.snapshot)
+        XCTAssertEqual(slow.character, fast.character)
+        XCTAssertEqual(slow.collected, fast.collected)
+        XCTAssertEqual(slow.outcome, fast.outcome)
+    }
+
     func testFollowingViewportMapsAndRendersShiftedWorld() throws {
         let center = CellPosition(x: -130, y: 95)
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810, center: center))

@@ -1,8 +1,8 @@
 # Noirpx
 
 Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
-It is not yet a complete game. The Apple app displays the deterministic fixture
-with Metal, advances it at a fixed tick rate, and includes a basic character.
+It is not yet a complete game. The Apple app offers Beacon Run, a small fixed
+challenge rendered with Metal and advanced at a fixed tick rate.
 The standalone core also has an opt-in parallel resident-world prototype,
 which is not connected to the app.
 
@@ -19,27 +19,37 @@ chunks, or its stable `digest`. Commands replace one material at a position on
 an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
-The app shows a view following the character with 509 simulation cells along the
-long edge of the drawable. A landscape Mac or iPhone therefore shows 509 cells
-across; in portrait, 509 cells are visible vertically. This shows approximately
-half the area of the earlier 720-cell-long-edge view. The other dimension follows
+In Beacon Run, collect both amber outlined beacons and touch the gate; it turns
+green when unlocked. Jump the gap and climb or erase the sand pile. Falling
+below the course ends the run; win and fall both freeze the world until Restart.
+The beacons and gate are nonphysical markers, not materials. They are collected
+by touching them with the character, in either order. The gate can be visited
+early, but only wins when both beacons have been collected and the character
+touches it again. There is no timer, damage, enemy, score, or save. Painting
+can bridge the gap or alter the course: this is an open-ended tool, not a
+restricted scoring challenge. Fire and water do not hurt the character.
+
+The app shows a view following the character with 200 simulation cells along the
+long edge of the drawable. The other dimension follows
 the drawable's aspect ratio, rounded to whole cells, so small margins may appear.
 Resizing and rotation update the view and brush mapping. Nearest-neighbor
 sampling keeps cells distinct, although non-integer display scaling can produce
-uneven pixel widths. Its overlay shows
-the app version, submitted render frames per second, completed simulation tick,
-chunks rendered and allocated, and character position. Rendered chunks contain at least one nonempty cell in the
-last submitted camera frame; allocated chunks are all nonempty chunks
-in the latest completed simulation snapshot, including frozen chunks. Physics
+uneven pixel widths. Physics
 updates chunks intersecting the camera and extends two viewport chunk widths
 beyond each visible edge (independently on each axis). More distant chunks stay
 resident but are frozen until the viewport's active region includes them again;
 they do not catch up on missed ticks. Physics cannot move or react across the
 active region boundary. Explicit commands still apply to frozen chunks. The
-renderer skips chunks outside the visible camera. Restart
-replays the fixture and character from tick zero. The initial fire is consumed on the first
-tick and the materials eventually settle; restart to see the motion again.
-This is a diagnostic scene, not a complete gameplay loop.
+renderer skips chunks outside the visible camera. Restart reconstructs the same
+seeded course and character from tick zero and discards queued edits.
+
+Open **Diagnostics** to see submitted FPS, completed tick, rendered and
+allocated chunk counts, and the character's lower-left position. Rendered
+chunks contain at least one nonempty cell in the last submitted camera frame;
+allocated chunks are all nonempty chunks in the latest completed simulation
+snapshot, including frozen chunks. These counts can refer to different ticks.
+The simulation continues while diagnostics are open; controls and the timing
+baseline reset when opening and closing the panel.
 
 Move with A/D or the left/right arrow keys and jump with W, up, or space on
 macOS. On iOS, hold the on-screen left and right controls and tap jump; movement
@@ -47,8 +57,7 @@ and jumping can be used together. The character is a 5 × 9-cell rectangle that
 collides with rock, sand, and world bounds, but not water or fire. It advances after
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), can jump only while grounded, and does not affect the
-materials. The app extends the fixture's rock floor from x = -120 to 120.
-The character can fall off the floor; restart to return. Painting rock or sand directly inside the character is
+materials. Painting rock or sand directly inside the character is
 ignored. A queued edit or moving sand can still overlap it: the character does
 not block material movement.
 
@@ -56,8 +65,7 @@ Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
 water, or fire; number keys 1–5 select them as well. Strokes are applied on the
 next simulation tick, and moving materials may immediately fall or react. Input
-outside the displayed scene is ignored. Restart clears edits and replays the
-fixture.
+outside the displayed scene is ignored. Painting is disabled after a win or fall.
 
 Sand and water cannot move diagonally past an occupied side cell. Sand can
 displace water into an empty side cell, or upward if both sides are occupied;

@@ -13,17 +13,19 @@ public struct FixtureViewport {
     public let center: CellPosition
 
     public init?(drawableWidth: Double, drawableHeight: Double,
-                 center: CellPosition = CellPosition(x: 0, y: 0)) {
+                 center: CellPosition = CellPosition(x: 0, y: 0),
+                 longEdgeCells: Int = Self.longEdgeCells) {
         guard drawableWidth.isFinite, drawableHeight.isFinite,
               drawableWidth > 0, drawableHeight > 0,
+              (1...Self.longEdgeCells).contains(longEdgeCells),
               Simulation.coordinateBounds.contains(center.x),
               Simulation.coordinateBounds.contains(center.y) else { return nil }
         self.center = center
         let longEdge = max(drawableWidth, drawableHeight)
         let shortEdgeCells = max(1, Int((min(drawableWidth, drawableHeight) / longEdge
-                                         * Double(Self.longEdgeCells)).rounded()))
-        columns = drawableWidth >= drawableHeight ? Self.longEdgeCells : shortEdgeCells
-        rows = drawableHeight >= drawableWidth ? Self.longEdgeCells : shortEdgeCells
+                                         * Double(longEdgeCells)).rounded()))
+        columns = drawableWidth >= drawableHeight ? longEdgeCells : shortEdgeCells
+        rows = drawableHeight >= drawableWidth ? longEdgeCells : shortEdgeCells
         let scale = min(drawableWidth / Double(columns), drawableHeight / Double(rows))
         width = Double(columns) * scale
         height = Double(rows) * scale

@@ -141,6 +141,20 @@ double updates, chunk/negative-coordinate boundaries, and repeatable state
 digests for fixed seeds and commands. An idle region must not change. Core tests
 run without a GPU or Apple UI.
 
+**Prototype decisions:** The single-owner implementation uses 16×16 chunks
+with row-major material identifiers and a bounded integer world. This is a
+simple testable starting point, not a measured performance choice. Commands,
+rule ordering, SplitMix64, full immutable snapshots, and the digest format are
+documented in [INTERFACES.md](INTERFACES.md). It scans allocated chunks on each
+tick; activity and dirty tracking, streaming, resource budgets, and GPU
+uploads are not implemented. Full snapshots make skipped revisions and chunk
+removal unambiguous but require memory and upload measurements.
+
+The contract is provisional and has not been agreed by separate core and
+renderer contributors. Their review remains necessary before dependent
+branches diverge; neither cross-device determinism nor target-device
+performance has been established.
+
 ### 2. Renderable world and platform hosts
 
 Create a Metal renderer that consumes published snapshots and renders a test

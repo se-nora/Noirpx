@@ -1,14 +1,22 @@
 # Noirpx
 
 Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
-It is not yet playable. The current Apple app displays a Metal clear color; the
-core only tracks a seed and tick count. There is no world, scheduler, input, or
-material rendering yet.
+It is not yet playable. The current Apple app displays a Metal clear color.
+The standalone core has a deterministic chunked material prototype and a
+headless fixture; the app has no scheduler, input, or material rendering yet.
 
 - [Development plan](PLAN.md) records decisions and milestones.
-- [Initial interface contracts](INTERFACES.md) distinguish implemented APIs
+- [Interface contracts](INTERFACES.md) distinguish implemented APIs
   from agreements needed by future work.
 - [Agent instructions](AGENTS.md) define collaboration and integration.
+
+## Headless prototype
+
+`HeadlessFixture.make(seed:)` creates a simulation with a small scene queued for
+tick 1. Call `advance()` to complete each tick, then inspect `snapshot`, its
+chunks, or its stable `digest`. Commands replace one material at a position on
+an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
+world limits, snapshot ownership, digest format, and prototype limitations.
 
 ## Toolchain and targets
 

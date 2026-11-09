@@ -1,0 +1,211 @@
+import XCTest
+import SimulationCore
+
+final class WorldTests: XCTestCase {
+    private func place(
+        _ material: Material, _ x: Int, _ y: Int, tick: UInt64 = 1, in simulation: inout Simulation
+    ) throws {
+        try simulation.enqueue(SimulationCommand(
+            tick: tick, position: CellPosition(x: x, y: y), material: material
+        ))
+    }
+
+    private func cell(_ snapshot: SimulationSnapshot, _ x: Int, _ y: Int) throws -> Material {
+        try snapshot.material(at: CellPosition(x: x, y: y))
+    }
+
+    func testSandFallsOnlyOneCellAndSnapshotsRemainImmutable() throws {
+        var simulation = Simulation(seed: 1)
+        try place(.sand, 0, 1, in: &simulation)
+        try simulation.advance()
+        let first = simulation.snapshot
+        XCTAssertEqual(try cell(first, 0, 0), .sand)
+        XCTAssertEqual(try cell(first, 0, -1), .empty)
+        try simulation.advance()
+        XCTAssertEqual(try cell(first, 0, 0), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, 0, -1), .sand)
+    }
+
+    func testWaterFlowsSidewaysWhenDownwardPathsAreBlocked() throws {
+        var simulation = Simulation(seed: 1)
+        for x in -1...1 { try place(.solid, x, -1, in: &simulation) }
+        try place(.water, 0, 0, in: &simulation)
+        try simulation.advance()
+        let result = simulation.snapshot
+        XCTAssertEqual(try cell(result, 0, 0), .empty)
+        let sides = try [cell(result, -1, 0), cell(result, 1, 0)]
+        XCTAssertEqual(sides.filter { $0 == .water }.count, 1)
+    }
+
+    func testSeedControlsDiagonalPreference() throws {
+        var left = Simulation(seed: 0)
+        var right = Simulation(seed: 2)
+        try place(.solid, 0, 0, in: &left)
+        try place(.sand, 0, 1, in: &left)
+        try place(.solid, 0, 0, in: &right)
+        try place(.sand, 0, 1, in: &right)
+        try left.advance()
+        try right.advance()
+        XCTAssertEqual(try cell(left.snapshot, 1, 0), .sand)
+        XCTAssertEqual(try cell(right.snapshot, -1, 0), .sand)
+    }
+
+    func testConflictingSandMovesAreResolvedInCoordinateOrder() throws {
+        var simulation = Simulation(seed: 4)
+        for x in [-2, -1, 1, 2] { try place(.solid, x, 0, in: &simulation) }
+        try place(.sand, -1, 1, in: &simulation)
+        try place(.sand, 1, 1, in: &simulation)
+        try simulation.advance()
+        let result = simulation.snapshot
+        XCTAssertEqual(try cell(result, 0, 0), .sand)
+        XCTAssertEqual(try cell(result, -1, 1), .empty)
+        XCTAssertEqual(try cell(result, 1, 1), .sand)
+    }
+
+    func testFireConsumesOneAdjacentWaterAndExpires() throws {
+        var simulation = Simulation(seed: 3)
+        // The water is blocked until the fire reaches it.
+        for x in -1...1 { try place(.solid, x, -1, in: &simulation) }
+        try place(.solid, -1, 0, in: &simulation)
+        try place(.water, 0, 0, in: &simulation)
+        try place(.fire, 1, 0, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .empty)
+        XCTAssertEqual(try cell(simulation.snapshot, 1, 0), .empty)
+    }
+
+    func testFireExpiresWithoutWater() throws {
+        var simulation = Simulation(seed: 0)
+        try place(.fire, 0, 0, in: &simulation)
+        try simulation.advance()
+        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+    }
+
+    func testFireConsumesOnlyFirstWaterInPriorityOrder() throws {
+        var simulation = Simulation(seed: 0)
+        // The lower water cannot escape before the fire acts.
+        for x in -1...1 { try place(.solid, x, -2, in: &simulation) }
+        try place(.solid, -1, -1, in: &simulation)
+        try place(.solid, 1, -1, in: &simulation)
+        try place(.water, 0, -1, in: &simulation)
+        try place(.fire, 0, 0, in: &simulation)
+        try place(.water, 0, 1, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, 0, -1), .empty)
+        // The surviving upper water falls into the fire's vacated cell.
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .water)
+    }
+
+    func testNegativeChunkBoundariesAndRemoval() throws {
+        var simulation = Simulation(seed: 0)
+        for x in [-17, -16, -1, 0, 15, 16] {
+            try place(.solid, x, -1, in: &simulation)
+        }
+        try simulation.advance()
+        let previous = simulation.snapshot
+        XCTAssertEqual(previous.chunks.map { $0.position.x }, [-2, -1, 0, 1])
+        XCTAssertEqual(previous.chunks.map { $0.position.y }, [-1, -1, -1, -1])
+        for x in [-17, -16, -1, 0, 15, 16] {
+            XCTAssertEqual(try cell(previous, x, -1), .solid)
+            try place(.empty, x, -1, tick: 2, in: &simulation)
+        }
+        try simulation.advance()
+        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+        XCTAssertEqual(try cell(previous, -17, -1), .solid)
+    }
+
+    func testMovementAcrossChunkEdge() throws {
+        var simulation = Simulation(seed: 0)
+        try place(.sand, -16, 0, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, -16, -1), .sand)
+        XCTAssertEqual(simulation.snapshot.chunks.first?.position.y, -1)
+    }
+
+    func testDiagonalMovementAcrossNegativeChunkEdge() throws {
+        var simulation = Simulation(seed: 2)
+        try place(.solid, -16, -16, in: &simulation)
+        try place(.sand, -16, -15, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, -17, -16), .sand)
+    }
+
+    func testWorldBoundaryIsImpassableAndInvalidCommandsAreRejected() throws {
+        var simulation = Simulation(seed: 0)
+        let lower = Simulation.coordinateBounds.lowerBound
+        try place(.sand, lower, lower, in: &simulation)
+        try place(.solid, lower + 1, lower, in: &simulation)
+        XCTAssertThrowsError(try place(.solid, lower - 1, 0, in: &simulation)) {
+            XCTAssertEqual($0 as? SimulationError, .positionOutOfBounds(CellPosition(x: lower - 1, y: 0)))
+        }
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, lower, lower), .sand)
+        XCTAssertThrowsError(try place(.solid, 0, 0, tick: 1, in: &simulation)) {
+            XCTAssertEqual($0 as? SimulationError, .commandTickNotInFuture)
+        }
+        XCTAssertThrowsError(try cell(simulation.snapshot, Int.max, 0))
+    }
+
+    func testCommandsApplyInEnqueueOrderAndAtTheirTicks() throws {
+        var simulation = Simulation(seed: 0)
+        try place(.solid, 0, 0, tick: 2, in: &simulation)
+        try place(.solid, 1, 0, in: &simulation)
+        try place(.empty, 1, 0, in: &simulation)
+        try simulation.advance()
+        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .solid)
+    }
+
+    func testIdleRegionDoesNotChange() throws {
+        var simulation = Simulation(seed: 9)
+        try place(.solid, -16, 16, in: &simulation)
+        try simulation.advance()
+        let before = simulation.snapshot
+        for _ in 0..<4 { try simulation.advance() }
+        XCTAssertEqual(simulation.snapshot.chunks, before.chunks)
+        XCTAssertEqual(simulation.snapshot.randomState, before.randomState)
+    }
+
+    func testIdleChunkDoesNotChangeWhileAnotherChunkIsActive() throws {
+        var simulation = Simulation(seed: 9)
+        try place(.solid, 100, 100, in: &simulation)
+        try place(.sand, 0, 0, in: &simulation)
+        try simulation.advance()
+        let before = simulation.snapshot.chunks.first { $0.position.x == 6 && $0.position.y == 6 }
+        XCTAssertNotNil(before)
+        for _ in 0..<4 { try simulation.advance() }
+        let after = simulation.snapshot.chunks.first { $0.position.x == 6 && $0.position.y == 6 }
+        XCTAssertEqual(before, after)
+    }
+
+    func testFixtureReplayAndGoldenDigest() throws {
+        var first = try HeadlessFixture.make(seed: 42)
+        var second = try HeadlessFixture.make(seed: 42)
+        for _ in 0..<10 {
+            try first.advance()
+            try second.advance()
+            XCTAssertEqual(first.snapshot, second.snapshot)
+            XCTAssertEqual(first.snapshot.digest, second.snapshot.digest)
+        }
+        XCTAssertEqual(first.snapshot.digest, 3_106_953_574_103_584_285)
+    }
+
+    func testEquivalentWorldsIgnoreChunkInsertionOrder() throws {
+        var first = Simulation(seed: 17)
+        var second = Simulation(seed: 17)
+        let positions = [CellPosition(x: -17, y: 1), CellPosition(x: 16, y: 1)]
+        for position in positions {
+            try first.enqueue(SimulationCommand(tick: 1, position: position, material: .sand))
+        }
+        for position in positions.reversed() {
+            try second.enqueue(SimulationCommand(tick: 1, position: position, material: .sand))
+        }
+        for _ in 0..<4 {
+            try first.advance()
+            try second.advance()
+            XCTAssertEqual(first.snapshot, second.snapshot)
+            XCTAssertEqual(first.snapshot.digest, second.snapshot.digest)
+        }
+    }
+}

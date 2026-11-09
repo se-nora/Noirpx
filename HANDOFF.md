@@ -14,13 +14,13 @@ deadline. See [INTERFACES.md](INTERFACES.md) and [PLAN.md](PLAN.md) for precise
 semantics, unchosen budget, memory limits, and benchmark results. Independent
 core/renderer review remains open, not claimed as completed.
 
-On the development Mac, the core build, full test suite, Debug macOS and iOS
-Simulator builds, focused Thread Sanitizer tests, and the optional Release
-microbenchmark passed. The optional benchmark is skipped by default. Xcode
-emitted a Simulator placeholder OS-version warning. No physical-device,
-dense-world, sustained performance, rendering, or real-host deadline tests
-were performed. Inspect the current branch and integration state before
-continuing; rerun affected checks after integration.
+The resident-world prototype was merged to `main`. After integration on the
+development Mac, the core build and full suite passed (30 tests; the optional
+benchmark was skipped), as did Debug macOS and iOS Simulator builds. Focused
+Thread Sanitizer tests and the optional Release microbenchmark passed before
+integration. Xcode emitted a Simulator placeholder OS-version warning. No
+physical-device, dense-world, sustained performance, rendering, or real-host
+deadline tests were performed.
 
 The remaining sections describe earlier handoffs and are historical.
 

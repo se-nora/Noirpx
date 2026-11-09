@@ -45,6 +45,10 @@
 - Follow the repository's existing patterns and the milestone acceptance
   criteria. Prefer small, testable changes and add focused tests for behavior,
   boundaries, deterministic replay, and regressions as relevant.
+- For each implementation iteration, increment the app's minor marketing
+  version once before building (for example, 0.1.0 becomes 0.2.0), resetting
+  the patch component to zero. Keep `MARKETING_VERSION` consistent across
+  the app's Debug and Release build configurations.
 - After each implementation iteration, build the app and install and launch it
   on the connected physical iPhone, in addition to the applicable automated
   checks. Use the signing and device setup in [README.md](README.md). Report

@@ -168,15 +168,17 @@ and after every character tick, independently of display callbacks;
 the simulation waits for a valid viewport before ticking. Rendering skips chunks
 outside the visible rectangle. Frozen chunks remain in complete snapshots.
 
-The overlay shows instructions, beacon count, outcome, restart, and a
+The overlay shows instructions, seed, beacon count, outcome, Restart, New Run, and a
 Diagnostics button. Its panel reports submitted FPS, completed tick, rendered
 and allocated chunk counts, and the character's lower-left position. Rendered
 counts are from the last submitted camera frame; allocated counts are from the
 latest completed snapshot, so they can refer to different ticks. The simulation
 continues while the panel is open; controls and the scheduler baseline reset on
-opening and closing it. Restart
-creates a fresh seeded run at tick zero, clears controls and pending edits, and
-resets the scheduler. The material brush maps mouse or single-touch strokes through the same
+opening and closing it. Restart recreates the current seed; New Run adds
+`0x9e3779b97f4a7c15` modulo 2^64 to it (initial seed 42). Both create a
+fresh run at tick zero, clear controls and pending edits, reset the scheduler
+and refresh the renderer. The sequence is local, with no seed entry or save.
+The material brush maps mouse or single-touch strokes through the same
 following drawable viewport as the renderer, ignores letterboxing and cells
 outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water or
 fire (also via keys 1–5); each cell replacement is enqueued in event order for
@@ -198,27 +200,50 @@ on lifecycle changes and window focus loss. Painting rock or sand inside the
 character is ignored, but an earlier queued edit or moving sand can overlap it;
 edge-only collision permits it to leave such an overlap.
 
-`BeaconRun` owns the simulation, character, health, vent, two collected flags and outcome.
-At tick 1 it installs a rock floor x=-40...150 at y=-2 except the 36...47
-gap, a 3-cell-high step at x=14...18, and sand x=65...70, y=-1...14.
+`BeaconRun` owns the seed, immutable `BeaconCourse`, simulation, character,
+health, vent, two collected flags and outcome. Generation uses fixed UInt64
+wrapping arithmetic and a SplitMix64 finalizer, independently choosing each
+bounded feature; it never consults time, retries or platform APIs. Specifically,
+choice i is `(mix(seed &+ i) ^ mix(42 &+ i)) % count`, with mix defined in
+`BeaconCourse`. Seeds may map to the same layout; seed 42 preserves the original
+fixture positions. The deprecated public `BeaconRun.beaconPositions`,
+`BeaconRun.goalPosition`, and `BeaconRun.ventX` constants retain their original
+fixed-course values for source compatibility. They match seed 42 but must not be
+used to locate fixtures for arbitrary seeds; use the corresponding fields of
+`run.course`. Gameplay and rendering use that generated course, not the legacy
+constants. At tick 1 it installs a rock floor x=-40...160 at y=-2
+except a gap starting at 36...40 of width 10...12, a 3-cell-high, 5-cell-wide
+step starting at 14...16, and 6-cell-wide sand starting at 65...69, from y=-1
+through y=14...16.
+
+The first beacon is at x=22...25, the second at x=92...97, both at y=0.
+The seven-cell-wide vent starts at x=123...128; the gate begins immediately
+after it. These separated ranges leave stable floor before and after the gap,
+keep the low step climbable, keep sand away from the gap and markers, and
+provide an unobstructed route past the vent. A grounded jump from five cells
+before the gap crosses every allowed width; moving right while pulsing after
+the gap can clear the sand without painting, and crossing the vent normally
+costs at most one of three health. These are constraints on unedited generated
+courses, not guarantees after painting or a general reachability proof.
+The finite generator does not reject or repair layouts.
 Materials update before the character. After movement, a lower-left character
 y of -20 or below loses, taking precedence over damage and marker checks. Otherwise,
 the vent and health rules below run before marker checks; lethal damage also
 takes precedence over a simultaneous goal. If alive,
-overlap of the 5 × 9 body with each 5 × 12 marker at (22, 0) and (92, 0)
-collects it. Overlap with the gate at (130, 0) wins only once both flags are
+overlap of the 5 × 9 body with each generated 5 × 12 marker collects it.
+Overlap with the generated gate wins only once both flags are
 set; visiting early does not automatically win later. Markers are not cells and
 cannot be painted away. The renderer draws uncollected amber outlines and a
 gray locked or green unlocked gate over materials, then the character. A win
 or failure freezes ticks and ignores paint until restart. Brushes otherwise remain
 unrestricted, so players can bridge or erase obstacles.
 
-The original heat vent is a non-material course fixture occupying x=123...129,
-y=0...6, just before the gate. Its striped red area is hot; blue means cooled.
+The heat vent is a non-material course fixture occupying the generated vent x
+range and y=0...6, just before the gate. Its striped red area is hot; blue means cooled.
 Its contact rectangle uses inclusive cells against the character's half-open
 body rectangle; touching only an edge is not contact. It can be jumped over.
 After material physics and character movement on each playing tick, the vent
-samples post-physics water in x=123...129, y=-1...3. The sensor includes the
+samples post-physics water in the generated vent x range, y=-1...3. The sensor includes the
 space immediately above the floor, so water painted on the visible base at
 y=0 can fall to y=-1 and still cool it. Any water there resets
 cooling to 120 ticks without consuming the water; otherwise the cooling timer
@@ -262,7 +287,7 @@ cells, including hits, lasts four gameplay ticks (the firing tick included);
 the renderer only reads it. Restart recreates the initial facing, cooldown and
 empty flash.
 
-Character, health, vent, pulse and progression state and queued input are separate from
+Course layout, character, health, vent, pulse and progression state and queued input are separate from
 `SimulationSnapshot` and its digest, so the digest does not represent a
 complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance

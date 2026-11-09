@@ -38,7 +38,7 @@ public enum FixturePixels {
         }
         if let challenge {
             for worldY in BeaconRun.ventY {
-                for worldX in BeaconRun.ventX where worldY == BeaconRun.ventY.lowerBound
+                for worldX in challenge.course.ventX where worldY == BeaconRun.ventY.lowerBound
                     || worldY == BeaconRun.ventY.upperBound || (worldX + worldY) % 4 == 0 {
                     let x = worldX - viewport.center.x + width / 2
                     let y = height / 2 - 1 - worldY + viewport.center.y
@@ -47,11 +47,11 @@ public enum FixturePixels {
                     pixels[y * width + x] = color.littleEndian
                 }
             }
-            let markers = BeaconRun.beaconPositions.enumerated().compactMap { index, position in
+            let markers = challenge.course.beacons.enumerated().compactMap { index, position in
                 challenge.collected[index] ? nil : position
             }
-            for marker in markers + [BeaconRun.goalPosition] {
-                let color: UInt32 = marker == BeaconRun.goalPosition
+            for marker in markers + [challenge.course.goal] {
+                let color: UInt32 = marker == challenge.course.goal
                     ? (challenge.collected.allSatisfy { $0 } ? 0xff70ec76 : 0xff727980)
                     : 0xff50d8ff
                 for dy in 0..<BeaconRun.markerHeight {

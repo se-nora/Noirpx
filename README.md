@@ -1,7 +1,7 @@
 # Noirpx
 
 Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
-It is not yet a complete game. The Apple app offers Beacon Run, a small fixed
+It is not yet a complete game. The Apple app offers Beacon Run, a small seeded
 challenge rendered with Metal and advanced at a fixed tick rate.
 The standalone core also has an opt-in parallel resident-world prototype,
 which is not connected to the app.
@@ -45,8 +45,12 @@ beyond each visible edge (independently on each axis). More distant chunks stay
 resident but are frozen until the viewport's active region includes them again;
 they do not catch up on missed ticks. Physics cannot move or react across the
 active region boundary. Explicit commands still apply to frozen chunks. The
-renderer skips chunks outside the visible camera. Restart reconstructs the same
-seeded course and character from tick zero and discards queued edits.
+renderer skips chunks outside the visible camera. The HUD displays the run seed.
+Restart reconstructs that same course and character from tick zero and discards
+queued edits; New Run deterministically advances the seed and starts another
+course. The course varies obstacle positions, gap width, sand height, objectives
+and vent placement within a tested, finishable route. Seeds can yield the same
+layout; the seed still affects material physics. There is no seed entry or save.
 
 Open **Diagnostics** to see submitted FPS, completed tick, rendered and
 allocated chunk counts, and the character's lower-left position. Rendered

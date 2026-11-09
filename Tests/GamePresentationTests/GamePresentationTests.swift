@@ -3,12 +3,63 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testGeneratedFixturesRenderAtGameplayPositions() throws {
+        let initial = BeaconCourse(seed: 42)
+        let seed = try XCTUnwrap((0..<100).map(UInt64.init).first {
+            let course = BeaconCourse(seed: $0)
+            return course.ventX.lowerBound > initial.ventX.lowerBound
+                && course.beacons[0] != initial.beacons[0]
+                && course.goal != initial.goal
+        })
+        var run = try BeaconRun(seed: seed)
+        try run.advance(horizontal: 0, jump: false)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 80, y: 0), longEdgeCells: 200))
+        func pixel(_ p: CellPosition) -> [UInt8] {
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
+                                                character: run.character, challenge: run)
+            let offset = ((viewport.rows / 2 - 1 - p.y + viewport.center.y) * viewport.columns
+                          + p.x - viewport.center.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        XCTAssertEqual(pixel(run.course.beacons[0]), [255, 216, 80, 255])
+        XCTAssertEqual(pixel(run.course.goal), [128, 121, 114, 255])
+        let vent = CellPosition(x: run.course.ventX.lowerBound, y: BeaconRun.ventY.upperBound)
+        XCTAssertEqual(pixel(.init(x: run.course.ventX.upperBound, y: BeaconRun.ventY.upperBound)),
+                       [255, 105, 61, 255])
+        XCTAssertNotEqual(pixel(.init(x: initial.ventX.lowerBound, y: BeaconRun.ventY.upperBound)),
+                          [255, 105, 61, 255])
+        try run.paint(.water, at: .init(x: run.course.ventX.lowerBound, y: 0))
+        try run.advance(horizontal: 0, jump: false)
+        XCTAssertGreaterThan(run.ventCooling, 0)
+        XCTAssertEqual(pixel(vent), [91, 196, 230, 255])
+        // A fresh run reaches the generated markers and hot vent without painting.
+        run = try BeaconRun(seed: seed)
+        var jumped = false
+        for _ in 0..<300 where !run.collected[1] && run.outcome == .playing {
+            let x = run.character.position.x
+            let jump = !jumped && x >= run.course.gap.lowerBound - 5 && run.character.grounded
+            if jump { jumped = true }
+            try run.advance(horizontal: 1, jump: jump, pulse: x > run.course.gap.upperBound)
+        }
+        XCTAssertEqual(run.collected, [true, true])
+        XCTAssertNotEqual(pixel(run.course.beacons[0]), [255, 216, 80, 255])
+        XCTAssertEqual(pixel(run.course.goal), [118, 236, 112, 255])
+        while run.health == BeaconRun.maximumHealth && run.outcome == .playing {
+            try run.advance(horizontal: 1, jump: false)
+        }
+        XCTAssertEqual(run.character.position.x, run.course.ventX.lowerBound - FixtureCharacter.width + 1)
+        XCTAssertEqual(run.health, BeaconRun.maximumHealth - 1)
+        XCTAssertEqual(pixel(.init(x: run.course.ventX.upperBound, y: BeaconRun.ventY.upperBound)),
+                       [255, 105, 61, 255])
+    }
+
     func testVentRasterReflectsCoolingWithoutMutatingSimulation() throws {
         var run = try BeaconRun()
         try run.advance(horizontal: 0, jump: false)
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
                                                      center: .init(x: 100, y: 0), longEdgeCells: 200))
-        let position = CellPosition(x: BeaconRun.ventX.lowerBound, y: BeaconRun.ventY.upperBound)
+        let position = CellPosition(x: run.course.ventX.lowerBound, y: BeaconRun.ventY.upperBound)
         func pixel() -> [UInt8] {
             let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
                                                 character: run.character, challenge: run)
@@ -78,8 +129,8 @@ final class GamePresentationTests: XCTestCase {
                           + position.x + viewport.columns / 2) * 4
             return Array(frame.pixels[offset..<offset + 4])
         }
-        XCTAssertEqual(pixel(BeaconRun.beaconPositions[0]), [255, 216, 80, 255])
-        let p = BeaconRun.beaconPositions[0]
+        XCTAssertEqual(pixel(run.course.beacons[0]), [255, 216, 80, 255])
+        let p = run.course.beacons[0]
         XCTAssertEqual(viewport.cell(atX: (Double(p.x + viewport.columns / 2) + 0.5) * viewport.width / Double(viewport.columns),
                                     y: (Double(viewport.rows / 2 - 1 - p.y) + 0.5) * viewport.height / Double(viewport.rows)), p)
         XCTAssertNil(FixtureViewport(drawableWidth: 100, drawableHeight: 100, longEdgeCells: 0))

@@ -27,14 +27,23 @@ private final class GameModel: ObservableObject {
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
     private var input = GameplayInput()
+    private var session = BeaconRunSession()
 
     init() {
         restart()
     }
 
     func restart() {
+        startRun(newSeed: false)
+    }
+
+    func newRun() {
+        startRun(newSeed: true)
+    }
+
+    private func startRun(newSeed: Bool) {
         do {
-            let run = try BeaconRun()
+            let run = try newSeed ? session.newRun() : session.restart()
             challenge = run
             snapshot = run.simulation.snapshot
             updateActiveChunks()
@@ -163,6 +172,7 @@ private struct HostView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
                 Text("BEACON RUN").fontWeight(.bold)
+                Text("Seed \(model.challenge?.seed ?? 0)  •  Restart replays; New Run changes course")
                 Text("Collect 2 amber beacons, then reach the green gate.")
                 Text("Jump the gap; pulse through sand.")
                 Text("Red vent: jump or paint water at base (blue = cool).")
@@ -181,6 +191,7 @@ private struct HostView: View {
                 }
                 HStack {
                     Button("Restart") { model.restart() }
+                    Button("New Run") { model.newRun() }
                     Button("Diagnostics") {
                         model.resetClock()
                         showingDiagnostics = true

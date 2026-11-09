@@ -18,14 +18,15 @@ final class BeaconHazardTests: XCTestCase {
         return run
     }
 
-    func testVentContactUsesHalfOpenBodyBoundaries() {
-        XCTAssertFalse(BeaconRun.touchesVent(.init(x: 118, y: 0)))
-        XCTAssertTrue(BeaconRun.touchesVent(.init(x: 119, y: 0)))
-        XCTAssertTrue(BeaconRun.touchesVent(.init(x: 129, y: 6)))
-        XCTAssertFalse(BeaconRun.touchesVent(.init(x: 130, y: 0)))
-        XCTAssertFalse(BeaconRun.touchesVent(.init(x: 123, y: 7)))
-        XCTAssertFalse(BeaconRun.touchesVent(.init(x: 123, y: -9)))
-        XCTAssertTrue(BeaconRun.touchesVent(.init(x: 123, y: -8)))
+    func testVentContactUsesHalfOpenBodyBoundaries() throws {
+        let run = try BeaconRun()
+        XCTAssertFalse(run.touchesVent(.init(x: 118, y: 0)))
+        XCTAssertTrue(run.touchesVent(.init(x: 119, y: 0)))
+        XCTAssertTrue(run.touchesVent(.init(x: 129, y: 6)))
+        XCTAssertFalse(run.touchesVent(.init(x: 130, y: 0)))
+        XCTAssertFalse(run.touchesVent(.init(x: 123, y: 7)))
+        XCTAssertFalse(run.touchesVent(.init(x: 123, y: -9)))
+        XCTAssertTrue(run.touchesVent(.init(x: 123, y: -8)))
     }
 
     func testDamageCadenceAndFailureBeatsGoalAndPulse() throws {
@@ -68,13 +69,13 @@ final class BeaconHazardTests: XCTestCase {
         try run.advance(horizontal: 0, jump: false)
         XCTAssertEqual(run.ventCooling, BeaconRun.ventCoolingTicks)
         let snapshot = run.simulation.snapshot
-        XCTAssertTrue(BeaconRun.ventX.contains { x in
+        XCTAssertTrue(run.course.ventX.contains { x in
             BeaconRun.ventSensorY.contains { y in
                 (try? snapshot.material(at: .init(x: x, y: y))) == .water
             }
         })
         // Erase all water in the sensor and freeze physics, so no water can re-enter it.
-        for x in BeaconRun.ventX {
+        for x in run.course.ventX {
             for y in BeaconRun.ventSensorY { try run.paint(.empty, at: .init(x: x, y: y)) }
         }
         for _ in 1..<BeaconRun.ventCoolingTicks {

@@ -186,7 +186,10 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 fixed 32 × 18-cell camera with a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
 version and the absence of a character; the fixture can be restarted. The
-renderer rebuilds a small texture per frame from a complete snapshot. This is
+overlay also selects a material brush; mouse and touch strokes enqueue cell
+replacements for the next deterministic tick. This is diagnostic interaction,
+not character controls. The renderer rebuilds a small texture per frame from a
+complete snapshot. This is
 not the planned 480 × 270 resident viewport, a movable camera, gameplay input,
 or a performance-validated renderer. Independent contract review, resident
 mode integration, physical-device validation and the remaining exit criteria

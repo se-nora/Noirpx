@@ -19,6 +19,7 @@ private final class GameModel: ObservableObject {
     @Published var framesPerSecond: Double = 0
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
+    @Published var selectedMaterial: SimulationCore.Material = .sand
     private var simulation: Simulation?
     private var scheduler = FixedTickScheduler()
 
@@ -45,6 +46,17 @@ private final class GameModel: ObservableObject {
     func resetClock() {
         scheduler.reset()
         framesPerSecond = 0
+    }
+
+    func paint(_ position: CellPosition) {
+        guard simulation != nil, let snapshot, errorMessage == nil else { return }
+        do {
+            let (tick, overflow) = snapshot.tick.addingReportingOverflow(1)
+            guard !overflow else { throw SimulationError.tickOverflow }
+            try simulation?.enqueue(.init(tick: tick, position: position, material: selectedMaterial))
+        } catch {
+            errorMessage = "Could not apply input: \(error)"
+        }
     }
 
     func update(at time: Double) {
@@ -79,7 +91,8 @@ private struct HostView: View {
                     device: device,
                     snapshot: snapshot,
                     onFPS: { model.framesPerSecond = $0 },
-                    onError: { model.errorMessage = $0 }
+                    onError: { model.errorMessage = $0 },
+                    onPaint: { model.paint($0) }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -93,6 +106,14 @@ private struct HostView: View {
                 Text("Tick  \(model.snapshot?.tick ?? 0)")
                 Text("Character  unavailable")
                 Button("Restart fixture") { model.restart() }
+                HStack(spacing: 6) {
+                    materialButton("Erase", material: .empty, key: "1")
+                    materialButton("Rock", material: .solid, key: "2")
+                    materialButton("Sand", material: .sand, key: "3")
+                    materialButton("Water", material: .water, key: "4")
+                    materialButton("Fire", material: .fire, key: "5")
+                }
+                Text("Paint: click or touch and drag (keys 1–5)")
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
@@ -114,6 +135,15 @@ private struct HostView: View {
             }
         }
     }
+
+    private func materialButton(_ title: String, material: SimulationCore.Material, key: KeyEquivalent) -> some View {
+        Button(title) { model.selectedMaterial = material }
+            .keyboardShortcut(key, modifiers: [])
+            .buttonStyle(.bordered)
+            .tint(model.selectedMaterial == material ? .orange : .gray)
+            .accessibilityLabel("\(title) material")
+            .accessibilityAddTraits(model.selectedMaterial == material ? .isSelected : [])
+    }
 }
 
 private struct MetalSurface {
@@ -121,6 +151,7 @@ private struct MetalSurface {
     let snapshot: SimulationSnapshot
     let onFPS: (Double) -> Void
     let onError: (String) -> Void
+    let onPaint: (CellPosition) -> Void
 
     func makeCoordinator() -> MetalRenderer {
         MetalRenderer(device: device, snapshot: snapshot, onFPS: onFPS, onError: onError)
@@ -135,30 +166,112 @@ private struct MetalSurface {
 }
 
 #if os(macOS)
+private final class InputMetalView: MTKView {
+    var onPaint: ((CellPosition) -> Void)?
+    private var lastCell: CellPosition?
+
+    override func mouseDown(with event: NSEvent) {
+        lastCell = nil
+        paint(event)
+    }
+
+    override func mouseDragged(with event: NSEvent) { paint(event) }
+    override func mouseUp(with event: NSEvent) { lastCell = nil }
+
+    private func paint(_ event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
+        paintPoint(x: point.x - bounds.minX, y: y)
+    }
+}
+
 extension MetalSurface: NSViewRepresentable {
-    func makeNSView(context: Context) -> MTKView {
-        let view = MTKView()
+    func makeNSView(context: Context) -> InputMetalView {
+        let view = InputMetalView()
+        view.onPaint = onPaint
         configure(view, coordinator: context.coordinator)
         return view
     }
 
-    func updateNSView(_ view: MTKView, context: Context) {
+    func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
+        view.onPaint = onPaint
     }
 }
 #elseif os(iOS)
+private final class InputMetalView: MTKView {
+    var onPaint: ((CellPosition) -> Void)?
+    private var lastCell: CellPosition?
+    private var activeTouch: UITouch?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard activeTouch == nil, let touch = touches.first else { return }
+        activeTouch = touch
+        lastCell = nil
+        paint(touch)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = activeTouch, touches.contains(touch) else { return }
+        for sample in event?.coalescedTouches(for: touch) ?? [touch] {
+            paint(sample)
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = activeTouch, touches.contains(touch) else { return }
+        paint(touch)
+        activeTouch = nil
+        lastCell = nil
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = activeTouch, touches.contains(touch) else { return }
+        activeTouch = nil
+        lastCell = nil
+    }
+
+    private func paint(_ touch: UITouch) {
+        let point = touch.location(in: self)
+        paintPoint(x: point.x - bounds.minX, y: point.y - bounds.minY)
+    }
+}
+
 extension MetalSurface: UIViewRepresentable {
-    func makeUIView(context: Context) -> MTKView {
-        let view = MTKView()
+    func makeUIView(context: Context) -> InputMetalView {
+        let view = InputMetalView()
+        view.onPaint = onPaint
         configure(view, coordinator: context.coordinator)
         return view
     }
 
-    func updateUIView(_ view: MTKView, context: Context) {
+    func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
+        view.onPaint = onPaint
     }
 }
 #endif
+
+private extension InputMetalView {
+    func paintPoint(x: CGFloat, y: CGFloat) {
+        guard bounds.width > 0, bounds.height > 0,
+              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
+                                             drawableHeight: Double(drawableSize.height)),
+              let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
+                                       y: Double(y / bounds.height * drawableSize.height)) else {
+            lastCell = nil
+            return
+        }
+        if let lastCell {
+            for position in FixtureStroke.cells(from: lastCell, to: cell) {
+                onPaint?(position)
+            }
+        } else {
+            onPaint?(cell)
+        }
+        lastCell = cell
+    }
+}
 
 private final class MetalRenderer: NSObject, MTKViewDelegate {
     private let device: MTLDevice
@@ -215,18 +328,13 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,
                             bytesPerRow: FixturePixels.width * 4)
         }
-        let scale = min(view.drawableSize.width / CGFloat(FixturePixels.width),
-                        view.drawableSize.height / CGFloat(FixturePixels.height))
-        let pixelScale = scale >= 1 ? floor(scale) : scale
-        let width = CGFloat(FixturePixels.width) * pixelScale
-        let height = CGFloat(FixturePixels.height) * pixelScale
-        guard width > 0, height > 0 else {
+        guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
+                                             drawableHeight: Double(view.drawableSize.height)) else {
             encoder.endEncoding()
             return
         }
-        encoder.setViewport(MTLViewport(originX: Double((view.drawableSize.width - width) / 2),
-                                        originY: Double((view.drawableSize.height - height) / 2),
-                                        width: Double(width), height: Double(height), znear: 0, zfar: 1))
+        encoder.setViewport(MTLViewport(originX: viewport.x, originY: viewport.y,
+                                        width: viewport.width, height: viewport.height, znear: 0, zfar: 1))
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentTexture(texture, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)

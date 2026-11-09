@@ -144,7 +144,13 @@ strategy for a larger world.
 
 The overlay shows the bundle version, submitted frames per second, completed
 tick and an unavailable character position. Restart creates the same fixture
-again. Missing Metal devices, renderer initialization failures, simulation
+again. The material brush maps mouse or single-touch strokes through the same
+centered drawable viewport as the renderer, ignores letterboxing, and fills
+gaps between sampled cells. The overlay selects empty, solid, sand, water or
+fire (also via keys 1–5); each cell replacement is enqueued in event order for
+the next tick. A stroke leaving the viewport is disconnected until it re-enters.
+The host surfaces enqueue and tick-overflow failures; inputs are not recorded
+for replay. Missing Metal devices, renderer initialization failures, simulation
 errors and GPU command errors are displayed; a missing drawable skips a frame.
-The host still needs gameplay input, a movable camera, resident-mode integration,
-and physical-device lifecycle and performance validation.
+The host still needs character gameplay input, a movable camera, resident-mode
+integration, and physical-device lifecycle and performance validation.

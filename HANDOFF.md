@@ -1,5 +1,20 @@
 # Handoff: deterministic simulation prototype
 
+## Fixture input increment
+
+The deterministic fixture has a material brush on macOS and iOS. The overlay
+selects erase, rock, sand, water or fire; keys 1–5 also select brushes. Mouse
+and single-touch strokes map through the renderer's centered viewport and queue
+cell replacements for the next tick. See [INTERFACES.md](INTERFACES.md).
+
+On the development Mac, `swift test` passed with the optional scheduling
+benchmark skipped; Debug macOS arm64 and generic iOS Simulator builds passed
+with signing disabled. Xcode warned that App Intents metadata extraction was
+skipped. Input mapping, interpolation and command ordering have package tests,
+but actual mouse, keyboard and touch interaction, lifecycle, physical devices,
+and performance have not been verified for this increment. Independent
+core/renderer contract review remains open.
+
 ## Fixture renderer increment
 
 The Apple host now displays and advances the deterministic fixture and shows

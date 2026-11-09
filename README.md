@@ -26,6 +26,13 @@ replays the fixture from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
 This is a diagnostic scene, not the planned camera or gameplay input.
 
+Select a brush in the overlay, then click and drag on the scene on macOS or
+touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
+water, or fire; number keys 1–5 select them as well. Strokes are applied on the
+next simulation tick, and moving materials may immediately fall or react. Input
+outside the displayed scene is ignored. Restart clears edits and replays the
+fixture.
+
 `ResidentSimulation` is a separate experimental mode for a larger sparse,
 fully resident world. It accepts a focus and a host-provided per-batch budget
 check, sleeps idle chunks, and computes proposals in parallel. Different

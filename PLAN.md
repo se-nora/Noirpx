@@ -25,9 +25,29 @@ later; no non-Apple platform is promised by the first release.
   cross-platform support. For future platforms, evaluate Swift toolchain
   availability and implement a new host and rendering backend; consider a C ABI
   or a core migration only if a real target requires it.
-- Avoid picking external libraries or minimum OS/device versions before the
-  milestone 0 toolchain and hardware decision. Record those decisions and their
-  consequences here.
+- Avoid external libraries until a concrete need is established. Record
+  consequential toolchain and hardware decisions below.
+
+### Milestone 0 baseline
+
+- Baseline: Xcode 27.2 (27B52), Swift 6.4.2, Swift tools 6.0 manifest,
+  macOS 15+ and iOS 18+. The host uses Swift 5 language mode. The package is
+  independent of Apple UI and Metal; portability beyond Apple platforms has
+  not been verified.
+- Representative devices: M4 MacBook Air and iPhone 16 Pro. Initial builds are
+  Debug and target the active architecture. Plan for 60 ticks/second and 60
+  frames/second; capture actual display refresh, power settings, OS, thermals,
+  and Release configuration when measuring on those devices.
+- A local Swift package supplies `SimulationCore`; a shared multiplatform Xcode
+  app target contains the minimal SwiftUI/Metal host. The initial contracts
+  and their unimplemented portions are documented in [INTERFACES.md](INTERFACES.md).
+  They require review by both core and renderer contributors before parallel
+  implementation depends on them.
+- Verification so far is on an M3 Mac and iPhone 16 Pro Simulator, not the
+  selected physical targets. A physical iPhone requires a signing team, unique
+  bundle ID, provisioning, and device access. See [README.md](README.md) for
+  commands and setup. Device measurements and contributor contract review remain
+  open; do not treat simulator results as physical-device validation.
 
 ## Architecture and invariants
 
@@ -199,7 +219,8 @@ fix; do not rewrite shared history or discard another agent's work.
 
 ## Open decisions and risks
 
-- Supported OS versions, deployment devices, and signing setup are not selected.
+- Physical device access, signing credentials, and display settings for the
+  selected M4 MacBook Air and iPhone 16 Pro remain to be confirmed.
 - Chunk size, cell representation, snapshot buffering, and streaming policy require
   profiling; aggressive copying or GPU uploads can exhaust iOS memory/bandwidth.
 - Fixed-tick scheduling alone does not ensure determinism; rule ordering, RNG,

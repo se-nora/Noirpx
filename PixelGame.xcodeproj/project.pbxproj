@@ -1,0 +1,135 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A10000000000000000000001 /* PixelGameApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* PixelGameApp.swift */; };
+		A10000000000000000000002 /* SimulationCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SimulationCore */; };
+		A20000000000000000000001 /* PixelGameApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelGameApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* PixelGame.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PixelGame.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A10000000000000000000002 /* SimulationCore in Frameworks */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A40000000000000000000001 = {
+			isa = PBXGroup;
+			children = (A40000000000000000000002 /* AppleHost */, A40000000000000000000003 /* Products */,);
+			sourceTree = "<group>";
+		};
+		A40000000000000000000002 /* AppleHost */ = {
+			isa = PBXGroup;
+			children = (A20000000000000000000001 /* PixelGameApp.swift */,);
+			path = AppleHost;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (A20000000000000000000002 /* PixelGame.app */,);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A50000000000000000000001 /* PixelGame */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "PixelGame" */;
+			buildPhases = (A60000000000000000000001 /* Sources */, A30000000000000000000001 /* Frameworks */,);
+			buildRules = ();
+			dependencies = ();
+			name = PixelGame;
+			packageProductDependencies = (A90000000000000000000001 /* SimulationCore */,);
+			productName = PixelGame;
+			productReference = A20000000000000000000002 /* PixelGame.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2720;
+				TargetAttributes = { A50000000000000000000001 = {CreatedOnToolsVersion = 27.2; }; };
+			};
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "PixelGame" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base,);
+			mainGroup = A40000000000000000000001;
+			packageReferences = (A80000000000000000000001 /* XCLocalSwiftPackageReference "." */,);
+			productRefGroup = A40000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A50000000000000000000001 /* PixelGame */,);
+		};
+		A60000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A10000000000000000000001 /* PixelGameApp.swift in Sources */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A70000000000000000000001 /* Build configuration list for PBXProject "PixelGame" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */,);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "PixelGame" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */,);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000001 /* XCLocalSwiftPackageReference "." */ = {isa = XCLocalSwiftPackageReference; relativePath = .; };
+		A90000000000000000000001 /* SimulationCore */ = {isa = XCSwiftPackageProductDependency; package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = SimulationCore; };
+		B10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; };
+			name = Debug;
+		};
+		B10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; ONLY_ACTIVE_ARCH = YES; SWIFT_COMPILATION_MODE = wholemodule; };
+			name = Release;
+		};
+		B10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AppleHost/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.PixelGame;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AppleHost/Info.plist;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.PixelGame;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+	};
+	rootObject = A50000000000000000000002 /* Project object */;
+}

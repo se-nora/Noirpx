@@ -1,14 +1,61 @@
 # PixelGame
 
-PixelGame is an early-stage plan for an original 2D pixel-simulation action game,
-inspired by the emergent material interactions and exploration of Noita. The
-initial platforms are macOS and iOS. The project is not yet a playable game.
+PixelGame is an early-stage original 2D pixel-simulation game for macOS and iOS.
+It is not yet playable. The current Apple app displays a Metal clear color; the
+core only tracks a seed and tick count. There is no world, scheduler, input, or
+material rendering yet.
 
-- [Development plan](PLAN.md) covers architecture, milestones, verification,
-  performance, and parallel work.
-- [Agent instructions](AGENTS.md) define how contributors and agents work
-  together and keep `main` stable.
+- [Development plan](PLAN.md) records decisions and milestones.
+- [Initial interface contracts](INTERFACES.md) distinguish implemented APIs
+  from agreements needed by future work.
+- [Agent instructions](AGENTS.md) define collaboration and integration.
 
-The proposed first implementation is a pure Swift simulation core with a Metal
-renderer and Apple platform hosts. No build, test, or runtime commands exist yet;
-the first implementation milestone must add and document them.
+## Toolchain and targets
+
+The selected baseline is Xcode 27.2 (27B52), Swift 6.4.2, macOS 15+ and
+iOS 18+. The package manifest uses Swift tools version 6.0; the app currently
+uses Swift 5 language mode. No external dependencies are required. The core is
+plain Swift, with no UI, Metal, input-device, or clock imports. Other platforms
+have not been tested or promised.
+
+Representative targets are an Apple silicon M4 MacBook Air and an iPhone 16
+Pro. Plan for 60 simulation ticks and 60 frames per second, with display refresh
+and power settings recorded during device measurements; the iPhone's adaptive
+refresh must not change simulation results. These are targets, not measured
+performance. Initial verification used Debug builds on an Apple M3 Mac running
+macOS 27.0.1 and an iPhone 16 Pro Simulator running iOS 18.5, not the selected
+physical devices. Hardware display settings and Release performance remain to
+be recorded.
+
+## Build and test
+
+From the repository root with Xcode selected by `xcode-select`:
+
+```sh
+swift build --target SimulationCore
+swift test
+xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath DerivedData/ios-simulator CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+  -destination 'generic/platform=iOS' \
+  -derivedDataPath DerivedData/ios-device CODE_SIGNING_ALLOWED=NO build
+```
+
+The Xcode project builds the active architecture, rather than a universal Mac
+binary. The last command builds an **unsigned** device app and does not prove
+it can be installed. To run on a simulator, open the project in Xcode and run
+the shared `PixelGame` scheme on an available iPhone 16 Pro simulator. For a
+physical iPhone, connect and trust the device, enable Developer Mode if
+requested, select an Apple Developer team under Signing & Capabilities, and
+choose a unique bundle identifier instead of `com.example.PixelGame`. Allow
+Xcode to create a provisioning profile, select the device, and run. Signing
+requires a suitable Apple developer account and local credentials; do not commit
+personal team IDs or profiles.
+
+Swift sources use four-space indentation and standard Swift naming. The Xcode
+project uses Xcode's tab-indented project format. No formatter or CI is
+configured.

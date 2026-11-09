@@ -71,7 +71,7 @@ public struct Simulation {
         var moved: Set<CellPosition> = []
         for position in positions where !moved.contains(position) {
             switch material(at: position) {
-            case .empty, .solid:
+            case .empty, .solid, .pitch:
                 break
             case .sand, .water:
                 let material = material(at: position)
@@ -111,15 +111,42 @@ public struct Simulation {
                     break
                 }
             case .fire:
+                var quenched = false
                 for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
                     let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
                     if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
                         && material(at: neighbor) == .water {
                         set(.empty, at: neighbor)
+                        quenched = true
                         break
                     }
                 }
+                if !quenched {
+                    for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
+                        let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
+                        if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
+                            && !moved.contains(neighbor) && material(at: neighbor) == .pitch {
+                            set(.burningPitch, at: neighbor)
+                            moved.insert(neighbor)
+                            break
+                        }
+                    }
+                }
                 set(.empty, at: position)
+            default:
+                let current = material(at: position)
+                var quenched = false
+                for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
+                    let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
+                    if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
+                        && material(at: neighbor) == .water {
+                        set(.empty, at: neighbor)
+                        quenched = true
+                        break
+                    }
+                }
+                set(quenched ? .pitch : current.nextBurnStage, at: position)
+                moved.insert(position)
             }
         }
         tick = nextTick

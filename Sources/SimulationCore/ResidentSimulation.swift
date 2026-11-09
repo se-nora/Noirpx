@@ -119,7 +119,13 @@ public struct ResidentSimulation {
                 if left.source.y != right.source.y { return left.source.y < right.source.y }
                 return left.source.x < right.source.x
             }
-            for proposal in proposals where !moved.contains(proposal.source) {
+            for proposal in proposals {
+                if moved.contains(proposal.source) {
+                    if material(at: proposal.source).isBurningPitch {
+                        active.insert(Self.locate(proposal.source, width: chunkWidth).0)
+                    }
+                    continue
+                }
                 guard material(at: proposal.source) == proposal.material else { continue }
                 switch proposal.material {
                 case .sand, .water:
@@ -152,10 +158,23 @@ public struct ResidentSimulation {
                 case .fire:
                     if let water = proposal.destinations.first(where: { material(at: $0) == .water }) {
                         set(.empty, at: water)
+                    } else if let pitch = proposal.destinations.first(where: {
+                        !moved.contains($0) && material(at: $0) == .pitch
+                    }) {
+                        set(.burningPitch, at: pitch)
+                        moved.insert(pitch)
                     }
                     set(.empty, at: proposal.source)
-                case .empty, .solid:
+                case .empty, .solid, .pitch:
                     break
+                default:
+                    if let water = proposal.destinations.first(where: { material(at: $0) == .water }) {
+                        set(.empty, at: water)
+                        set(.pitch, at: proposal.source)
+                    } else {
+                        set(proposal.material.nextBurnStage, at: proposal.source)
+                    }
+                    moved.insert(proposal.source)
                 }
             }
             index = end
@@ -236,15 +255,16 @@ public struct ResidentSimulation {
             return world[coordinate]?[index] ?? .empty
         }
         var proposals: [ResidentProposal] = []
-        for (index, cell) in cells.enumerated() where cell != .empty && cell != .solid {
+        for (index, cell) in cells.enumerated() where cell != .empty && cell != .solid && cell != .pitch {
             let source = CellPosition(x: chunk.x * width + index % width, y: chunk.y * width + index / width)
             let random = randomValue(seed: seed, tick: tick, position: source)
             let direction = random & 1 == 0 ? -1 : 1
             var destinations: [CellPosition] = []
-            if cell == .fire {
+            if cell == .fire || cell.isBurningPitch {
                 for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
                     let target = CellPosition(x: source.x + dx, y: source.y + dy)
-                    if contains(target) && material(target) == .water { destinations.append(target) }
+                    if contains(target) && (material(target) == .water
+                        || (cell == .fire && material(target) == .pitch)) { destinations.append(target) }
                 }
             } else {
                 var offsets = [(0, -1), (direction, -1), (-direction, -1)]

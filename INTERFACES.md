@@ -27,7 +27,8 @@ their workloads, especially on iOS.
 
 ## Materials, commands, and tick rules
 
-The enum raw identifiers are empty 0, solid 1, sand 2, water 3, and fire 4.
+The enum raw identifiers are empty 0, solid 1, sand 2, water 3, fire 4,
+pitch 5, and 64 consecutive burning-pitch stages 6...69.
 The typed API accepts only these cases; external decoding must reject unknown
 identifiers. There is no material definition or persistence format yet.
 
@@ -65,7 +66,28 @@ preference for both diagonal and horizontal choices comes from one SplitMix64
 draw per processed sand or water cell, even when blocked or falling straight
 down. Seed initializes the state; all arithmetic wraps modulo 2^64. Fire checks
 down, left, right, then up, removes the first adjacent water if present, and
-always expires to empty on its turn. Fire has no other effects. A water cell
+always expires to empty on its turn. If it found no water, it instead ignites
+the first adjacent pitch in that same down, left, right, up order. Pitch is a
+stationary blocking solid; ignition changes it to burning stage 6, marked
+updated so it cannot advance in the same tick. Burning pitch checks adjacent
+water in the same order: it consumes the first and returns to pitch. Otherwise
+it advances 6→7→...→69→fire, one stage per processed tick. Ignition on tick T
+publishes stage 6 without advancing it; absent quenching and deferral, stages
+6...69 are published on T...T+63, and it becomes fire on T+64. Water is checked
+first on every burning turn, including T+64, giving 64 subsequent processed
+ticks in which to quench. Fire then acts no earlier than T+65. All stages
+render the same orange color; at 60 ticks/second this is about 1.07 seconds of
+simulation time, not a guarantee of display frames, wall-clock time or human
+reaction. Water must actually remain adjacent until the burning turn: painting
+one cell directly above the fixture is one way to do that.
+Fire can spread to another pitch only when its own subsequent turn runs.
+Each actor affects at most one neighbor; there is no random ignition, diagonal
+reaction, heat radius, timer, or damage. Water may be consumed even if it
+already moved that tick, as with existing fire. Fire and burning pitch check
+the current world in traversal order: first claim wins, a consumed water is
+unavailable to later actors, and a newly ignited or quenched cell cannot change
+again on that tick. Pitch and burning pitch block movement, liquid, player and warden;
+the pulse stops at them without removing them. A water cell
 may move before or be consumed by fire according to the same traversal order.
 These deliberately simple rules are prototype behavior, not a balance promise.
 
@@ -108,8 +130,8 @@ more slowly and interact with current neighbors.
 
 Within a batch, chunk proposals are calculated in parallel from the same
 immutable world state. Sand and water propose their normal movement preferences
-using a seed/tick/position-derived direction; fire proposes adjacent water in
-the normal priority order. Destinations empty, water for sand, or water for fire
+using a seed/tick/position-derived direction; fire proposes adjacent water
+and pitch, and burning pitch proposes adjacent water. Destinations empty, water for sand, or water or pitch for fire
 at the start of the batch are proposed, subject to the same diagonal corner
 rule. Proposals commit in world y/x order; each source must still hold its
 original material, and destinations and diagonal side cells must still be
@@ -119,6 +141,22 @@ choice was claimed. A moved cell cannot move again in the same global tick,
 including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
 not record schedules or promise reproducible replay across runs or devices.
+
+Fire proposes all adjacent water and pitch visible at batch start; burning
+pitch proposes adjacent water. Commit first checks still-present proposed
+water in down/left/right/up order, then (for fire only) still-present proposed
+pitch in that order. New neighbors created since proposal are not considered.
+An ignition marks its target updated for the global tick even across batches.
+Burn stages and quenching use the deterministic transitions above, but only
+when the owning chunk is processed; a deferred chunk does not advance. A
+processed fire may interact across a chunk boundary even if the neighbor chunk
+is deferred; changed cells wake allocated neighboring chunks, which wait for
+the next tick if absent from the original candidate list. A changed burning
+cell keeps its chunk active; inert pitch can sleep until a nearby edit wakes it.
+If a later batch clears the wake for a newly ignited, already-updated burning
+cell, processing that skipped proposal restores its chunk's wake for the next
+global tick. It does not update twice. Deferred processing can extend the
+duration in global ticks, but cannot shorten the 64 processed opportunities.
 
 Chunks with no resulting changes sleep. A changed cell wakes its own chunk and
 any allocated chunk containing a neighboring cell, including diagonals. Newly
@@ -145,6 +183,13 @@ digests are not compatible. It includes the
 completed world and RNG state, **not queued future commands**; equal digests
 alone do not establish equal future inputs. It is not a cryptographic hash,
 save format, or cross-device determinism certification.
+The digest algorithm and version remain unchanged for this addition, preserving
+digests of pitch-free worlds given identical inputs. Pitch and its stages hash
+as their new identifier bytes; old software cannot decode those identifiers.
+The longer burn changes outcomes and future digests for existing pitch-containing
+states, including stages 6...9, but not material-only worlds without pitch.
+The Beacon Run fixture itself now contains pitch, so its snapshots and digests
+intentionally differ from earlier releases. There is no save migration.
 
 ## Host and future work
 
@@ -168,8 +213,13 @@ and after every character tick, independently of display callbacks;
 the simulation waits for a valid viewport before ticking. Rendering skips chunks
 outside the visible rectangle. Frozen chunks remain in complete snapshots.
 
-The overlay shows instructions, seed, beacon count, outcome, Restart, New Run, and a
-Diagnostics button. Its panel reports submitted FPS, completed tick, rendered
+The top-left overlay is a vertically scrollable viewport, constrained to 45%
+of the host view width when the view is at least 116 points wide (its fixed
+padding is 52 points). Its height fits the view; on iOS it reserves 96 points
+at the bottom for movement, jump and pulse. Scroll to reach Restart, New Run,
+Stats, Help and all six brushes in a compact window. The same keyboard shortcuts
+work while controls are offscreen. Help contains controls and fixture
+instructions, and Stats opens the diagnostic panel reporting submitted FPS, completed tick, rendered
 and allocated chunk counts, and the character's lower-left position. Rendered
 counts are from the last submitted camera frame; allocated counts are from the
 latest completed snapshot, so they can refer to different ticks. The simulation
@@ -180,8 +230,8 @@ fresh run at tick zero, clear controls and pending edits, reset the scheduler
 and refresh the renderer. The sequence is local, with no seed entry or save.
 The material brush maps mouse or single-touch strokes through the same
 following drawable viewport as the renderer, ignores letterboxing and cells
-outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water or
-fire (also via keys 1–5); each cell replacement is enqueued in event order for
+outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water,
+fire or pitch (also via keys 1–6); each cell replacement is enqueued in event order for
 the next tick. A stroke leaving the viewport is disconnected until it re-enters.
 The host surfaces enqueue and tick-overflow failures; inputs are not recorded
 for replay. Missing Metal devices, renderer initialization failures, simulation
@@ -192,11 +242,11 @@ cell is attempted per tick; vertical velocity uses quarter-cell integer units,
 with gravity and a bounded fall speed. When grounded horizontal movement is
 blocked, the character can step up at most three cells, provided the upward and
 horizontal paths are clear and the destination has support. Movement checks each newly entered edge,
-including intermediate vertical cells, against rock, sand, and world bounds.
+including intermediate vertical cells, against rock, sand, pitch, burning pitch, and world bounds.
 Empty space, water, and fire do not block the character; the character does not affect
 material rules. Jump presses are buffered until the next tick and only take
 effect while grounded. Simultaneous opposite directions cancel. Controls reset
-on lifecycle changes and window focus loss. Painting rock or sand inside the
+on lifecycle changes and window focus loss. Painting a blocking material inside the
 character is ignored, but an earlier queued edit or moving sand can overlap it;
 edge-only collision permits it to leave such an overlap.
 
@@ -228,6 +278,18 @@ the gap can clear the sand without painting, and crossing the vent normally
 costs at most one of three health. These are constraints on unedited generated
 courses, not guarantees after painting or a general reachability proof.
 The finite generator does not reject or repair layouts.
+Five pitch cells at x=6...10, y=13 form a small floating experimental fixture
+above the start, clear of the standing route. It does not ignite by itself:
+paint fire beside it and water beside the orange cell to quench it. The host
+applies paint before physics, so fire can expire immediately while leaving a
+visible burning-pitch snapshot; display callbacks may still skip states under
+load. At a 1000×600 host size after settling, the shared HUD geometry keeps
+these cells and the cells directly above and below them outside the HUD;
+320×300 and portrait 600×1000 layouts are also covered by geometry tests.
+On macOS, a hosted SwiftUI test checks the actual scroll viewport and that all
+ten action and brush buttons can be scrolled fully into view at these sizes,
+including the iOS bottom-reserve geometry. The HUD is not a
+physical-device touch or readability validation.
 Materials update before the character. After movement, a lower-left character
 y of -20 or below loses, taking precedence over damage and marker checks. Otherwise,
 the vent and health rules below run before marker checks; lethal damage also
@@ -267,12 +329,12 @@ HUD show the remaining protection; health does not regenerate. Zero health
 ends the run as `exhausted`. Restart restores all health and timers. Neither
 ordinary water nor ordinary fire damages the character: active fire expires in
 the material tick, before gameplay checks, and frozen fire is also harmless.
-No material rule or material snapshot digest is changed.
+The vent does not itself alter material rules or the material snapshot digest.
 
 The Chime Warden is a single 5 × 6-cell, non-material rectangle; it does not
 block the player or materials. After material physics and player movement it
-checks that every body cell is free of rock and sand and every cell directly
-under its width has rock or sand support. If not, it is removed permanently for
+checks that every body cell is free of blocking material and every cell directly
+under its width has blocking material support. If not, it is removed permanently for
 that run, including if moving sand buries it or its support is erased. It does
 not fall, climb, teleport, respawn or search for a new floor. Otherwise its
 60-tick phase advances modulo 60. Phases 0...23 are amber warning, 24...35
@@ -284,7 +346,7 @@ fire are passable. This update runs every gameplay tick regardless of frozen
 chunks, against the post-physics material state. A threatening half-open body
 overlap uses the same global 30-tick damage protection as the vent; simultaneous
 contact cannot deal two hits. Damage is checked before pulse and goal, and
-lethal damage wins over either. Direct painting of rock or sand into a living
+lethal damage wins over either. Direct painting of blocking materials into a living
 warden is ignored, but commands queued before it moved or material physics
 can still change the area; the next validation applies the removal rule.
 This intentionally bounded terrain response is not general enemy navigation.
@@ -303,7 +365,7 @@ fall/damage/goal checks, a playing run may fire. Thus a winning or failing tick 
 fire; terminal runs freeze cooldown and flash until restart. Five horizontal
 lanes at character lower-left y+2...y+6 start immediately outside the facing
 edge, extending at most 18 cells each. Each lane stops at the world boundary,
-the first rock, or the first sand. Rock is unchanged; the first sand is removed;
+the first rock, pitch, burning pitch, or sand. Rock and pitch are unchanged; the first sand is removed;
 empty, water and fire are transparent and unchanged. Each pulse inspects at
 most 90 cells and removes at most five. It uses the post-physics snapshot, so
 paint commands applied this tick affect occlusion; removed sand affects physics
@@ -311,11 +373,11 @@ on the next tick. Like painting, this explicit action can modify frozen chunks.
 The completed material snapshot includes removals. A cyan flash of the traced
 cells, including hits, lasts four gameplay ticks (the firing tick included);
 the renderer only reads it. If any traced cell reaches the living warden, the
-warden is removed after tracing; rock and the first sand per lane shield it,
+warden is removed after tracing; rock, pitch and the first sand per lane shield it,
 and sand excavation still occurs normally in every lane. The pulse is not
 stopped by the warden. For an overlapping warden, a separate near-field check
 walks each of the same five lanes across the player body, from the facing edge
-inward, stopping before the first rock, sand, or world boundary. A warden cell
+inward, stopping before the first blocking material or world boundary. A warden cell
 reached in that check also counts as a hit, even when it is entirely inside the
 player; empty, water and fire are transparent. This check neither excavates
 material nor extends the external range or flash. Both checks use pre-excavation

@@ -3,6 +3,64 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testPitchFixtureAndPaintTargetsClearActualHostHUDGeometry() throws {
+        var run = try BeaconRun(seed: 42)
+        for _ in 0..<30 { try run.advance(horizontal: 0, jump: false) }
+        let camera = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
+                                  y: run.character.position.y + FixtureCharacter.height / 2)
+        for (width, height) in [(320.0, 300.0), (1000.0, 600.0), (600.0, 1000.0)] {
+            let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: width, drawableHeight: height,
+                                                         center: camera, longEdgeCells: 200))
+            XCTAssertEqual(HostLayout.hudContentWidth(viewWidth: width)
+                           + 2 * (HostLayout.outerPadding + HostLayout.innerPadding),
+                           HostLayout.hudWidth(viewWidth: width))
+            for position in (6...10).map({ CellPosition(x: $0, y: 13) })
+                + [.init(x: 6, y: 12), .init(x: 6, y: 14)] {
+                let column = position.x - camera.x + viewport.columns / 2
+                let row = viewport.rows / 2 - 1 - position.y + camera.y
+                let left = viewport.x + Double(column) * viewport.width / Double(viewport.columns)
+                let top = viewport.y + Double(row) * viewport.height / Double(viewport.rows)
+                XCTAssertGreaterThan(left, HostLayout.hudWidth(viewWidth: width))
+                XCTAssertGreaterThanOrEqual(top, viewport.y)
+                XCTAssertLessThan(top, viewport.y + viewport.height)
+                XCTAssertEqual(viewport.cell(atX: left + viewport.width / Double(viewport.columns) / 2,
+                                             y: top + viewport.height / Double(viewport.rows) / 2), position)
+            }
+        }
+    }
+
+    func testPitchPaletteAndRealPaintTickRendering() throws {
+        XCTAssertEqual(MaterialBrush.allCases.map(\.rawValue), [1, 2, 3, 4, 5, 6])
+        XCTAssertEqual(MaterialBrush.pitch.material, .pitch)
+        XCTAssertEqual(MaterialBrush.pitch.title, "Pitch")
+        var run = try BeaconRun(seed: 42)
+        try run.advance(horizontal: 0, jump: false)
+        let p = CellPosition(x: 6, y: 13)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 0, y: 0), longEdgeCells: 200))
+        func pixel() -> [UInt8] {
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport)
+            let offset = ((viewport.rows / 2 - 1 - p.y) * viewport.columns + p.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        XCTAssertEqual(pixel(), [131, 89, 173, 255])
+        try run.paint(MaterialBrush.fire.material, at: .init(x: 6, y: 12))
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
+        try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .burningPitch)
+        XCTAssertEqual(pixel(), [255, 186, 68, 255])
+        for _ in 0..<59 {
+            try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
+        }
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .burningPitch60)
+        XCTAssertEqual(pixel(), [255, 186, 68, 255])
+        try run.paint(MaterialBrush.water.material, at: .init(x: 6, y: 14))
+        try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
+        XCTAssertEqual(pixel(), [131, 89, 173, 255])
+    }
+
     func testWardenOverlapIndicatorSurvivesPlayerRasterAtExactTick() throws {
         var run = try BeaconRun(seed: 42)
         var jumped = false

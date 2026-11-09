@@ -249,6 +249,14 @@ new runs. A visible heat vent before the goal can be jumped or cooled with water
 health, hit protection and cooling run on fixed ticks.
 The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
 cooldown and visible feedback; rock shields sand and is never destroyed.
+Five suspended pitch cells near the start provide an optional brush experiment:
+fire ignites them into a 64-processed-tick orange burning state, and adjacent water
+quenches the burning cell. Pitch is blocking and can be burned away; see
+the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
+The fixture does not obstruct the normal standing course; a bounded-width,
+scrollable HUD leaves it and its paint targets clear in tested host geometries.
+SwiftUI layout tests cover scroll access at 320×300 and larger windows. Display
+callbacks may skip states, and touch readability remains unverified on hardware.
 One original Chime Warden patrols the supported floor after the second marker,
 telegraphing a periodic contact attack; the pulse can defeat it through clear
 lanes. It reverses at terrain and disappears if buried or unsupported rather

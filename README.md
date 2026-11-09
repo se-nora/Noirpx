@@ -32,10 +32,17 @@ by touching them with the character, in either order. The gate can be visited
 early, but only wins when both beacons have been collected and the character
 touches it again. A Chime Warden patrols the floor after the second beacon:
 amber warns, red is dangerous on contact, and purple is recovery. Jump past it
-or hit it with the Silt Pulse; rock and sand shield it. When it overlaps you,
+or hit it with the Silt Pulse; rock, sand and pitch shield it. When it overlaps you,
 a matching colored bar and bell icon appear on and above the player. It shares the vent's
 hit protection. It disappears if buried or its floor is removed. There is no
-overall time limit, score, or save. Painting
+overall time limit, score, or save. Above the start are five violet pitch cells.
+Paint fire next to one to ignite it orange; paint water directly above a burning
+cell to quench it back to pitch. A burning cell remains orange for 64 processed
+ticks (about 1.07 seconds of simulation at 60 Hz), and checks water once more
+on the tick it would otherwise turn to fire. Water may move or be consumed
+before it can quench, depending on tick order. Unquenched pitch burns away and can ignite an
+adjacent pitch cell. This is optional and ordinary fire remains harmless to the
+character. Painting
 can bridge the gap or alter the course: this is an open-ended tool, not a
 restricted scoring challenge. Ordinary fire and water do not hurt the character.
 
@@ -57,13 +64,16 @@ course. The course varies obstacle positions, gap width, sand height, objectives
 and vent placement within a tested, finishable route. Seeds can yield the same
 layout; the seed still affects material physics. There is no seed entry or save.
 
-Open **Diagnostics** to see submitted FPS, completed tick, rendered and
+Open **Help** for controls and course instructions. Open **Stats** to see submitted FPS, completed tick, rendered and
 allocated chunk counts, and the character's lower-left position. Rendered
 chunks contain at least one nonempty cell in the last submitted camera frame;
 allocated chunks are all nonempty chunks in the latest completed simulation
 snapshot, including frozen chunks. These counts can refer to different ticks.
 The simulation continues while diagnostics are open; controls and the timing
-baseline reset when opening and closing the panel.
+baseline reset when opening and closing the panel. In compact windows, scroll
+the top-left HUD to reach every action and brush; keyboard brush shortcuts also
+work while the buttons are offscreen. On iOS the HUD leaves room at the bottom
+for the movement, pulse and jump controls.
 
 Move with A/D or the left/right arrow keys and jump with W, up, or space on
 macOS; hold F to fire the **Silt Pulse** in the last movement direction. On iOS,
@@ -71,24 +81,24 @@ hold the on-screen left and right controls, tap jump, and tap or hold the bolt
 button for the pulse; controls can be used together. A cyan flash shows its
 path and the overlay shows readiness or remaining cooldown ticks. The pulse
 reaches 18 cells ahead in five horizontal lanes, removing the first sand in
-each lane. Rock stops it without damage; water and fire let it pass. It can
+each lane. Rock, pitch and burning pitch stop it without damage; water and fire let it pass. It can
 defeat the warden when a traced lane reaches it, and open a route through sand
 but cannot break the floor or rock step. At point-blank range the same five
 lanes also check inside the player, from the facing edge inward: an overlapping
-warden is hit only if no rock or sand blocks that lane. This close-range check
+warden is hit only if no blocking material obstructs that lane. This close-range check
 does not excavate material. It fires at
 most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
-collides with rock, sand, and world bounds, but not water or fire. It advances after
+collides with rock, sand, pitch, burning pitch, and world bounds, but not water or fire. It advances after
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), and can jump only while grounded.
-Painting rock or sand directly inside the character is
+Painting blocking materials directly inside the character is
 ignored. A queued edit or moving sand can still overlap it: the character does
-not block material movement. Rock and sand cannot be painted directly into a
+not block material movement. Blocking materials cannot be painted directly into a
 living warden; falling sand can bury and remove it.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
-water, or fire; number keys 1–5 select them as well. Strokes are applied on the
+water, fire, or pitch; number keys 1–6 select them as well. Strokes are applied on the
 next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Painting is disabled after a win or failure.
 
@@ -97,6 +107,10 @@ displace water into an empty side cell, or upward if both sides are occupied;
 the upward search may pass occupied cells. The displaced water does not move
 again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
 resident-mode ordering.
+Fire prioritizes adjacent water over pitch; burning pitch consumes adjacent
+water and reverts to pitch, or advances through 64 orange stages before
+becoming ordinary fire. Processed ticks are not necessarily displayed frames.
+Fire and water have no effect across a frozen boundary.
 
 `ResidentSimulation` is a separate experimental mode for a larger sparse,
 fully resident world. It accepts a focus and a host-provided per-batch budget

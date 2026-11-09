@@ -140,6 +140,7 @@ private struct HostView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = GameModel()
     @State private var showingDiagnostics = false
+    @State private var showingHelp = false
     private let timer = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
     private let device = MTLCreateSystemDefaultDevice()
 
@@ -148,6 +149,7 @@ private struct HostView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
         ZStack(alignment: .topLeading) {
             if let device, let snapshot = model.snapshot {
                 MetalSurface(
@@ -169,14 +171,16 @@ private struct HostView: View {
                 Color(red: 0.06, green: 0.08, blue: 0.12).ignoresSafeArea()
             }
 
+            HUDScrollViewport(width: geometry.size.width, height: geometry.size.height,
+                              bottomReserved: hudBottomReserved) {
             VStack(alignment: .leading, spacing: 5) {
+                if geometry.size.width < 400 || geometry.size.height < 400 {
+                    Text("Scroll for controls ↓")
+                }
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
                 Text("BEACON RUN").fontWeight(.bold)
-                Text("Seed \(model.challenge?.seed ?? 0)  •  Restart replays; New Run changes course")
-                Text("Collect 2 amber beacons, then reach the green gate.")
-                Text("Jump the gap; pulse through sand.")
-                Text("Red vent: jump or paint water at base (blue = cool).")
-                Text("Chime Warden: amber warns, red hurts, purple rests. Overlap shows an icon above you.")
+                Text("Seed \(model.challenge?.seed ?? 0)")
+                Text("Pitch: fire ignites; water quenches.")
                 Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
                 Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
                         "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
@@ -190,28 +194,12 @@ private struct HostView: View {
                 } else if model.challenge?.outcome == .exhausted {
                     Text("Out of health. Restart to try again!").foregroundStyle(.red).fontWeight(.bold)
                 }
-                HStack {
-                    Button("Restart") { model.restart() }
-                    Button("New Run") { model.newRun() }
-                    Button("Diagnostics") {
-                        model.resetClock()
-                        showingDiagnostics = true
-                    }
-                    .accessibilityLabel("Show diagnostics")
-                }
-                HStack(spacing: 6) {
-                    materialButton("Erase", material: .empty, key: "1")
-                    materialButton("Rock", material: .solid, key: "2")
-                    materialButton("Sand", material: .sand, key: "3")
-                    materialButton("Water", material: .water, key: "4")
-                    materialButton("Fire", material: .fire, key: "5")
-                }
-                Text("Paint: drag; keys 1–5")
-                #if os(macOS)
-                Text("Move: A/D or arrows; jump: W, up or space; pulse: F")
-                #else
-                Text("Move, jump and hold bolt to pulse")
-                #endif
+                HUDControls(selected: model.selectedMaterial,
+                            restart: { model.restart() }, newRun: { model.newRun() },
+                            diagnostics: { model.resetClock(); showingDiagnostics = true },
+                            help: { model.resetClock(); showingHelp = true },
+                            select: { model.selectedMaterial = $0 })
+                Text("Paint: drag; keys 1–6")
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
@@ -221,9 +209,7 @@ private struct HostView: View {
             }
             .font(.system(.caption, design: .monospaced))
             .foregroundStyle(.white)
-            .padding(10)
-            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
-            .padding()
+            }
             #if os(iOS)
             VStack {
                 Spacer()
@@ -248,15 +234,31 @@ private struct HostView: View {
         .sheet(isPresented: $showingDiagnostics, onDismiss: { model.resetClock() }) {
             DiagnosticsView(model: model, dismiss: { showingDiagnostics = false })
         }
+        .sheet(isPresented: $showingHelp, onDismiss: { model.resetClock() }) {
+            VStack(alignment: .leading, spacing: 12) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Beacon Run").font(.headline)
+                        Text("Collect two amber beacons, then reach the green gate. Jump the gap and pulse through sand.")
+                        Text("Violet pitch above the start: paint fire beside it; water quenches the orange cell.")
+                        Text("Jump the red vent or paint water at its base. The Chime Warden warns in amber and hurts in red.")
+                        Text("macOS: A/D or arrows move, W/up/space jumps, F pulses. iOS: use the on-screen controls.")
+                    }
+                }
+                Button("Done") { showingHelp = false }
+            }
+            .padding(24)
+            .frame(maxWidth: 480)
+        }
+        }
     }
 
-    private func materialButton(_ title: String, material: SimulationCore.Material, key: KeyEquivalent) -> some View {
-        Button(title) { model.selectedMaterial = material }
-            .keyboardShortcut(key, modifiers: [])
-            .buttonStyle(.bordered)
-            .tint(model.selectedMaterial == material ? .orange : .gray)
-            .accessibilityLabel("\(title) material")
-            .accessibilityAddTraits(model.selectedMaterial == material ? .isSelected : [])
+    private var hudBottomReserved: Double {
+        #if os(iOS)
+        96
+        #else
+        0
+        #endif
     }
 
     #if os(iOS)

@@ -58,6 +58,9 @@ public struct BeaconRun {
         for x in course.sand {
             for y in -1...course.sandHeight { try place(.sand, x: x, y: y) }
         }
+        for x in 6...10 {
+            try place(.pitch, x: x, y: 13)
+        }
     }
 
     private mutating func place(_ material: Material, x: Int, y: Int) throws {
@@ -177,7 +180,7 @@ public struct BeaconRun {
                     sand.append(cell)
                     break
                 }
-                if material == .solid { break }
+                if material.blocksCharacter { break }
             }
         }
         return (flash, sand)

@@ -11,6 +11,7 @@ final class MaterialBehaviorTests: XCTestCase {
         XCTAssertTrue(MaterialBehavior.forMaterial(.sand) is SandBehavior)
         XCTAssertTrue(MaterialBehavior.forMaterial(.water) is WaterBehavior)
         XCTAssertTrue(MaterialBehavior.forMaterial(.fire) is FireBehavior)
+        XCTAssertTrue(MaterialBehavior.forMaterial(.oil) is OilBehavior)
         for material in Material.allCases {
             let behavior = MaterialBehavior.forMaterial(material)
             XCTAssertTrue(behavior === MaterialBehavior.forMaterial(material))

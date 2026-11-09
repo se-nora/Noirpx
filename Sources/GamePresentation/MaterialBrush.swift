@@ -2,7 +2,7 @@ import SimulationCore
 
 /// Shared palette for touch buttons and their macOS keyboard shortcuts.
 public enum MaterialBrush: Int, CaseIterable, Sendable {
-    case erase = 1, rock, sand, water, fire, pitch
+    case erase = 1, rock, sand, water, fire, pitch, oil
 
     public var material: Material {
         switch self {
@@ -12,6 +12,7 @@ public enum MaterialBrush: Int, CaseIterable, Sendable {
         case .water: return .water
         case .fire: return .fire
         case .pitch: return .pitch
+        case .oil: return .oil
         }
     }
 
@@ -23,6 +24,7 @@ public enum MaterialBrush: Int, CaseIterable, Sendable {
         case .water: return "Water"
         case .fire: return "Fire"
         case .pitch: return "Pitch"
+        case .oil: return "Lamp oil"
         }
     }
 }

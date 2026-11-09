@@ -130,7 +130,8 @@ public struct ResidentSimulation {
             }
             for proposal in proposals {
                 if moved.contains(proposal.source) {
-                    if thermalUnchecked(at: proposal.source) != .zero {
+                    if thermalUnchecked(at: proposal.source) != .zero
+                        || MaterialBehavior.forMaterial(material(at: proposal.source)).usesDirection {
                         active.insert(Self.locate(proposal.source, width: chunkWidth).0)
                     }
                     continue
@@ -141,6 +142,7 @@ public struct ResidentSimulation {
                     destinations: proposal.destinations, direction: proposal.direction,
                     maximumY: Self.yBounds.upperBound, canVisit: Self.contains,
                     material: { material(at: $0) }, moved: moved,
+                    secondary: proposal.secondary,
                     thermal: { thermalUnchecked(at: $0) }
                 )
                 let transfers = Dictionary(uniqueKeysWithValues: action.thermalTransfers.map {
@@ -270,8 +272,11 @@ public struct ResidentSimulation {
             let destinations = behavior.destinations(
                 source: source, direction: direction, canVisit: contains, material: material
             )
+            let secondary = behavior.secondaryDestinations(
+                source: source, direction: direction, canVisit: contains, material: material
+            )
             proposals.append(ResidentProposal(source: source, material: cell,
-                                              destinations: destinations, direction: direction))
+                                              destinations: destinations, direction: direction, secondary: secondary))
         }
         return proposals
     }
@@ -291,6 +296,7 @@ private struct ResidentProposal: Sendable {
     let material: Material
     let destinations: [CellPosition]
     let direction: Int
+    let secondary: [CellPosition]
 }
 
 // Each worker publishes one result through the lock; the owner reads after all workers finish.

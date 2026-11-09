@@ -32,7 +32,7 @@ public struct HUDControls: View {
                 HStack { infoButtons }
                 VStack(alignment: .leading) { infoButtons }
             }
-            ForEach(0..<2, id: \.self) { row in
+            ForEach(0..<((MaterialBrush.allCases.count + 2) / 3), id: \.self) { row in
                 let brushes = Array(MaterialBrush.allCases.dropFirst(row * 3).prefix(3))
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {

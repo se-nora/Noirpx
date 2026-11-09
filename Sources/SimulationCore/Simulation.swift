@@ -82,10 +82,14 @@ public struct Simulation {
             let destinations = behavior.destinations(
                 source: position, direction: direction, canVisit: canVisit, material: { material(at: $0) }
             )
+            let secondary = behavior.secondaryDestinations(
+                source: position, direction: direction, canVisit: canVisit, material: { material(at: $0) }
+            )
             let action = behavior.resolve(
                 source: position, current: current, destinations: destinations,
                 direction: direction, maximumY: Self.coordinateBounds.upperBound,
                 canVisit: canVisit, material: { material(at: $0) }, moved: moved,
+                secondary: secondary,
                 thermal: { thermalUnchecked(at: $0) }
             )
             let transfers = Dictionary(uniqueKeysWithValues: action.thermalTransfers.map {

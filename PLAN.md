@@ -253,6 +253,13 @@ fire heats them until they ignite into a 64-processed-turn orange burning state;
 burning cells transfer heat to adjacent pitch, and water quenches hot pitch.
 Pitch retains its identity and is blocking until burned away; see
 the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
+The optional lamp-oil brush adds a nonblocking, flowing flammable material;
+its heat and burn age travel with each cell. It reuses liquid movement and
+flammable reactions, with no new scene hazard: paint it near fire or pitch to
+experiment. Its lower 80 heat threshold, 48-turn burnout, water priority and
+reaction-before-movement ordering are defined in the interface contract.
+This changes replay results and consumes an old retired identifier, without
+providing old-data migration.
 The fixture does not obstruct the normal standing course; a bounded-width,
 scrollable HUD leaves it and its paint targets clear in tested host geometries.
 The HUD presents a concise objective and platform control reminder before the

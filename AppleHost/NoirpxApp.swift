@@ -201,7 +201,7 @@ private struct HostView: View {
                             diagnostics: { model.resetClock(); showingDiagnostics = true },
                             help: { model.resetClock(); showingHelp = true },
                             select: { model.selectedMaterial = $0 })
-                Text("Paint: drag; keys 1–6")
+                Text("Paint: drag; keys 1–7")
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
@@ -243,6 +243,7 @@ private struct HostView: View {
                         Text("Beacon Run").font(.headline)
                         Text("Collect two amber beacons, then reach the green gate. Jump the gap and pulse through sand.")
                         Text("Violet pitch above the start: paint fire beside it; water quenches the orange cell.")
+                        Text("Lamp oil brush: flowing oil catches fire; water quenches hot oil.")
                         Text("Jump the red vent or paint water at its base. The Chime Warden warns in amber and hurts in red.")
                         Text("macOS: A/D or arrows move, W/up/space jumps, F pulses. iOS: use the on-screen controls.")
                     }

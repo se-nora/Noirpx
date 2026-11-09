@@ -45,7 +45,7 @@ final class GamePresentationTests: XCTestCase {
     }
 
     func testPitchPaletteAndRealPaintTickRendering() throws {
-        XCTAssertEqual(MaterialBrush.allCases.map(\.rawValue), [1, 2, 3, 4, 5, 6])
+        XCTAssertEqual(MaterialBrush.allCases.map(\.rawValue), [1, 2, 3, 4, 5, 6, 7])
         XCTAssertEqual(MaterialBrush.pitch.material, .pitch)
         XCTAssertEqual(MaterialBrush.pitch.title, "Pitch")
         var run = try BeaconRun(seed: 42)
@@ -59,6 +59,7 @@ final class GamePresentationTests: XCTestCase {
             let offset = ((viewport.rows / 2 - 1 - p.y) * viewport.columns + p.x + viewport.columns / 2) * 4
             return Array(frame.pixels[offset..<offset + 4])
         }
+
         XCTAssertEqual(pixel(), [131, 89, 173, 255])
         try run.paint(MaterialBrush.fire.material, at: .init(x: 6, y: 12))
         XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
@@ -75,6 +76,52 @@ final class GamePresentationTests: XCTestCase {
         try run.advance(horizontal: 0, jump: false, activeChunks: viewport.activeChunks)
         XCTAssertEqual(try run.simulation.snapshot.material(at: p), .pitch)
         XCTAssertEqual(pixel(), [131, 89, 173, 255])
+    }
+
+    func testOilPalettePaintAndBurnRendering() throws {
+        XCTAssertEqual(MaterialBrush.oil.rawValue, 7)
+        XCTAssertEqual(MaterialBrush.oil.material, .oil)
+        XCTAssertEqual(MaterialBrush.oil.title, "Lamp oil")
+        XCTAssertFalse(Material.oil.blocksCharacter)
+        var run = try BeaconRun(seed: 42)
+        try run.advance(horizontal: 0, jump: false)
+        let p = CellPosition(x: 30, y: 12)
+        let firePosition = CellPosition(x: 29, y: 12)
+        for position in [CellPosition(x: 30, y: 11), .init(x: 31, y: 12), firePosition] {
+            try run.paint(.solid, at: position)
+        }
+        try run.paint(MaterialBrush.oil.material, at: p)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .empty)
+        try run.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .oil)
+        XCTAssertEqual(try run.simulation.snapshot.thermalState(at: p), .zero)
+
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 0, y: 0), longEdgeCells: 200))
+        func pixel() -> [UInt8] {
+            let frame = FixturePixels.rgba(snapshot: run.simulation.snapshot, viewport: viewport)
+            let offset = ((viewport.rows / 2 - 1 - p.y) * viewport.columns + p.x + viewport.columns / 2) * 4
+            return Array(frame[offset..<offset + 4])
+        }
+        XCTAssertEqual(pixel(), [155, 140, 67, 255])
+
+        try run.paint(MaterialBrush.fire.material, at: firePosition)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: firePosition), .solid)
+        try run.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: firePosition), .fire)
+        XCTAssertEqual(try run.simulation.snapshot.thermalState(at: firePosition).fireElapsed, 1)
+        XCTAssertEqual(try run.simulation.snapshot.thermalState(at: p).heat, 0)
+        try run.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(try run.simulation.snapshot.thermalState(at: p).heat, 40)
+        XCTAssertFalse(try run.simulation.snapshot.thermalState(at: p).isBurning)
+        XCTAssertEqual(pixel(), [155, 140, 67, 255])
+        try run.advance(horizontal: 0, jump: false)
+        let burning = try run.simulation.snapshot.thermalState(at: p)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .oil)
+        XCTAssertEqual(burning.heat, 80)
+        XCTAssertTrue(burning.isBurning)
+        XCTAssertEqual(burning.burnElapsed, 0)
+        XCTAssertEqual(pixel(), [255, 170, 55, 255])
     }
 
     func testWardenOverlapIndicatorSurvivesPlayerRasterAtExactTick() throws {

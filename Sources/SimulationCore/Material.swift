@@ -6,10 +6,11 @@ public enum Material: UInt8, CaseIterable, Sendable {
     case water = 3
     case fire = 4
     case pitch = 5
+    case oil = 6
     public var blocksCharacter: Bool {
         switch self {
         case .solid, .sand, .pitch: return true
-        case .empty, .water, .fire: return false
+        case .empty, .water, .fire, .oil: return false
         }
     }
 }

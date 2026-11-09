@@ -7,6 +7,7 @@ class MaterialBehavior: @unchecked Sendable {
     static let water = WaterBehavior()
     static let fire = FireBehavior()
     static let pitch = PitchBehavior()
+    static let oil = OilBehavior()
 
     static func forMaterial(_ material: Material) -> MaterialBehavior {
         switch material {
@@ -16,6 +17,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .water: return water
         case .fire: return fire
         case .pitch: return pitch
+        case .oil: return oil
         }
     }
 
@@ -47,10 +49,17 @@ class MaterialBehavior: @unchecked Sendable {
         []
     }
 
+    func secondaryDestinations(source: CellPosition, direction: Int,
+                               canVisit: (CellPosition) -> Bool,
+                               material: (CellPosition) -> Material) -> [CellPosition] {
+        []
+    }
+
     func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
                  direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
                  material: (CellPosition) -> Material,
                  moved: Set<CellPosition>,
+                 secondary: [CellPosition] = [],
                  thermal: (CellPosition) -> ThermalCellState = { _ in .zero }) -> MaterialAction {
         MaterialAction()
     }
@@ -92,6 +101,7 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
                           direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
                           material: (CellPosition) -> Material,
                           moved: Set<CellPosition>,
+                          secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         for destination in destinations {
             if destination.x != source.x && destination.y != source.y {
@@ -185,6 +195,7 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
                           direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
                           material: (CellPosition) -> Material,
                           moved: Set<CellPosition>,
+                          secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
         if let water = destinations.first(where: { material($0) == .water }) {
@@ -205,13 +216,12 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
     }
 }
 
-final class PitchBehavior: FlameBehavior, @unchecked Sendable {
-    override var ignitionThreshold: UInt16? { 100 }
-
+class FlammableBehavior: FlameBehavior, @unchecked Sendable {
+    var burnoutAge: UInt16 { 64 }
     override func receiveHeat(at target: CellPosition, state: ThermalCellState, amount: UInt16,
                               canVisit: (CellPosition) -> Bool,
                               material: (CellPosition) -> Material) -> MaterialAction {
-        let neighbors = destinations(source: target, direction: 0, canVisit: canVisit, material: material)
+        let neighbors = super.destinations(source: target, direction: 0, canVisit: canVisit, material: material)
         if let water = neighbors.first(where: { material($0) == .water }) {
             return MaterialAction(writes: [(water, .empty)], moved: [target],
                                   thermalWrites: [(target, .zero)])
@@ -224,6 +234,7 @@ final class PitchBehavior: FlameBehavior, @unchecked Sendable {
                           direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
                           material: (CellPosition) -> Material,
                           moved: Set<CellPosition>,
+                          secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
         var state = thermal(source)
@@ -236,7 +247,7 @@ final class PitchBehavior: FlameBehavior, @unchecked Sendable {
             state.burnElapsed = state.burnElapsed == .max ? .max : state.burnElapsed + 1
             spread(destinations: destinations, age: state.burnElapsed, canVisit: canVisit, material: material,
                    thermal: thermal, moved: moved, action: &action)
-            if state.burnElapsed >= 64 {
+            if state.burnElapsed >= burnoutAge {
                 action.writes.append((source, .empty))
             } else {
                 action.thermalWrites.append((source, state))
@@ -246,5 +257,56 @@ final class PitchBehavior: FlameBehavior, @unchecked Sendable {
             action.thermalWrites.append((source, state))
         }
         return action
+    }
+}
+
+final class PitchBehavior: FlammableBehavior, @unchecked Sendable {
+    override var ignitionThreshold: UInt16? { 100 }
+}
+
+final class OilBehavior: FlammableBehavior, @unchecked Sendable {
+    override var ignitionThreshold: UInt16? { 80 }
+    override var burnoutAge: UInt16 { 48 }
+    override var usesDirection: Bool { true }
+
+    override func destinations(source: CellPosition, direction: Int,
+                               canVisit: (CellPosition) -> Bool,
+                               material: (CellPosition) -> Material) -> [CellPosition] {
+        MaterialBehavior.water.destinations(source: source, direction: direction,
+                                            canVisit: canVisit, material: material)
+    }
+
+    override func secondaryDestinations(source: CellPosition, direction: Int,
+                                        canVisit: (CellPosition) -> Bool,
+                                        material: (CellPosition) -> Material) -> [CellPosition] {
+        super.destinations(source: source, direction: direction, canVisit: canVisit, material: material)
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material, moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        var reaction = super.resolve(source: source, current: current, destinations: secondary,
+                                     direction: direction, maximumY: maximumY, canVisit: canVisit,
+                                     material: material, moved: moved, secondary: [], thermal: thermal)
+        // Quenching and burnout consume this turn; otherwise reaction precedes movement.
+        if reaction.moved.contains(source) || reaction.writes.contains(where: { $0.0 == source }) {
+            return reaction
+        }
+        let movement = MaterialBehavior.water.resolve(
+            source: source, current: current, destinations: destinations, direction: direction,
+            maximumY: maximumY, canVisit: canVisit, material: material,
+            moved: moved.union(reaction.moved), secondary: [], thermal: thermal
+        )
+        if let destination = movement.thermalTransfers.first?.destination {
+            reaction.thermalWrites = reaction.thermalWrites.map {
+                ($0.0 == source ? destination : $0.0, $0.1)
+            }
+        }
+        reaction.writes.append(contentsOf: movement.writes)
+        reaction.moved.append(contentsOf: movement.moved)
+        reaction.thermalTransfers.append(contentsOf: movement.thermalTransfers)
+        return reaction
     }
 }

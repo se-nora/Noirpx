@@ -62,7 +62,7 @@ final class HUDViewportTests: XCTestCase {
                 XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
             }
             scroll.contentView.scroll(to: .zero)
-            for (brush, keyCode) in zip(MaterialBrush.allCases, [18, 19, 20, 21, 23, 22] as [UInt16]) {
+            for (brush, keyCode) in zip(MaterialBrush.allCases, [18, 19, 20, 21, 23, 22, 26] as [UInt16]) {
                 let key = String(brush.rawValue)
                 let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                                                            timestamp: 0, windowNumber: window.windowNumber,

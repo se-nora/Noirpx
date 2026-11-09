@@ -66,7 +66,9 @@ layout; the seed still affects material physics. There is no seed entry or save.
 The HUD starts with the current objective and a compact reminder of movement,
 jump, pulse and painting controls; once both beacons are collected it points to
 the green gate. Open **Help** for the fuller controls, hazards and pitch
-instructions. Open **Stats** to see submitted FPS, completed tick, rendered and
+instructions. Select **Lamp oil** to paint an optional flowing fuel; fire or
+burning pitch can ignite it, and adjacent water quenches hot oil. The oil remains
+nonblocking and is not placed in the course automatically. Open **Stats** to see submitted FPS, completed tick, rendered and
 allocated chunk counts, and the character's lower-left position. Rendered
 chunks contain at least one nonempty cell in the last submitted camera frame;
 allocated chunks are all nonempty chunks in the latest completed simulation
@@ -83,14 +85,14 @@ hold the on-screen left and right controls, tap jump, and tap or hold the bolt
 button for the pulse; controls can be used together. A cyan flash shows its
 path and the overlay shows readiness or remaining cooldown ticks. The pulse
 reaches 18 cells ahead in five horizontal lanes, removing the first sand in
-each lane. Rock and pitch (including while burning) stop it without damage; water and fire let it pass. It can
+each lane. Rock and pitch (including while burning) stop it without damage; water, fire and oil let it pass. It can
 defeat the warden when a traced lane reaches it, and open a route through sand
 but cannot break the floor or rock step. At point-blank range the same five
 lanes also check inside the player, from the facing edge inward: an overlapping
 warden is hit only if no blocking material obstructs that lane. This close-range check
 does not excavate material. It fires at
 most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
-collides with rock, sand, pitch, and world bounds, but not water or fire. It advances after
+collides with rock, sand, pitch, and world bounds, but not water, fire or oil. It advances after
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), and can jump only while grounded.
 Painting blocking materials directly inside the character is
@@ -100,11 +102,12 @@ living warden; falling sand can bury and remove it.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
-water, fire, or pitch; number keys 1–6 select them as well. Strokes are applied on the
+water, fire, pitch, or lamp oil; number keys 1–7 select them as well. Strokes are applied on the
 next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Painting is disabled after a win or failure.
 
-Sand and water cannot move diagonally past an occupied side cell. Sand can
+Sand, water and oil cannot move diagonally past an occupied side cell. Oil
+does not displace water, sand or other oil, and sand does not displace oil. Sand can
 displace water into an empty side cell, or upward if both sides are occupied;
 the upward search may pass occupied cells. The displaced water does not move
 again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
@@ -113,6 +116,9 @@ Fire prioritizes adjacent water over heating; hot pitch consumes adjacent
 water and cools, while unquenched burning pitch eventually disappears.
 Fire lasts 32 processed turns and transfers 40 heat starting at age 2;
 pitch ignites at 100 and cools by 1 when not burning. Processed ticks are not necessarily displayed frames.
+Oil ignites at 80, cools by 1 when unburning, spreads heat from age 2 and
+burns out on its 48th burning turn. Its heat travels with it; it reacts before
+moving, and quenching consumes its turn.
 Fire and water have no effect across a frozen boundary.
 
 `ResidentSimulation` is a separate experimental mode for a larger sparse,

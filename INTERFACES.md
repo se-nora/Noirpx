@@ -43,7 +43,8 @@ their workloads, especially on iOS.
 ## Materials, commands, and tick rules
 
 The enum raw identifiers are empty 0, solid 1, sand 2, water 3, fire 4,
-and pitch 5. Former burning-stage identifiers 6...69 are removed and rejected;
+pitch 5, and lamp oil 6. Former burning-stage identifiers 7...69 are rejected;
+identifier 6 has been reused for oil, not migrated from the former stage format;
 there is no automatic conversion or replay compatibility with the previous rules.
 The typed API accepts only these cases; external decoding must reject unknown
 identifiers. There is no material definition or persistence format yet.
@@ -69,7 +70,9 @@ world y, then increasing x. A cell displaced into a position is marked so it
 cannot be processed again that tick. Updates are immediate: the first actor to
 claim an empty cell wins, and later actors see prior movement and reactions.
 Empty and solid do not act. Sand attempts down, then the two down-diagonals;
-water does the same and then attempts the two horizontal neighbors. Diagonal
+water and oil do the same and then attempt the two horizontal neighbors. Oil
+cannot displace water, sand, or other oil; sand cannot displace oil.
+Diagonal
 movement requires the adjacent horizontal cell to be empty and active. Sand can
 enter water that has not already moved this tick: it relocates that water to
 the first empty side cell of the destination in the sand's preferred direction,
@@ -79,25 +82,28 @@ search stays within the world and active region; if it finds no cell, that
 destination is rejected. Both relocated water and sand are marked moved.
 Otherwise the first empty in-bounds destination wins. The left/right
 preference for both diagonal and horizontal choices comes from one SplitMix64
-draw per processed sand or water cell, even when blocked or falling straight
+draw per processed sand, water, or oil cell, even when blocked or falling straight
 down. Seed initializes the state; all arithmetic wraps modulo 2^64.
 
 Immutable shared per-material behavior classes calculate movement and thermal
-actions; cell state is never stored in them. Pitch is the only currently
-flammable material, always ID 5 and blocking, even while orange/burning.
+actions; cell state is never stored in them. Pitch remains ID 5 and blocking,
+even while orange/burning. Oil is nonblocking and uses the same liquid movement
+and shared flammable reaction rules through immutable composition.
 Heat is an abstract UInt16 quantity. A heat transfer adds 40 with saturation
 at 65535; at 100 or above pitch ignites, with burn age zero. An unburning,
 heated pitch cell cools by 1 on each of its processed turns, to a minimum of
-zero. Fire and burning pitch increment their respective UInt16 ages saturating
-at 65535. Starting with age zero, they can transfer heat starting at age 2.
+zero. Oil ignites at 80, also cools by 1 when unburning, and burns away after
+48 processed burning turns. Fire and burning flammable cells increment their
+respective UInt16 ages saturating at 65535. Starting with age zero, they can
+transfer heat starting at age 2.
 Fire expires to empty after its 32nd processed turn; burning pitch burns away
-to empty after its 64th processed turn, with the last turn still able to
-transfer. Ignition does not advance burn age that tick. Fire is thus able to
+to empty after its 64th processed turn. Their last turns can still transfer heat.
+Ignition does not advance burn age that tick. Fire is thus able to
 ignite pitch from a single paint, and burning cells can independently spread.
 
 Each source checks down, left, right, up for water first. Fire consumes the
-first water and extinguishes; hot or burning pitch consumes the first water and
-resets its thermal state to zero, remaining pitch. Cold pitch ignores water.
+first water and extinguishes; hot or burning pitch or oil consumes the first water and
+resets its thermal state to zero, retaining its material. Cold flammable material ignores water.
 Water can have moved earlier in the tick. Without quenching, a source transfers
 to at most one eligible adjacent nonburning flammable cell per tick. Eligible
 targets are sorted in down/left/right/up order, rotated by source age modulo
@@ -106,7 +112,7 @@ for equal heat. Completing warmer targets avoids endlessly diluting heat, while
 excluding burning targets permits branches to be served. This is bounded
 fairness for stable neighborhoods with sufficient source lifetime, not a
 promise under moving water, competing sources, deferral, or changing terrain.
-Before applying heat to the selected pitch, the pitch checks its own currently
+Before applying heat to the selected flammable cell, that cell checks its own currently
 adjacent accessible water in down/left/right/up order. If present, it consumes
 the first water and resets to zero instead of receiving heat, even if it was
 cold before this attempt. This still spends the source's one target for the
@@ -119,6 +125,11 @@ The first source in traversal/commit order claims a target per global tick.
 A heated or quenched target cannot subsequently act or be heated that tick;
 a target that already had its own turn may be heated after cooling on that
 turn, but cannot act again. A quenched target cannot reignite that tick.
+Oil resolves its thermal action at its starting position before attempting its
+liquid move; quenching consumes the turn, and burnout removes the cell without
+moving. Otherwise its updated thermal state follows it to its destination.
+Heating or quenching an oil target claims it for the tick and prevents its
+movement or own reaction in that tick; if it already moved it cannot be heated.
 Newly ignited cells never spread on their ignition tick. No diagonals, random
 thermal choices, or character damage are involved. Frozen chunks neither
 cool nor age, and cannot exchange heat across the active boundary.
@@ -161,8 +172,8 @@ none is set by the core. Deferred chunks do not replay missed ticks: they update
 more slowly and interact with current neighbors.
 
 Within a batch, chunk proposals are calculated in parallel from the same
-immutable world state. Sand and water propose their normal movement preferences
-using a seed/tick/position-derived direction; fire and pitch propose adjacent
+immutable world state. Sand, water and oil propose their normal movement preferences
+using a seed/tick/position-derived direction; fire, pitch and oil propose adjacent
 water and flammable materials. Destinations empty, water for sand, or water or flammable for flames
 at the start of the batch are proposed, subject to the same diagonal corner
 rule. Proposals commit in world y/x order; each source must still hold its
@@ -174,7 +185,7 @@ including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
 not record schedules or promise reproducible replay across runs or devices.
 
-Flames propose all adjacent water and flammable materials visible at batch
+Flames and oil propose all adjacent water and flammable materials visible at batch
 start. Commit checks still-present candidates and current thermal state using
 the thermal rules above. New direct neighbors of the source created since
 proposal are not considered. The selected target's water check instead reads
@@ -184,11 +195,14 @@ The source can quench a target in a deferred chunk; consuming water wakes
 affected allocated chunks under the ordinary cross-batch rules.
 A heat attempt marks its target updated for the global tick even when quenched
 and across batches.
+Oil movement and reaction candidates are captured independently at batch start;
+commits recheck them against the current world, with reactions before movement.
+Skipped mobile cells restore their chunk's wake even when their heat is zero.
 Ages and cooling advance only when the owning chunk is processed; a deferred chunk does not advance. A
 processed fire may interact across a chunk boundary even if the neighbor chunk
 is deferred; changed cells wake allocated neighboring chunks, which wait for
 the next tick if absent from the original candidate list. A changed hot or burning
-cell keeps its chunk active; inert pitch can sleep until a nearby edit wakes it.
+cell keeps its chunk active; inert pitch and blocked cold oil can sleep until a nearby edit wakes them.
 If a later batch clears the wake for an already-heated cell, its skipped
 proposal restores the wake. Deferred processing extends durations in global
 ticks rather than catching up.
@@ -225,7 +239,7 @@ even for zero-thermal worlds; version 2 distinguished the 64-wide layout from
 version 1's 16-wide layout. The stage-3 physics change keeps the stage-2 v3
 byte layout but changes the simulation rules and therefore is not replay
 compatible; old digests are not comparable as evidence of equal future behavior.
-The later target-side water-priority correction also changes replay outcomes
+The later target-side water-priority correction and oil addition also change replay outcomes
 without changing the v3 byte layout.
 Prior digest versions are not compatible. It includes the
 completed world and RNG state, **not queued future commands**; equal digests
@@ -263,7 +277,7 @@ padding is 52 points). Its height fits the view; on iOS it reserves 96 points
 at the bottom for movement, jump and pulse. Its presentation-only guide shows
 the current beacon/gate objective or terminal restart prompt, followed by
 platform-specific movement, jump, pulse and painting reminders. Scroll to reach Restart, New Run,
-Stats, Help and all six brushes in a compact window. The same keyboard shortcuts
+Stats, Help and all seven brushes in a compact window. The same keyboard shortcuts
 work while controls are offscreen. Help contains controls and fixture
 instructions, and Stats opens the diagnostic panel reporting submitted FPS, completed tick, rendered
 and allocated chunk counts, and the character's lower-left position. Rendered
@@ -277,7 +291,7 @@ and refresh the renderer. The sequence is local, with no seed entry or save.
 The material brush maps mouse or single-touch strokes through the same
 following drawable viewport as the renderer, ignores letterboxing and cells
 outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water,
-fire or pitch (also via keys 1–6); each cell replacement is enqueued in event order for
+fire, pitch or lamp oil (also via keys 1–7); each cell replacement is enqueued in event order for
 the next tick. A stroke leaving the viewport is disconnected until it re-enters.
 The host surfaces enqueue and tick-overflow failures; inputs are not recorded
 for replay. Missing Metal devices, renderer initialization failures, simulation
@@ -289,7 +303,7 @@ with gravity and a bounded fall speed. When grounded horizontal movement is
 blocked, the character can step up at most three cells, provided the upward and
 horizontal paths are clear and the destination has support. Movement checks each newly entered edge,
 including intermediate vertical cells, against rock, sand, pitch, and world bounds.
-Empty space, water, and fire do not block the character; the character does not affect
+Empty space, water, fire and oil do not block the character; the character does not affect
 material rules. Jump presses are buffered until the next tick and only take
 effect while grounded. Simultaneous opposite directions cancel. Controls reset
 on lifecycle changes and window focus loss. Painting a blocking material inside the
@@ -336,7 +350,7 @@ load. At a 1000×600 host size after settling, the shared HUD geometry keeps
 these cells and the cells directly above and below them outside the HUD;
 320×300 and portrait 600×1000 layouts are also covered by geometry tests.
 On macOS, a hosted SwiftUI test checks the actual scroll viewport and that all
-ten action and brush buttons can be scrolled fully into view at these sizes,
+eleven action and brush buttons can be scrolled fully into view at these sizes,
 including the iOS bottom-reserve geometry. The HUD is not a
 physical-device touch or readability validation.
 Materials update before the character. After movement, a lower-left character
@@ -375,8 +389,8 @@ when the global protection timer is zero, setting it to 30 ticks. It decrements
 on each subsequent playing tick, including outside the vent or while cooled;
 contact can damage again on the tick it reaches zero. A pink character and the
 HUD show the remaining protection; health does not regenerate. Zero health
-ends the run as `exhausted`. Restart restores all health and timers. Neither
-ordinary water nor ordinary fire damages the character, including while frozen.
+ends the run as `exhausted`. Restart restores all health and timers. None of
+ordinary water, fire or oil damages the character, including while frozen.
 The vent does not itself alter material rules or the material snapshot digest.
 
 The Chime Warden is a single 5 × 6-cell, non-material rectangle; it does not
@@ -389,8 +403,8 @@ not fall, climb, teleport, respawn or search for a new floor. Otherwise its
 red contact danger, and 36...59 purple recovery; phase zero is the initial
 state. Every sixth phase (including zero), it attempts one horizontal cell,
 initially left. It reverses without moving when its next full rectangle lacks
-clearance or support, or would leave the patrol lower-left bounds. Water and
-fire are passable. This update runs every gameplay tick regardless of frozen
+clearance or support, or would leave the patrol lower-left bounds. Water,
+fire and oil are passable. This update runs every gameplay tick regardless of frozen
 chunks, against the post-physics material state. A threatening half-open body
 overlap uses the same global 30-tick damage protection as the vent; simultaneous
 contact cannot deal two hits. Damage is checked before pulse and goal, and
@@ -414,7 +428,7 @@ fire; terminal runs freeze cooldown and flash until restart. Five horizontal
 lanes at character lower-left y+2...y+6 start immediately outside the facing
 edge, extending at most 18 cells each. Each lane stops at the world boundary,
 the first rock, pitch, or sand. Rock and pitch are unchanged; the first sand is removed;
-empty, water and fire are transparent and unchanged. Each pulse inspects at
+empty, water, fire and oil are transparent and unchanged. Each pulse inspects at
 most 90 cells and removes at most five. It uses the post-physics snapshot, so
 paint commands applied this tick affect occlusion; removed sand affects physics
 on the next tick. Like painting, this explicit action can modify frozen chunks.
@@ -427,7 +441,7 @@ stopped by the warden. For an overlapping warden, a separate near-field check
 walks each of the same five lanes across the player body, from the facing edge
 inward, stopping before the first blocking material or world boundary. A warden cell
 reached in that check also counts as a hit, even when it is entirely inside the
-player; empty, water and fire are transparent. This check neither excavates
+player; empty, water, fire and oil are transparent. This check neither excavates
 material nor extends the external range or flash. Both checks use pre-excavation
 material, so a pulse cannot hit through sand it removes on that tick.
 Restart recreates the warden, initial facing, cooldown and

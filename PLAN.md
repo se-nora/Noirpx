@@ -66,10 +66,11 @@ later; no non-Apple platform is promised by the first release.
   that a moved cell cannot be advanced twice in the same tick. Cover chunk edges
   and negative coordinates with tests. Parallel simulation is a later measured
   optimization, not a prerequisite.
-- The same initial state, seed, tick-indexed inputs, and simulation version must
-  produce the same state on repeated runs. Avoid platform-dependent iteration
-  order and floating-point-dependent cell rules. Cross-device determinism must
-  be tested before it is relied upon for saves or networking.
+- The original deterministic mode must reproduce the same state for the same
+  initial state, seed, tick-indexed inputs, and simulation version. The
+  separately selected resident-world mode uses host deadlines and intentionally
+  does not promise this reproducibility. Cross-device determinism remains
+  unverified and must not be relied upon for saves or networking.
 - Begin with static solids, empty space, sand, water, and simple fire/reactions.
   Define rules, state transitions, and boundary behavior before expanding the
   material set. World generation, entities, and tools communicate through
@@ -90,10 +91,10 @@ later; no non-Apple platform is promised by the first release.
   full initial sync, chunk removal, and recovery when intermediate revisions are
   skipped. Measure copying, memory pressure, and upload cost rather than
   assuming a particular buffering scheme.
-- A render frame must not cause a simulation update, and changing display
-  frequency must not change tick results for the same tick-indexed inputs.
-  Start on one thread if needed, but preserve this boundary when introducing
-  concurrency.
+- A render frame must not directly cause a simulation update. In the original
+  deterministic mode, changing display frequency must not change tick results
+  for the same tick-indexed inputs. The opt-in resident mode instead depends on
+  its host's budget decisions, so display and device timing can affect results.
 - Render the material grid with crisp pixel scaling and a camera. UI, lighting,
   effects, and audio are consumers of game state, not sources of physics.
 
@@ -151,9 +152,31 @@ uploads are not implemented. Full snapshots make skipped revisions and chunk
 removal unambiguous but require memory and upload measurements.
 
 The contract is provisional and has not been agreed by separate core and
-renderer contributors. Their review remains necessary before dependent
-branches diverge; neither cross-device determinism nor target-device
-performance has been established.
+renderer contributors. Their independent review remains open; neither
+cross-device determinism nor target-device performance has been established.
+
+**Resident-world direction:** The project owner authorized a single-owner
+implementation after reviewing the proposed change. The new opt-in mode uses
+a 64,000 × 128,000 sparse, fully resident world; configurable power-of-two
+chunks default to 64 × 64; inactive chunks sleep. Parallel proposal/commit
+batches use a host deadline and prioritize proximity to the future viewport
+center with aging for distant work. Delayed chunks run slowly, not via
+catch-up replay. The intended viewport is 480 × 270 cells, but the host still
+only displays a clear color. Outcomes may vary with deadline and batch choices;
+the original deterministic mode remains available. See
+[INTERFACES.md](INTERFACES.md) for ordering, fairness, and deadline limitations.
+
+The time budget remains unchosen. A synthetic Release microbenchmark on an
+Apple M3, macOS 27.0.1 and Xcode 27.2 used 1,024 active chunks containing one
+sand cell each, five runs per width and batch size 8. Median planning/full-tick
+times in milliseconds were: width 16: 0.123/2.791; 32: 0.119/3.672;
+64: 0.115/5.270; 128: 0.113/10.941. Planning was 1.0–4.5% of the measured
+full tick in this narrow scene; it includes sorting but no batch work. A
+100,000-call loop measured `DispatchTime.now().uptimeNanoseconds` at about
+9 ns per call on this host, not including a real host's budget logic. Use the
+README benchmark command to repeat it. It is not a sustained, dense-world,
+viewport, memory, or target-device test; allocation, sorting, full snapshots,
+batch overrun, thermals, and real iPhone behavior still need measurement.
 
 ### 2. Renderable world and platform hosts
 
@@ -162,10 +185,11 @@ scene. Add macOS and iOS hosts, a camera, resize handling, and an independent
 fixed-tick scheduler. Provide basic keyboard/mouse and touch input.
 
 **Exit:** Both hosts display and interact with the same fixture. Automated
-scheduler/snapshot tests demonstrate identical simulation results for identical
-tick-indexed commands at different display rates, including skipped snapshot
-revisions and chunk removal. Verify lifecycle and touch behavior on a physical
-iPhone; report any device or signing limitation.
+scheduler/snapshot tests demonstrate identical results at different display
+rates for the deterministic mode, and explicitly cover budget-dependent results
+for resident mode, skipped snapshot revisions, and chunk removal. Verify
+lifecycle and touch behavior on a physical iPhone; report any device or signing
+limitation.
 
 ### 3. Performance and world scale
 

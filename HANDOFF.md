@@ -1,5 +1,29 @@
 # Handoff: deterministic simulation prototype
 
+## Resident-world prototype update (2026-11-09)
+
+The project owner authorized a single-owner implementation of a separate
+resident-world mode. [ResidentSimulation.swift](Sources/SimulationCore/ResidentSimulation.swift)
+implements a sparse 64,000 × 128,000 world with configurable power-of-two
+chunk widths (default 64), parallel proposal batches, sleeping/wake-up,
+focus-based priority with aging, and a host-provided per-batch deadline check.
+It intentionally does not promise deterministic replay; the earlier
+deterministic mode remains unchanged. The intended viewport is 480 × 270
+cells, but the host still only clears the screen and supplies no focus or
+deadline. See [INTERFACES.md](INTERFACES.md) and [PLAN.md](PLAN.md) for precise
+semantics, unchosen budget, memory limits, and benchmark results. Independent
+core/renderer review remains open, not claimed as completed.
+
+On the development Mac, the core build, full test suite, Debug macOS and iOS
+Simulator builds, focused Thread Sanitizer tests, and the optional Release
+microbenchmark passed. The optional benchmark is skipped by default. Xcode
+emitted a Simulator placeholder OS-version warning. No physical-device,
+dense-world, sustained performance, rendering, or real-host deadline tests
+were performed. Inspect the current branch and integration state before
+continuing; rerun affected checks after integration.
+
+The remaining sections describe earlier handoffs and are historical.
+
 ## Milestone 1 integration update (2026-11-09)
 
 The single-owner headless simulation prototype was merged provisionally into

@@ -2,8 +2,9 @@
 
 Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
 It is not yet playable. The current Apple app displays a Metal clear color.
-The standalone core has a deterministic chunked material prototype and a
-headless fixture; the app has no scheduler, input, or material rendering yet.
+The standalone core has a deterministic material prototype, a headless
+fixture, and an opt-in parallel resident-world prototype; the app has no
+scheduler, input, or material rendering yet.
 
 - [Development plan](PLAN.md) records decisions and milestones.
 - [Interface contracts](INTERFACES.md) distinguish implemented APIs
@@ -17,6 +18,20 @@ tick 1. Call `advance()` to complete each tick, then inspect `snapshot`, its
 chunks, or its stable `digest`. Commands replace one material at a position on
 an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
+
+`ResidentSimulation` is a separate experimental mode for a larger sparse,
+fully resident world. It accepts a focus and a host-provided per-batch budget
+check, sleeps idle chunks, and computes proposals in parallel. Different
+deadline decisions can produce different worlds; it does not promise replay
+determinism. The 480 × 270-cell viewport and host timing are not implemented.
+
+To run the optional release-mode scheduling microbenchmark:
+
+```sh
+NOIRPX_BENCHMARK=1 swift test -c release --filter ResidentSchedulingBenchmark/testSchedulingOverhead
+```
+
+This synthetic benchmark is not a device performance certification.
 
 ## Toolchain and targets
 

@@ -64,7 +64,10 @@ course. The course varies obstacle positions, gap width, sand height, objectives
 and vent placement within a tested, finishable route. Seeds can yield the same
 layout; the seed still affects material physics. There is no seed entry or save.
 
-Open **Help** for controls and course instructions. Open **Stats** to see submitted FPS, completed tick, rendered and
+The HUD starts with the current objective and a compact reminder of movement,
+jump, pulse and painting controls; once both beacons are collected it points to
+the green gate. Open **Help** for the fuller controls, hazards and pitch
+instructions. Open **Stats** to see submitted FPS, completed tick, rendered and
 allocated chunk counts, and the character's lower-left position. Rendered
 chunks contain at least one nonempty cell in the last submitted camera frame;
 allocated chunks are all nonempty chunks in the latest completed simulation

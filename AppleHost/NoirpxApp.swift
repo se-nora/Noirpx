@@ -179,8 +179,10 @@ private struct HostView: View {
                 }
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
                 Text("BEACON RUN").fontWeight(.bold)
+                HUDGuide(outcome: model.challenge?.outcome,
+                         collected: model.challenge?.collected.filter { $0 }.count ?? 0,
+                         controls: hudGuideControls)
                 Text("Seed \(model.challenge?.seed ?? 0)")
-                Text("Pitch: fire ignites; water quenches.")
                 Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
                 Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
                         "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
@@ -261,6 +263,14 @@ private struct HostView: View {
         #endif
     }
 
+    private var hudGuideControls: HUDGuideText.Controls {
+        #if os(iOS)
+        .touch
+        #else
+        .keyboard
+        #endif
+    }
+
     #if os(iOS)
     private func controlButton(_ title: String, symbol: String, control: GameplayControl) -> some View {
         Image(systemName: symbol)
@@ -337,24 +347,25 @@ private final class InputMetalView: MTKView {
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
-    private var keyMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
+    private var keyMonitor: ScopedRegistration?
+    private var resignObserver: ScopedRegistration?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        keyMonitor = nil
+        resignObserver = nil
         keys.removeAll()
         onKeyboard?(GameplayControls())
         guard let window else { return }
-        resignObserver = NotificationCenter.default.addObserver(
+        let observer = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: window, queue: .main
         ) { [weak self] _ in
             self?.keys.removeAll()
             self?.onKeyboard?(GameplayControls())
             self?.onInputReset?()
         }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+        resignObserver = ScopedRegistration { NotificationCenter.default.removeObserver(observer) }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp], handler: { [weak self] event in
             guard let self, event.window === self.window,
                   [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
@@ -369,12 +380,9 @@ private final class InputMetalView: MTKView {
                 pulse: self.keys.contains(3)
             ))
             return nil
+        }) {
+            keyMonitor = ScopedRegistration { NSEvent.removeMonitor(monitor) }
         }
-    }
-
-    deinit {
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
     }
 
     override func mouseDown(with event: NSEvent) {

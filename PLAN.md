@@ -196,9 +196,8 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 ### 2. Renderable world and platform hosts
 
 **Incremental prototype:** The Apple host renders the deterministic fixture in a
-centered camera with 509 cells along the drawable's long edge, adapting the other
-dimension to its aspect ratio. This approximately halves the visible area from
-the earlier 720-cell view. The camera follows the character. It uses a 60 Hz host accumulator, four-step catch-up cap,
+centered camera with 200 cells along the drawable's long edge, adapting the other
+dimension to its aspect ratio. The camera follows the character. It uses a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
 version, rendered and allocated chunk counts, and the character position;
 the fixture can be restarted. The
@@ -255,6 +254,12 @@ quenches the burning cell. Pitch is blocking and can be burned away; see
 the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
 The fixture does not obstruct the normal standing course; a bounded-width,
 scrollable HUD leaves it and its paint targets clear in tested host geometries.
+The HUD presents a concise objective and platform control reminder before the
+status and palette; the objective changes when the gate unlocks or a run ends.
+This addresses an observed macOS start screen where movement, jumping, pulse and
+the goal were only explained in Help, while pitch instructions occupied the HUD.
+The macOS input view also uses single-owner registrations for its keyboard
+monitor and focus observer, avoiding repeated removal during view replacement.
 SwiftUI layout tests cover scroll access at 320×300 and larger windows. Display
 callbacks may skip states, and touch readability remains unverified on hardware.
 One original Chime Warden patrols the supported floor after the second marker,

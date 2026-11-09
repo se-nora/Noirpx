@@ -3,6 +3,21 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testHUDGuideTracksObjectiveAndTerminalOutcomes() {
+        XCTAssertEqual(HUDGuideText.objective(outcome: nil, collected: 0), "Waiting for run")
+        for count in 0...1 {
+            XCTAssertEqual(HUDGuideText.objective(outcome: .playing, collected: count),
+                           "Touch 2 amber beacons, then gate")
+        }
+        XCTAssertEqual(HUDGuideText.objective(outcome: .playing, collected: 2), "Both found: touch green gate")
+        XCTAssertEqual(HUDGuideText.objective(outcome: .won, collected: 2), "Run complete • Restart or New Run")
+        for outcome in [BeaconRun.Outcome.fell, .exhausted] {
+            XCTAssertEqual(HUDGuideText.objective(outcome: outcome, collected: 0), "Run ended • Restart to retry")
+        }
+        XCTAssertEqual(HUDGuideText.controls(.keyboard), ["A/D move • Space jump", "F pulse • drag paints"])
+        XCTAssertEqual(HUDGuideText.controls(.touch), ["←/→ move • ↑ jump", "⚡ pulse • drag paints"])
+    }
+
     func testPitchFixtureAndPaintTargetsClearActualHostHUDGeometry() throws {
         var run = try BeaconRun(seed: 42)
         for _ in 0..<30 { try run.advance(horizontal: 0, jump: false) }

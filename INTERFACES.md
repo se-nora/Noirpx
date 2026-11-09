@@ -216,7 +216,9 @@ outside the visible rectangle. Frozen chunks remain in complete snapshots.
 The top-left overlay is a vertically scrollable viewport, constrained to 45%
 of the host view width when the view is at least 116 points wide (its fixed
 padding is 52 points). Its height fits the view; on iOS it reserves 96 points
-at the bottom for movement, jump and pulse. Scroll to reach Restart, New Run,
+at the bottom for movement, jump and pulse. Its presentation-only guide shows
+the current beacon/gate objective or terminal restart prompt, followed by
+platform-specific movement, jump, pulse and painting reminders. Scroll to reach Restart, New Run,
 Stats, Help and all six brushes in a compact window. The same keyboard shortcuts
 work while controls are offscreen. Help contains controls and fixture
 instructions, and Stats opens the diagnostic panel reporting submitted FPS, completed tick, rendered
@@ -249,6 +251,9 @@ effect while grounded. Simultaneous opposite directions cancel. Controls reset
 on lifecycle changes and window focus loss. Painting a blocking material inside the
 character is ignored, but an earlier queued edit or moving sand can overlap it;
 edge-only collision permits it to leave such an overlap.
+On macOS, each window attachment owns its keyboard monitor and focus observer.
+Detaching, replacing the view, or destroying it cancels each registration at most
+once; a detached view cannot leave an old keyboard monitor installed.
 
 `BeaconRun` owns the seed, immutable `BeaconCourse`, simulation, character,
 health, vent, two collected flags and outcome. Generation uses fixed UInt64

@@ -16,7 +16,11 @@ final class HUDViewportTests: XCTestCase {
             let view = NSHostingView(rootView: HUDScrollViewport(width: width, height: height,
                                                                  bottomReserved: bottomReserved) {
                 VStack(alignment: .leading, spacing: 5) {
-                    ForEach(0..<8) { i in Text("Status \(i)") }
+                    Text("NOIRPX v0.16.0")
+                    Text("BEACON RUN")
+                    HUDGuide(outcome: .playing, collected: 0,
+                             controls: bottomReserved == 0 ? .keyboard : .touch)
+                    ForEach(0..<6) { i in Text("Status \(i)") }
                     HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
                                 select: { selected = $0 })
                 }

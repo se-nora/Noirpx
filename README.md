@@ -19,7 +19,7 @@ chunks, or its stable `digest`. Commands replace one material at a position on
 an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
-The app shows a view centered on the origin with 509 simulation cells along the
+The app shows a view following the character with 509 simulation cells along the
 long edge of the drawable. A landscape Mac or iPhone therefore shows 509 cells
 across; in portrait, 509 cells are visible vertically. This shows approximately
 half the area of the earlier 720-cell-long-edge view. The other dimension follows
@@ -39,7 +39,7 @@ active region boundary. Explicit commands still apply to frozen chunks. The
 renderer skips chunks outside the visible camera. Restart
 replays the fixture and character from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
-This is a diagnostic scene, not a movable camera or complete gameplay loop.
+This is a diagnostic scene, not a complete gameplay loop.
 
 Move with A/D or the left/right arrow keys and jump with W, up, or space on
 macOS. On iOS, hold the on-screen left and right controls and tap jump; movement
@@ -48,8 +48,7 @@ collides with rock, sand, and world bounds, but not water or fire. It advances a
 each material tick, automatically steps up obstacles at most three cells high
 while grounded (if there is headroom), can jump only while grounded, and does not affect the
 materials. The app extends the fixture's rock floor from x = -120 to 120.
-The camera remains fixed, so the character can leave the view or fall off the
-floor; restart to return. Painting rock or sand directly inside the character is
+The character can fall off the floor; restart to return. Painting rock or sand directly inside the character is
 ignored. A queued edit or moving sand can still overlap it: the character does
 not block material movement.
 
@@ -59,6 +58,12 @@ water, or fire; number keys 1–5 select them as well. Strokes are applied on th
 next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Restart clears edits and replays the
 fixture.
+
+Sand and water cannot move diagonally past an occupied side cell. Sand can
+displace water into an empty side cell, or upward if both sides are occupied;
+the upward search may pass occupied cells. The displaced water does not move
+again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
+resident-mode ordering.
 
 `ResidentSimulation` is a separate experimental mode for a larger sparse,
 fully resident world. It accepts a focus and a host-provided per-batch budget

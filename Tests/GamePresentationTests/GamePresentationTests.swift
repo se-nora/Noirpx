@@ -3,6 +3,44 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testFollowingViewportMapsAndRendersShiftedWorld() throws {
+        let center = CellPosition(x: -130, y: 95)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810, center: center))
+        let position = CellPosition(x: -130, y: 94)
+        var simulation = Simulation(seed: 0)
+        try simulation.enqueue(.init(tick: 1, position: position, material: .solid))
+        try simulation.advance()
+        let column = viewport.columns / 2
+        let row = viewport.rows / 2
+        let offset = (row * viewport.columns + column) * 4
+        let frame = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport)
+        XCTAssertEqual(Array(frame.pixels[offset..<offset + 4]), [112, 121, 139, 255])
+        XCTAssertEqual(viewport.cell(atX: viewport.x + (Double(column) + 0.5) * viewport.width / Double(viewport.columns),
+                                    y: viewport.y + (Double(row) + 0.5) * viewport.height / Double(viewport.rows)),
+                       position)
+        XCTAssertTrue(viewport.visibleChunks.contains(ChunkPosition(x: -3, y: 1)))
+        XCTAssertTrue(viewport.activeChunks.contains(ChunkPosition(x: -3, y: 1)))
+    }
+
+    func testFollowingViewportRejectsCellsOutsideWorld() throws {
+        let edge = Simulation.coordinateBounds.upperBound
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810,
+                                                     center: .init(x: edge, y: edge)))
+        XCTAssertNil(viewport.cell(atX: viewport.x + viewport.width - 1, y: viewport.y))
+        XCTAssertNil(FixtureViewport(drawableWidth: 100, drawableHeight: 100,
+                                     center: .init(x: edge + 1, y: 0)))
+    }
+
+    func testFollowingViewportMovesVisibleAndActiveRegions() throws {
+        let origin = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
+        let shifted = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810,
+                                                    center: .init(x: 128, y: -128)))
+        XCTAssertEqual(shifted.visibleChunks.x, (origin.visibleChunks.x.lowerBound + 2)...(origin.visibleChunks.x.upperBound + 2))
+        XCTAssertEqual(shifted.visibleChunks.y, (origin.visibleChunks.y.lowerBound - 2)...(origin.visibleChunks.y.upperBound - 2))
+        XCTAssertEqual(shifted.activeChunks.x, (origin.activeChunks.x.lowerBound + 2)...(origin.activeChunks.x.upperBound + 2))
+        XCTAssertEqual(shifted.activeChunks.y, (origin.activeChunks.y.lowerBound - 2)...(origin.activeChunks.y.upperBound - 2))
+    }
+
     func testCharacterRendersWithoutChangingChunkCount() throws {
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
         let snapshot = Simulation(seed: 0).snapshot

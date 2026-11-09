@@ -25,6 +25,7 @@ private final class GameModel: ObservableObject {
     private var simulation: Simulation?
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
+    private var drawableSize: (width: Double, height: Double)?
     private var keyboard = CharacterControls()
     private var touch = CharacterControls()
     private var pendingJump = false
@@ -43,6 +44,7 @@ private final class GameModel: ObservableObject {
             simulation = fixture
             snapshot = fixture.snapshot
             character = FixtureCharacter()
+            updateActiveChunks()
             clearControls()
             errorMessage = nil
             scheduler.reset()
@@ -102,6 +104,14 @@ private final class GameModel: ObservableObject {
 
     func setViewport(_ viewport: FixtureViewport) {
         if activeChunks == nil { scheduler.reset() }
+        drawableSize = (viewport.width + 2 * viewport.x, viewport.height + 2 * viewport.y)
+        updateActiveChunks()
+    }
+
+    private func updateActiveChunks() {
+        guard let drawableSize,
+              let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
+                                             center: character.cameraCenter) else { return }
         activeChunks = viewport.activeChunks
     }
 
@@ -118,17 +128,19 @@ private final class GameModel: ObservableObject {
     }
 
     func update(at time: Double) {
-        guard simulation != nil, errorMessage == nil, let activeChunks else { return }
+        guard simulation != nil, errorMessage == nil, activeChunks != nil else { return }
         do {
             let steps = scheduler.steps(at: time)
             guard steps > 0 else { return }
             for _ in 0..<steps {
+                guard let activeChunks else { return }
                 try simulation?.advance(activeChunks: activeChunks)
                 guard let completed = simulation?.snapshot else { return }
                 let heldHorizontal = (keyboard.right || touch.right ? 1 : 0)
                     - (keyboard.left || touch.left ? 1 : 0)
                 let horizontal = heldHorizontal == 0 ? accessibilityHorizontal : heldHorizontal
                 try character.advance(snapshot: completed, horizontal: horizontal, jump: pendingJump)
+                updateActiveChunks()
                 pendingJump = false
                 accessibilityHorizontal = 0
                 snapshot = completed
@@ -147,6 +159,12 @@ private struct CharacterControls {
     var left = false
     var right = false
     var jump = false
+}
+
+private extension FixtureCharacter {
+    var cameraCenter: CellPosition {
+        CellPosition(x: position.x + Self.width / 2, y: position.y + Self.height / 2)
+    }
 }
 
 private struct HostView: View {
@@ -287,6 +305,7 @@ private struct MetalSurface {
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
     var onKeyboard: ((CharacterControls) -> Void)?
+    var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
     private var keyMonitor: Any?
@@ -347,6 +366,7 @@ extension MetalSurface: NSViewRepresentable {
         let view = InputMetalView()
         view.onPaint = onPaint
         view.onKeyboard = onKeyboard
+        view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
     }
@@ -356,11 +376,13 @@ extension MetalSurface: NSViewRepresentable {
         context.coordinator.character = character
         view.onPaint = onPaint
         view.onKeyboard = onKeyboard
+        view.cameraCenter = character.cameraCenter
     }
 }
 #elseif os(iOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var activeTouch: UITouch?
 
@@ -401,6 +423,7 @@ extension MetalSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
     }
@@ -409,6 +432,7 @@ extension MetalSurface: UIViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
         view.onPaint = onPaint
+        view.cameraCenter = character.cameraCenter
     }
 }
 #endif
@@ -417,7 +441,7 @@ private extension InputMetalView {
     func paintPoint(x: CGFloat, y: CGFloat) {
         guard bounds.width > 0, bounds.height > 0,
               let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
-                                             drawableHeight: Double(drawableSize.height)),
+                                             drawableHeight: Double(drawableSize.height), center: cameraCenter),
               let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
                                        y: Double(y / bounds.height * drawableSize.height)) else {
             lastCell = nil
@@ -442,7 +466,7 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private let onRenderedChunks: (Int) -> Void
     private let onError: (String) -> Void
     private let onViewport: (FixtureViewport) -> Void
-    private var lastActiveChunks: ChunkRegion?
+    private var lastDrawableSize: CGSize?
     private var lastRenderedChunks: Int?
     private var fpsStart = ProcessInfo.processInfo.systemUptime
     private var frameCount = 0
@@ -481,9 +505,10 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
 
     func draw(in view: MTKView) {
         guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
-                                             drawableHeight: Double(view.drawableSize.height)) else { return }
-        if lastActiveChunks != viewport.activeChunks {
-            lastActiveChunks = viewport.activeChunks
+                                             drawableHeight: Double(view.drawableSize.height),
+                                             center: character.cameraCenter) else { return }
+        if lastDrawableSize != view.drawableSize {
+            lastDrawableSize = view.drawableSize
             DispatchQueue.main.async { [onViewport] in onViewport(viewport) }
         }
         guard let queue, let pipeline,

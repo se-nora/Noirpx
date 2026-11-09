@@ -52,8 +52,15 @@ world y, then increasing x. A cell displaced into a position is marked so it
 cannot be processed again that tick. Updates are immediate: the first actor to
 claim an empty cell wins, and later actors see prior movement and reactions.
 Empty and solid do not act. Sand attempts down, then the two down-diagonals;
-water does the same and then attempts the two horizontal neighbors. The first
-empty in-bounds destination wins; no material is displaced. The left/right
+water does the same and then attempts the two horizontal neighbors. Diagonal
+movement requires the adjacent horizontal cell to be empty and active. Sand can
+enter water that has not already moved this tick: it relocates that water to
+the first empty side cell of the destination in the sand's preferred direction,
+then the opposite side, or searches upward for the first empty cell, passing
+through occupied cells if needed. The sand's vacated cell is available. The
+search stays within the world and active region; if it finds no cell, that
+destination is rejected. Both relocated water and sand are marked moved.
+Otherwise the first empty in-bounds destination wins. The left/right
 preference for both diagonal and horizontal choices comes from one SplitMix64
 draw per processed sand or water cell, even when blocked or falling straight
 down. Seed initializes the state; all arithmetic wraps modulo 2^64. Fire checks
@@ -102,10 +109,12 @@ more slowly and interact with current neighbors.
 Within a batch, chunk proposals are calculated in parallel from the same
 immutable world state. Sand and water propose their normal movement preferences
 using a seed/tick/position-derived direction; fire proposes adjacent water in
-the normal priority order. Only destinations empty (or water for fire) at the
-start of that batch are proposed. Proposals commit in world y/x order; each
-source must still hold its original material, and destinations must still be
-available. A move tries its remaining proposed destinations if an earlier
+the normal priority order. Destinations empty, water for sand, or water for fire
+at the start of the batch are proposed, subject to the same diagonal corner
+rule. Proposals commit in world y/x order; each source must still hold its
+original material, and destinations and diagonal side cells must still be
+available. Water displacement is resolved against the current committed world
+and cannot relocate water already moved that tick. A move tries its remaining proposed destinations if an earlier
 choice was claimed. A moved cell cannot move again in the same global tick,
 including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
@@ -144,8 +153,8 @@ monotonic 60 Hz accumulator, independently of display callbacks. It performs at
 most four ticks per timer callback and discards excess elapsed time rather than
 skipping ticks. Lifecycle changes reset the time baseline and accumulated time.
 The Metal renderer reads complete immutable snapshots; each frame uses a fresh
-RGBA texture held by its command buffer through GPU completion. The centered
-camera covers 509 cells along the drawable's long edge, approximately halving
+RGBA texture held by its command buffer through GPU completion. The camera
+tracks the character's center and covers 509 cells along the drawable's long edge, approximately halving
 the area of the previous 720-cell view, with the short edge
 rounded to the nearest whole cell (at least one). Its viewport is uniformly
 scaled to fit and may have small margins; nearest-neighbor sampling does not
@@ -155,7 +164,8 @@ strategy for a larger world.
 
 The host computes the visible chunk rectangle from the viewport, including
 partially visible chunks, and extends it by twice its chunk width and height
-on each respective side for physics. The region updates on drawable size changes;
+on each respective side for physics. The region updates on drawable size changes
+and after every character tick, independently of display callbacks;
 the simulation waits for a valid viewport before ticking. Rendering skips chunks
 outside the visible rectangle. Frozen chunks remain in complete snapshots.
 
@@ -166,8 +176,8 @@ submitted camera frame; allocated counts reflect all allocated nonempty chunks
 in the latest completed snapshot, including those outside the camera. The two
 counts can refer to different ticks. Restart creates the same fixture
 again. The material brush maps mouse or single-touch strokes through the same
-centered drawable viewport as the renderer, ignores letterboxing, and fills
-gaps between sampled cells. The overlay selects empty, solid, sand, water or
+following drawable viewport as the renderer, ignores letterboxing and cells
+outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water or
 fire (also via keys 1–5); each cell replacement is enqueued in event order for
 the next tick. A stroke leaving the viewport is disconnected until it re-enters.
 The host surfaces enqueue and tick-overflow failures; inputs are not recorded
@@ -191,6 +201,6 @@ edge-only collision permits it to leave such an overlap.
 Character state and input are separate from `SimulationSnapshot` and its digest,
 so the digest does not represent a complete gameplay state. The renderer draws
 the character over the material frame without affecting rendered-chunk counts.
-The camera remains fixed, with no respawn except restart. Resident-mode
+There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance
 validation remain open.

@@ -1,6 +1,6 @@
 import SimulationCore
 
-/// Rasterizes the centered camera with RGBA rows ordered from top to bottom.
+/// Rasterizes the camera with RGBA rows ordered from top to bottom.
 public enum FixturePixels {
     public static func rgba(snapshot: SimulationSnapshot, viewport: FixtureViewport) -> [UInt8] {
         rasterize(snapshot: snapshot, viewport: viewport).pixels
@@ -20,8 +20,8 @@ public enum FixturePixels {
             for (index, material) in chunk.cells.enumerated() where material != .empty {
                 let worldX = chunk.position.x * Simulation.chunkWidth + index % Simulation.chunkWidth
                 let worldY = chunk.position.y * Simulation.chunkWidth + index / Simulation.chunkWidth
-                let x = worldX + width / 2
-                let y = height / 2 - 1 - worldY
+                let x = worldX - viewport.center.x + width / 2
+                let y = height / 2 - 1 - worldY + viewport.center.y
                 guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
                 chunkVisible = true
                 let color: UInt32
@@ -39,8 +39,8 @@ public enum FixturePixels {
         if let character {
             for dy in 0..<FixtureCharacter.height {
                 for dx in 0..<FixtureCharacter.width {
-                    let x = character.position.x + dx + width / 2
-                    let y = height / 2 - 1 - character.position.y - dy
+                    let x = character.position.x + dx - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - character.position.y - dy + viewport.center.y
                     guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
                     pixels[y * width + x] = UInt32(0xffe6e2b4).littleEndian
                 }

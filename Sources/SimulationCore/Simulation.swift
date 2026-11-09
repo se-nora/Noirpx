@@ -72,13 +72,33 @@ public struct Simulation {
                 }
                 for (dx, dy) in offsets {
                     let destination = CellPosition(x: position.x + dx, y: position.y + dy)
-                    if isInBounds(destination) && isActive(destination, in: activeChunks)
-                        && self.material(at: destination) == .empty {
-                        set(.empty, at: position)
-                        set(material, at: destination)
-                        moved.insert(destination)
-                        break
+                    guard isInBounds(destination) && isActive(destination, in: activeChunks) else { continue }
+                    if dx != 0 && dy != 0 {
+                        let side = CellPosition(x: position.x + dx, y: position.y)
+                        guard isInBounds(side), isActive(side, in: activeChunks),
+                              self.material(at: side) == .empty else { continue }
                     }
+                    let target = self.material(at: destination)
+                    var displaced: CellPosition?
+                    if material == .sand && target == .water && !moved.contains(destination) {
+                        displaced = MaterialMovement.displacedWaterDestination(
+                            source: position, destination: destination, direction: direction,
+                            maximumY: Self.coordinateBounds.upperBound,
+                            canVisit: { isInBounds($0) && isActive($0, in: activeChunks) },
+                            material: { self.material(at: $0) }
+                        )
+                    } else if target != .empty {
+                        continue
+                    }
+                    guard target == .empty || displaced != nil else { continue }
+                    set(.empty, at: position)
+                    set(material, at: destination)
+                    moved.insert(destination)
+                    if let displaced {
+                        set(.water, at: displaced)
+                        moved.insert(displaced)
+                    }
+                    break
                 }
             case .fire:
                 for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {

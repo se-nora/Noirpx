@@ -123,10 +123,30 @@ public struct ResidentSimulation {
                 guard material(at: proposal.source) == proposal.material else { continue }
                 switch proposal.material {
                 case .sand, .water:
-                    for destination in proposal.destinations where material(at: destination) == .empty {
+                    for destination in proposal.destinations {
+                        if destination.x != proposal.source.x && destination.y != proposal.source.y {
+                            let side = CellPosition(x: destination.x, y: proposal.source.y)
+                            guard material(at: side) == .empty else { continue }
+                        }
+                        let target = material(at: destination)
+                        var displaced: CellPosition?
+                        if proposal.material == .sand && target == .water && !moved.contains(destination) {
+                            displaced = MaterialMovement.displacedWaterDestination(
+                                source: proposal.source, destination: destination, direction: proposal.direction,
+                                maximumY: Self.yBounds.upperBound,
+                                canVisit: Self.contains, material: { material(at: $0) }
+                            )
+                        } else if target != .empty {
+                            continue
+                        }
+                        guard target == .empty || displaced != nil else { continue }
                         set(.empty, at: proposal.source)
                         set(proposal.material, at: destination)
                         moved.insert(destination)
+                        if let displaced {
+                            set(.water, at: displaced)
+                            moved.insert(displaced)
+                        }
                         break
                     }
                 case .fire:
@@ -218,6 +238,8 @@ public struct ResidentSimulation {
         var proposals: [ResidentProposal] = []
         for (index, cell) in cells.enumerated() where cell != .empty && cell != .solid {
             let source = CellPosition(x: chunk.x * width + index % width, y: chunk.y * width + index / width)
+            let random = randomValue(seed: seed, tick: tick, position: source)
+            let direction = random & 1 == 0 ? -1 : 1
             var destinations: [CellPosition] = []
             if cell == .fire {
                 for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
@@ -225,16 +247,23 @@ public struct ResidentSimulation {
                     if contains(target) && material(target) == .water { destinations.append(target) }
                 }
             } else {
-                let random = randomValue(seed: seed, tick: tick, position: source)
-                let direction = random & 1 == 0 ? -1 : 1
                 var offsets = [(0, -1), (direction, -1), (-direction, -1)]
                 if cell == .water { offsets += [(direction, 0), (-direction, 0)] }
                 for (dx, dy) in offsets {
                     let target = CellPosition(x: source.x + dx, y: source.y + dy)
-                    if contains(target) && material(target) == .empty { destinations.append(target) }
+                    guard contains(target) else { continue }
+                    if dx != 0 && dy != 0 {
+                        let side = CellPosition(x: source.x + dx, y: source.y)
+                        guard contains(side) && material(side) == .empty else { continue }
+                    }
+                    let targetMaterial = material(target)
+                    if targetMaterial == .empty || (cell == .sand && targetMaterial == .water) {
+                        destinations.append(target)
+                    }
                 }
             }
-            proposals.append(ResidentProposal(source: source, material: cell, destinations: destinations))
+            proposals.append(ResidentProposal(source: source, material: cell,
+                                              destinations: destinations, direction: direction))
         }
         return proposals
     }
@@ -253,6 +282,7 @@ private struct ResidentProposal: Sendable {
     let source: CellPosition
     let material: Material
     let destinations: [CellPosition]
+    let direction: Int
 }
 
 // Each worker publishes one result through the lock; the owner reads after all workers finish.

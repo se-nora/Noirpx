@@ -1,6 +1,6 @@
 import SimulationCore
 
-/// The centered fixture viewport in drawable pixels, with a top-left origin.
+/// A fixture viewport in drawable pixels, with a top-left origin.
 public struct FixtureViewport {
     public static let longEdgeCells = 509
 
@@ -10,10 +10,15 @@ public struct FixtureViewport {
     public let height: Double
     public let columns: Int
     public let rows: Int
+    public let center: CellPosition
 
-    public init?(drawableWidth: Double, drawableHeight: Double) {
+    public init?(drawableWidth: Double, drawableHeight: Double,
+                 center: CellPosition = CellPosition(x: 0, y: 0)) {
         guard drawableWidth.isFinite, drawableHeight.isFinite,
-              drawableWidth > 0, drawableHeight > 0 else { return nil }
+              drawableWidth > 0, drawableHeight > 0,
+              Simulation.coordinateBounds.contains(center.x),
+              Simulation.coordinateBounds.contains(center.y) else { return nil }
+        self.center = center
         let longEdge = max(drawableWidth, drawableHeight)
         let shortEdgeCells = max(1, Int((min(drawableWidth, drawableHeight) / longEdge
                                          * Double(Self.longEdgeCells)).rounded()))
@@ -33,8 +38,11 @@ public struct FixtureViewport {
               pointY >= y, pointY < y + height else { return nil }
         let column = min(columns - 1, Int((pointX - x) / width * Double(columns)))
         let row = min(rows - 1, Int((pointY - y) / height * Double(rows)))
-        return CellPosition(x: column - columns / 2,
-                            y: rows / 2 - 1 - row)
+        let cell = CellPosition(x: center.x + column - columns / 2,
+                                y: center.y + rows / 2 - 1 - row)
+        guard Simulation.coordinateBounds.contains(cell.x),
+              Simulation.coordinateBounds.contains(cell.y) else { return nil }
+        return cell
     }
 
     /// Includes every chunk intersecting the camera.
@@ -44,8 +52,8 @@ public struct FixtureViewport {
             return cell % Simulation.chunkWidth < 0 ? quotient - 1 : quotient
         }
         return ChunkRegion(
-            x: chunk(-columns / 2)...chunk(columns - 1 - columns / 2),
-            y: chunk(rows / 2 - rows)...chunk(rows / 2 - 1)
+            x: chunk(center.x - columns / 2)...chunk(center.x + columns - 1 - columns / 2),
+            y: chunk(center.y + rows / 2 - rows)...chunk(center.y + rows / 2 - 1)
         )
     }
 

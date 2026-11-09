@@ -192,18 +192,18 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 **Incremental prototype:** The Apple host renders the deterministic fixture in a
 centered camera with 509 cells along the drawable's long edge, adapting the other
 dimension to its aspect ratio. This approximately halves the visible area from
-the earlier 720-cell view. It uses a 60 Hz host accumulator, four-step catch-up cap,
+the earlier 720-cell view. The camera follows the character. It uses a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
-version, rendered and allocated chunk counts, and the absence of a character;
+version, rendered and allocated chunk counts, and the character position;
 the fixture can be restarted. The
 overlay also selects a material brush; mouse and touch strokes enqueue cell
-replacements for the next deterministic tick. This is diagnostic interaction,
-not character controls. Chunks beyond two viewport chunk spans from each camera edge are frozen until
+replacements for the next deterministic tick, alongside basic character controls.
+Chunks beyond two viewport chunk spans from each camera edge are frozen until
 they re-enter the active region, and physics cannot cross its boundary. The
 renderer skips chunks outside the camera and rebuilds a texture per frame from a
 complete snapshot. This is
-not the planned 480 × 270 resident viewport, a movable camera, gameplay input,
-or a performance-validated renderer. Independent contract review, resident
+not the planned 480 × 270 resident viewport or a performance-validated renderer.
+Independent contract review, resident
 mode integration, physical-device validation and the remaining exit criteria
 are still open.
 
@@ -238,7 +238,7 @@ than hiding the result. Simulator results do not replace device measurements.
 
 **First increment:** The deterministic fixture host now has a fixed-tick,
 5 × 9-cell character, rock and sand collision, three-cell step-up, jumping, Mac keyboard controls, and
-iPhone touch controls. It remains a diagnostic scene with a fixed camera;
+iPhone touch controls. It remains a diagnostic scene with a following camera;
 character state is not part of the material snapshot or digest. There is no
 level generation, damage, tool/weapon, goal, failure loop, or automatic respawn.
 See [INTERFACES.md](INTERFACES.md) for the provisional collision and input rules.

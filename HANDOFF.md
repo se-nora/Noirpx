@@ -1,10 +1,27 @@
 # Handoff: deterministic simulation prototype
 
+## Following camera and material movement increment
+
+The fixture camera follows the character; rendering, painting, and active
+physics regions use the shifted viewport. Both simulation modes prevent
+diagonal movement past an occupied side cell and let sand displace water.
+The changed rules affect simulation results and are not compatible with old
+replays; see [INTERFACES.md](INTERFACES.md) for ordering and boundary details.
+Character state remains separate from the material snapshot and digest.
+
+On the development Mac, the full Swift package suite and focused material and
+viewport tests passed, as did thread-sanitized resident and material tests.
+Debug macOS, iOS Simulator, and signed iOS device builds
+passed; the generic iOS destinations emitted placeholder OS-version warnings.
+The signed app installed and launched on the physical iPhone 16 Pro, and its
+process remained running. Camera behavior, touch interaction, lifecycle, and
+performance were not visually verified on the phone.
+
 ## Character controls increment
 
 The deterministic fixture app has a basic fixed-tick character, rock and sand collision, three-cell step-up,
 keyboard movement and jump on macOS, and on-screen controls on iOS. The host
-extends the fixture floor; the camera remains fixed and restart returns the
+extends the fixture floor; restart returns the
 character. Character state is separate from the material snapshot and digest.
 See [README.md](README.md) and [INTERFACES.md](INTERFACES.md) for controls,
 semantics, and limitations. The playable vertical slice remains incomplete.

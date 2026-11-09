@@ -1,21 +1,20 @@
 # Handoff: deterministic simulation prototype
 
-## Milestone 1 worktree update (2026-11-09)
+## Milestone 1 integration update (2026-11-09)
 
-The `agent/milestone-1` worktree contains a single-owner headless simulation
-prototype. See [INTERFACES.md](INTERFACES.md) for its rules, storage, commands,
+The single-owner headless simulation prototype was merged provisionally into
+`main`. See [INTERFACES.md](INTERFACES.md) for its rules, storage, commands,
 snapshot and digest contracts, and [PLAN.md](PLAN.md) for remaining risks.
 The host still only displays a clear color. The separate core/renderer
 contributor review and agreement remain outstanding; do not treat these
 provisional contracts as approved for diverging dependent branches.
 
-On the development Mac with Xcode 27.2, `swift build --target SimulationCore`
-and `swift test` passed (18 tests). The README's Debug macOS arm64 and generic
-iOS Simulator `xcodebuild` commands passed with signing disabled. Xcode emitted
-a Simulator placeholder OS-version warning. No physical-device build or run,
-cross-device replay, performance measurement, or renderer validation was
-performed for this change. Check the current branch and integration state
-before continuing, and rerun affected checks after integration.
+After integration on the development Mac with Xcode 27.2,
+`swift build --target SimulationCore` and `swift test` passed (18 tests). The
+README's Debug macOS arm64 and generic iOS Simulator `xcodebuild` commands also
+passed with signing disabled. Xcode emitted a Simulator placeholder OS-version
+warning. No physical-device build or run, cross-device replay, performance
+measurement, or renderer validation was performed for this change.
 
 The remainder describes the earlier foundation handoff and is historical.
 

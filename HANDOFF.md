@@ -1,5 +1,20 @@
 # Handoff: deterministic simulation prototype
 
+## Fixture renderer increment
+
+The Apple host now displays and advances the deterministic fixture and shows
+version, submitted FPS, tick, and an unavailable character position. Restart
+replays the fixture. The camera is fixed at 32 × 18 cells; character gameplay,
+resident mode, movable camera and gameplay input remain unimplemented. See
+[INTERFACES.md](INTERFACES.md) for scheduling and renderer ownership.
+
+On the development Mac, `swift test` passed 34 tests with the optional
+benchmark skipped; Debug macOS and iOS Simulator builds passed with signing
+disabled. On an iPhone 16 Pro Simulator running iOS 18.4, the fixture and
+overlay appeared and the displayed tick increased between screenshots. This was
+a smoke test, not a physical-device, interaction, lifecycle, or performance
+validation. Xcode reported a Simulator placeholder OS-version warning.
+
 ## Resident-world prototype update (2026-11-09)
 
 The project owner authorized a single-owner implementation of a separate

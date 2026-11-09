@@ -129,13 +129,20 @@ save format, or cross-device determinism certification.
 
 ## Host and future work
 
-The Apple app constructs only an initial snapshot and displays a Metal clear
-color. It does not advance the core or render the fixture. The host owns the
-Metal device, view, renderer, and display callbacks; rendering must never mutate
-the world or advance ticks. Missing Metal devices/queues are reported, GPU
-command errors are logged, and a missing drawable skips a frame.
+The Apple app runs the deterministic headless fixture with a host-owned
+monotonic 60 Hz accumulator, independently of display callbacks. It performs at
+most four ticks per timer callback and discards excess elapsed time rather than
+skipping ticks. Lifecycle changes reset the time baseline and accumulated time.
+The Metal renderer reads complete immutable snapshots; each frame uses a fresh
+32 × 18 RGBA texture held by its command buffer through GPU completion.
+The fixed camera covers x -16...15 and y -9...8. Integer scaling and nearest
+sampling keep cells crisp when the drawable is large enough. Full re-rasterizing
+handles skipped snapshots and removed chunks; it is not a measured upload
+strategy for a larger world.
 
-The future host must translate device input into ordered commands, schedule
-fixed ticks independently of rendering, define lifecycle handling and preserve
-snapshot and GPU-buffer lifetimes. The proposed 60 Hz accumulator, four-tick
-catch-up cap, and suspension baseline reset remain unimplemented.
+The overlay shows the bundle version, submitted frames per second, completed
+tick and an unavailable character position. Restart creates the same fixture
+again. Missing Metal devices, renderer initialization failures, simulation
+errors and GPU command errors are displayed; a missing drawable skips a frame.
+The host still needs gameplay input, a movable camera, resident-mode integration,
+and physical-device lifecycle and performance validation.

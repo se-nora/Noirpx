@@ -161,8 +161,8 @@ a 64,000 × 128,000 sparse, fully resident world; configurable power-of-two
 chunks default to 64 × 64; inactive chunks sleep. Parallel proposal/commit
 batches use a host deadline and prioritize proximity to the future viewport
 center with aging for distant work. Delayed chunks run slowly, not via
-catch-up replay. The intended viewport is 480 × 270 cells, but the host still
-only displays a clear color. Outcomes may vary with deadline and batch choices;
+catch-up replay. The intended viewport is 480 × 270 cells, but resident mode
+is not yet connected to the host. Outcomes may vary with deadline and batch choices;
 the original deterministic mode remains available. See
 [INTERFACES.md](INTERFACES.md) for ordering, fairness, and deadline limitations.
 
@@ -179,6 +179,16 @@ viewport, memory, or target-device test; allocation, sorting, full snapshots,
 batch overrun, thermals, and real iPhone behavior still need measurement.
 
 ### 2. Renderable world and platform hosts
+
+**Incremental prototype:** The Apple host renders the deterministic fixture in a
+fixed 32 × 18-cell camera with a 60 Hz host accumulator, four-step catch-up cap,
+and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
+version and the absence of a character; the fixture can be restarted. The
+renderer rebuilds a small texture per frame from a complete snapshot. This is
+not the planned 480 × 270 resident viewport, a movable camera, gameplay input,
+or a performance-validated renderer. Independent contract review, resident
+mode integration, physical-device validation and the remaining exit criteria
+are still open.
 
 Create a Metal renderer that consumes published snapshots and renders a test
 scene. Add macOS and iOS hosts, a camera, resize handling, and an independent

@@ -6,12 +6,13 @@
 	objects = {
 		A10000000000000000000001 /* NoirpxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* NoirpxApp.swift */; };
 		A10000000000000000000002 /* SimulationCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SimulationCore */; };
+		A10000000000000000000003 /* GamePresentation in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* GamePresentation */; };
 		A20000000000000000000001 /* NoirpxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoirpxApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* Noirpx.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noirpx.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A30000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000002 /* SimulationCore in Frameworks */,);
+			files = (A10000000000000000000002 /* SimulationCore in Frameworks */, A10000000000000000000003 /* GamePresentation in Frameworks */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A40000000000000000000001 = {
@@ -38,7 +39,7 @@
 			buildRules = ();
 			dependencies = ();
 			name = Noirpx;
-			packageProductDependencies = (A90000000000000000000001 /* SimulationCore */,);
+			packageProductDependencies = (A90000000000000000000001 /* SimulationCore */, A90000000000000000000002 /* GamePresentation */,);
 			productName = Noirpx;
 			productReference = A20000000000000000000002 /* Noirpx.app */;
 			productType = "com.apple.product-type.application";
@@ -82,6 +83,7 @@
 		};
 		A80000000000000000000001 /* XCLocalSwiftPackageReference "." */ = {isa = XCLocalSwiftPackageReference; relativePath = .; };
 		A90000000000000000000001 /* SimulationCore */ = {isa = XCSwiftPackageProductDependency; package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = SimulationCore; };
+		A90000000000000000000002 /* GamePresentation */ = {isa = XCSwiftPackageProductDependency; package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = GamePresentation; };
 		B10000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; };
@@ -98,6 +100,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = AppleHost/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -118,6 +122,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = AppleHost/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;

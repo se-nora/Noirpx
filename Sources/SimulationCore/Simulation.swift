@@ -52,7 +52,7 @@ public struct SimulationSnapshot: Equatable, Sendable {
                 appendByte(UInt8(truncatingIfNeeded: word >> shift))
             }
         }
-        appendWord(1)
+        appendWord(2)
         appendWord(seed)
         appendWord(tick)
         appendWord(randomState)
@@ -87,7 +87,7 @@ public struct SimulationCommand: Equatable, Sendable {
     }
 }
 
-private let chunkSize = 16
+private let chunkSize = 64
 private let cellCount = chunkSize * chunkSize
 private let coordinateLimit = 1_000_000
 

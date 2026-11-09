@@ -98,36 +98,52 @@ final class WorldTests: XCTestCase {
 
     func testNegativeChunkBoundariesAndRemoval() throws {
         var simulation = Simulation(seed: 0)
-        for x in [-17, -16, -1, 0, 15, 16] {
+        XCTAssertEqual(Simulation.chunkWidth, 64)
+        for x in [-65, -64, -1, 0, 63, 64] {
             try place(.solid, x, -1, in: &simulation)
         }
         try simulation.advance()
         let previous = simulation.snapshot
         XCTAssertEqual(previous.chunks.map { $0.position.x }, [-2, -1, 0, 1])
         XCTAssertEqual(previous.chunks.map { $0.position.y }, [-1, -1, -1, -1])
-        for x in [-17, -16, -1, 0, 15, 16] {
+        XCTAssertTrue(previous.chunks.allSatisfy { $0.cells.count == 64 * 64 })
+        for x in [-65, -64, -1, 0, 63, 64] {
             XCTAssertEqual(try cell(previous, x, -1), .solid)
             try place(.empty, x, -1, tick: 2, in: &simulation)
         }
         try simulation.advance()
         XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
-        XCTAssertEqual(try cell(previous, -17, -1), .solid)
+        XCTAssertEqual(try cell(previous, -65, -1), .solid)
     }
 
     func testMovementAcrossChunkEdge() throws {
         var simulation = Simulation(seed: 0)
-        try place(.sand, -16, 0, in: &simulation)
+        try place(.sand, -64, 0, in: &simulation)
         try simulation.advance()
-        XCTAssertEqual(try cell(simulation.snapshot, -16, -1), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, -64, -1), .sand)
         XCTAssertEqual(simulation.snapshot.chunks.first?.position.y, -1)
     }
 
     func testDiagonalMovementAcrossNegativeChunkEdge() throws {
         var simulation = Simulation(seed: 2)
-        try place(.solid, -16, -16, in: &simulation)
-        try place(.sand, -16, -15, in: &simulation)
+        try place(.solid, -64, -64, in: &simulation)
+        try place(.sand, -64, -63, in: &simulation)
         try simulation.advance()
-        XCTAssertEqual(try cell(simulation.snapshot, -17, -16), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, -65, -64), .sand)
+    }
+
+    func testChunkRowsAcrossPositiveAndNegativeBoundaries() throws {
+        var simulation = Simulation(seed: 0)
+        let rows = [-65, -64, -1, 0, 63, 64]
+        for y in rows { try place(.solid, 2, y, in: &simulation) }
+        try simulation.advance()
+        let snapshot = simulation.snapshot
+        XCTAssertEqual(snapshot.chunks.map { $0.position.y }, [-2, -1, 0, 1])
+        for y in rows { XCTAssertEqual(try cell(snapshot, 2, y), .solid) }
+        XCTAssertEqual(snapshot.chunks[0].cells[63 * 64 + 2], .solid)
+        XCTAssertEqual(snapshot.chunks[1].cells[2], .solid)
+        XCTAssertEqual(snapshot.chunks[2].cells[63 * 64 + 2], .solid)
+        XCTAssertEqual(snapshot.chunks[3].cells[2], .solid)
     }
 
     func testWorldBoundaryIsImpassableAndInvalidCommandsAreRejected() throws {
@@ -159,7 +175,7 @@ final class WorldTests: XCTestCase {
 
     func testIdleRegionDoesNotChange() throws {
         var simulation = Simulation(seed: 9)
-        try place(.solid, -16, 16, in: &simulation)
+        try place(.solid, -64, 64, in: &simulation)
         try simulation.advance()
         let before = simulation.snapshot
         for _ in 0..<4 { try simulation.advance() }
@@ -169,7 +185,7 @@ final class WorldTests: XCTestCase {
 
     func testIdleChunkDoesNotChangeWhileAnotherChunkIsActive() throws {
         var simulation = Simulation(seed: 9)
-        try place(.solid, 100, 100, in: &simulation)
+        try place(.solid, 388, 388, in: &simulation)
         try place(.sand, 0, 0, in: &simulation)
         try simulation.advance()
         let before = simulation.snapshot.chunks.first { $0.position.x == 6 && $0.position.y == 6 }
@@ -188,13 +204,16 @@ final class WorldTests: XCTestCase {
             XCTAssertEqual(first.snapshot, second.snapshot)
             XCTAssertEqual(first.snapshot.digest, second.snapshot.digest)
         }
-        XCTAssertEqual(first.snapshot.digest, 3_106_953_574_103_584_285)
+        XCTAssertEqual(try cell(first.snapshot, -1, -1), .sand)
+        XCTAssertEqual(try cell(first.snapshot, 0, -1), .water)
+        XCTAssertEqual(try cell(first.snapshot, 1, -1), .sand)
+        XCTAssertEqual(first.snapshot.digest, 9_325_503_850_943_149_782)
     }
 
     func testEquivalentWorldsIgnoreChunkInsertionOrder() throws {
         var first = Simulation(seed: 17)
         var second = Simulation(seed: 17)
-        let positions = [CellPosition(x: -17, y: 1), CellPosition(x: 16, y: 1)]
+        let positions = [CellPosition(x: -65, y: 1), CellPosition(x: 64, y: 1)]
         for position in positions {
             try first.enqueue(SimulationCommand(tick: 1, position: position, material: .sand))
         }

@@ -14,12 +14,12 @@ Outside is an impassable boundary. Commands and snapshot lookups outside these
 bounds throw `positionOutOfBounds`. The limit ensures neighbor and chunk
 arithmetic is safe on supported Swift platforms; it is not a streaming policy.
 
-Chunks are provisionally 16 by 16, row-major from local (0, 0), using floor
-division and nonnegative local coordinates. This small, simple unit permits
-testing both positive and negative boundaries without large allocations; it is
-not performance-tuned. Each chunk stores 256 `Material` values; empty chunks are
-removed. Boundary chunks include empty padding outside the world. Chunk size,
-layout, allocation and snapshot costs need measurement before being permanent.
+Chunks are provisionally 64 by 64, row-major from local (0, 0), using floor
+division and nonnegative local coordinates. Each chunk stores 4,096 `Material`
+values; empty chunks are removed. Boundary chunks include empty padding outside
+the world. The change from 16 to 64 increases the memory and scanning cost of
+individual chunks; it has not been performance-tested on target devices. Chunk
+size, layout, allocation and snapshot costs need measurement before being permanent.
 There is no chunk or command-queue budget, streaming, or recoverable
 out-of-memory API; Swift allocation failure is not caught. Callers must bound
 their workloads, especially on iOS.
@@ -120,9 +120,11 @@ retain or copy any storage used by asynchronous GPU work until completion;
 concrete GPU upload buffering and synchronization are not implemented.
 
 The `digest` is FNV-1a 64-bit, wrapping modulo 2^64. It hashes little-endian
-64-bit words: digest version 1, seed, completed tick, RNG state, chunk count,
+64-bit words: digest version 2, seed, completed tick, RNG state, chunk count,
 then for each sorted chunk signed two's-complement x and y as 64-bit words,
-followed by 256 material identifier bytes in row-major order. It includes the
+followed by 4,096 material identifier bytes in row-major order. Version 2
+distinguishes the 64-wide layout from version 1's 16-wide layout, so prior
+digests are not compatible. It includes the
 completed world and RNG state, **not queued future commands**; equal digests
 alone do not establish equal future inputs. It is not a cryptographic hash,
 save format, or cross-device determinism certification.

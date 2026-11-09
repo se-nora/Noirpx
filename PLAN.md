@@ -142,9 +142,11 @@ double updates, chunk/negative-coordinate boundaries, and repeatable state
 digests for fixed seeds and commands. An idle region must not change. Core tests
 run without a GPU or Apple UI.
 
-**Prototype decisions:** The single-owner implementation uses 16×16 chunks
-with row-major material identifiers and a bounded integer world. This is a
-simple testable starting point, not a measured performance choice. Commands,
+**Prototype decisions:** At the project owner's request, the single-owner
+implementation now uses 64×64 chunks (previously 16×16), with row-major
+material identifiers and a bounded integer world. This is not a measured
+performance choice; larger chunks increase per-chunk memory and scanning cost.
+The digest version changed with the layout. Commands,
 rule ordering, SplitMix64, full immutable snapshots, and the digest format are
 documented in [INTERFACES.md](INTERFACES.md). It scans allocated chunks on each
 tick; activity and dirty tracking, streaming, resource budgets, and GPU

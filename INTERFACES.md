@@ -40,6 +40,13 @@ checks for tick overflow before mutation, consumes the next tick's commands,
 then executes rules, and only then publishes the new tick. The host supplies
 ticks; the core reads no clock or platform input.
 
+`advance(activeChunks:)` optionally restricts physics to an inclusive rectangular
+chunk region; the default is unrestricted. Commands still apply everywhere.
+Frozen chunks retain their cells and consume no random draws. Movement and fire
+reactions cannot cross into frozen chunks. When a chunk becomes active again it
+updates normally without replaying missed ticks. Reproducibility requires the
+same active region on each tick as well as the same seed and commands.
+
 After commands, capture the occupied positions and process them in increasing
 world y, then increasing x. A cell displaced into a position is marked so it
 cannot be processed again that tick. Updates are immediate: the first actor to
@@ -138,17 +145,24 @@ most four ticks per timer callback and discards excess elapsed time rather than
 skipping ticks. Lifecycle changes reset the time baseline and accumulated time.
 The Metal renderer reads complete immutable snapshots; each frame uses a fresh
 RGBA texture held by its command buffer through GPU completion. The centered
-camera covers 720 cells along the drawable's long edge, with the short edge
+camera covers 509 cells along the drawable's long edge, approximately halving
+the area of the previous 720-cell view, with the short edge
 rounded to the nearest whole cell (at least one). Its viewport is uniformly
 scaled to fit and may have small margins; nearest-neighbor sampling does not
 guarantee equal-sized display pixels at fractional scales. Full re-rasterizing
 handles skipped snapshots and removed chunks; it is not a measured upload
 strategy for a larger world.
 
+The host computes the visible chunk rectangle from the viewport, including
+partially visible chunks, and extends it by twice its chunk width and height
+on each respective side for physics. The region updates on drawable size changes;
+the simulation waits for a valid viewport before ticking. Rendering skips chunks
+outside the visible rectangle. Frozen chunks remain in complete snapshots.
+
 The overlay shows the bundle version, submitted frames per second, completed
-tick, rendered and simulated chunk counts, and an unavailable character position.
+tick, rendered and allocated chunk counts, and an unavailable character position.
 Rendered counts reflect chunks with at least one nonempty cell in the last
-submitted camera frame; simulated counts reflect all allocated nonempty chunks
+submitted camera frame; allocated counts reflect all allocated nonempty chunks
 in the latest completed snapshot, including those outside the camera. The two
 counts can refer to different ticks. Restart creates the same fixture
 again. The material brush maps mouse or single-touch strokes through the same

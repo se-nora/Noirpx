@@ -32,16 +32,19 @@ final class GamePresentationTests: XCTestCase {
     func testPixelsAreTopDownAndClearRemovedChunks() throws {
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
         var simulation = Simulation(seed: 0)
-        let position = CellPosition(x: -300, y: 100)
+        let position = CellPosition(x: -200, y: 100)
         try simulation.enqueue(.init(tick: 1, position: position, material: .solid))
         try simulation.advance()
         let retained = simulation.snapshot
         let offset = ((viewport.rows / 2 - 1 - position.y) * viewport.columns
                       + position.x + viewport.columns / 2) * 4
         let retainedPixels = FixturePixels.rgba(snapshot: retained, viewport: viewport)
-        XCTAssertEqual(retainedPixels.count, 720 * 405 * 4)
+        XCTAssertEqual(retainedPixels.count, 509 * 286 * 4)
         XCTAssertEqual(Array(retainedPixels[offset..<offset + 4]), [112, 121, 139, 255])
-        XCTAssertEqual(viewport.cell(atX: 121, y: 203), position)
+        let column = position.x + viewport.columns / 2
+        let row = viewport.rows / 2 - 1 - position.y
+        XCTAssertEqual(viewport.cell(atX: viewport.x + (Double(column) + 0.5) * viewport.width / Double(viewport.columns),
+                                    y: viewport.y + (Double(row) + 0.5) * viewport.height / Double(viewport.rows)), position)
         try simulation.enqueue(.init(tick: 2, position: position, material: .empty))
         try simulation.advance()
         XCTAssertEqual(Array(FixturePixels.rgba(snapshot: simulation.snapshot, viewport: viewport)[offset..<offset + 4]), [15, 20, 31, 255])
@@ -70,12 +73,11 @@ final class GamePresentationTests: XCTestCase {
 
     func testViewportMapsDrawablePixelsAndRejectsLetterbox() throws {
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
-        XCTAssertEqual(viewport.columns, 720)
-        XCTAssertEqual(viewport.rows, 405)
+        XCTAssertEqual(viewport.columns, 509)
+        XCTAssertEqual(viewport.rows, 286)
         XCTAssertEqual(viewport.width, 1440)
-        XCTAssertEqual(viewport.height, 810)
-        XCTAssertEqual(viewport.cell(atX: 0, y: 0), CellPosition(x: -360, y: 201))
-        XCTAssertEqual(viewport.cell(atX: 1439, y: 809), CellPosition(x: 359, y: -203))
+        XCTAssertEqual(viewport.cell(atX: viewport.x, y: viewport.y), CellPosition(x: -254, y: 142))
+        XCTAssertEqual(viewport.cell(atX: 1439, y: 809), CellPosition(x: 254, y: -143))
         XCTAssertEqual(viewport.cell(atX: 720, y: 405), CellPosition(x: 0, y: -1))
         XCTAssertNil(viewport.cell(atX: -0.01, y: 6))
         XCTAssertNil(viewport.cell(atX: 1440, y: 6))
@@ -85,36 +87,81 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertNil(FixtureViewport(drawableWidth: .infinity, drawableHeight: 100))
 
         let rounded = try XCTUnwrap(FixtureViewport(drawableWidth: 101, drawableHeight: 65))
-        XCTAssertEqual(rounded.columns, 720)
-        XCTAssertEqual(rounded.rows, 463)
-        XCTAssertGreaterThan(rounded.y, 0)
-        XCTAssertNil(rounded.cell(atX: 50, y: 0))
-        XCTAssertNotNil(rounded.cell(atX: 50, y: rounded.y))
+        XCTAssertEqual(rounded.columns, 509)
+        XCTAssertEqual(rounded.rows, 328)
+        XCTAssertGreaterThan(rounded.x, 0)
+        XCTAssertNil(rounded.cell(atX: 0, y: 30))
+        XCTAssertNotNil(rounded.cell(atX: rounded.x, y: 30))
     }
 
     func testViewportAdaptsToOrientationAndSize() throws {
-        for size in [(2880.0, 1864.0), (2622.0, 1206.0), (1440.0, 810.0)] {
+        for size in [(2880.0, 1864.0), (2622.0, 1206.0), (1440.0, 810.0), (1000.0, 1000.0)] {
             let landscape = try XCTUnwrap(FixtureViewport(drawableWidth: size.0, drawableHeight: size.1))
             let portrait = try XCTUnwrap(FixtureViewport(drawableWidth: size.1, drawableHeight: size.0))
-            XCTAssertEqual(landscape.columns, 720)
-            XCTAssertEqual(portrait.rows, 720)
+            XCTAssertEqual(landscape.columns, 509)
+            XCTAssertEqual(portrait.rows, 509)
             XCTAssertEqual(landscape.rows, portrait.columns)
-            XCTAssertEqual(landscape.rows, Int((720 * size.1 / size.0).rounded()))
+            XCTAssertEqual(landscape.rows, Int((509 * size.1 / size.0).rounded()))
+            let previousCells = 720 * Int((720 * size.1 / size.0).rounded())
+            XCTAssertEqual(Double(landscape.columns * landscape.rows) / Double(previousCells), 0.5, accuracy: 0.0025)
             XCTAssertEqual(portrait.cell(atX: portrait.x, y: portrait.y),
-                           CellPosition(x: -portrait.columns / 2, y: 359))
+                           CellPosition(x: -portrait.columns / 2, y: 253))
         }
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 16, drawableHeight: 9))
-        XCTAssertEqual(viewport.cell(atX: 0, y: 0), CellPosition(x: -360, y: 201))
-        XCTAssertEqual(viewport.cell(atX: 15.9, y: 8.9), CellPosition(x: 355, y: -199))
+        XCTAssertEqual(viewport.cell(atX: viewport.x, y: viewport.y), CellPosition(x: -254, y: 142))
+        XCTAssertEqual(viewport.cell(atX: viewport.x + viewport.width * 508.5 / 509,
+                                    y: viewport.y + viewport.height * 285.5 / 286),
+                       CellPosition(x: 254, y: -143))
         let narrow = try XCTUnwrap(FixtureViewport(drawableWidth: 1, drawableHeight: 10000))
         XCTAssertEqual(narrow.columns, 1)
-        XCTAssertEqual(narrow.rows, 720)
+        XCTAssertEqual(narrow.rows, 509)
+    }
+
+    func testViewportChunkRegionsIncludeTwoViewportWidthsBeyondEachEdge() throws {
+        let landscape = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
+        XCTAssertEqual(landscape.visibleChunks, ChunkRegion(x: -4...3, y: -3...2))
+        XCTAssertEqual(landscape.activeChunks, ChunkRegion(x: -20...19, y: -15...14))
+        let portrait = try XCTUnwrap(FixtureViewport(drawableWidth: 810, drawableHeight: 1440))
+        XCTAssertEqual(portrait.visibleChunks, ChunkRegion(x: -3...2, y: -4...3))
+        XCTAssertEqual(portrait.activeChunks, ChunkRegion(x: -15...14, y: -20...19))
+        let narrow = try XCTUnwrap(FixtureViewport(drawableWidth: 1, drawableHeight: 10000))
+        XCTAssertEqual(narrow.visibleChunks, ChunkRegion(x: 0...0, y: -4...3))
+        XCTAssertEqual(narrow.activeChunks, ChunkRegion(x: -2...2, y: -20...19))
+    }
+
+    func testViewportFreezeThresholdAndOrientationChange() throws {
+        let landscape = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
+        let portrait = try XCTUnwrap(FixtureViewport(drawableWidth: 810, drawableHeight: 1440))
+        var simulation = Simulation(seed: 0)
+        for x in [-21, -20, 19, 20] {
+            try simulation.enqueue(.init(tick: 1, position: .init(x: x * 64, y: 10), material: .sand))
+        }
+        for y in [-16, -15, 14, 15] {
+            try simulation.enqueue(.init(tick: 1, position: .init(x: 10, y: y * 64 + 10), material: .sand))
+        }
+        try simulation.advance(activeChunks: landscape.activeChunks)
+        for x in [-21, 20] {
+            XCTAssertEqual(try simulation.snapshot.material(at: .init(x: x * 64, y: 10)), .sand)
+        }
+        for x in [-20, 19] {
+            XCTAssertEqual(try simulation.snapshot.material(at: .init(x: x * 64, y: 9)), .sand)
+        }
+        for y in [-16, 15] {
+            XCTAssertEqual(try simulation.snapshot.material(at: .init(x: 10, y: y * 64 + 10)), .sand)
+        }
+        for y in [-15, 14] {
+            XCTAssertEqual(try simulation.snapshot.material(at: .init(x: 10, y: y * 64 + 9)), .sand)
+        }
+        try simulation.advance(activeChunks: portrait.activeChunks)
+        XCTAssertEqual(try simulation.snapshot.material(at: .init(x: 10, y: 15 * 64 + 9)), .sand)
+        XCTAssertEqual(try simulation.snapshot.material(at: .init(x: 10, y: -16 * 64 + 9)), .sand)
+        XCTAssertEqual(try simulation.snapshot.material(at: .init(x: -20 * 64, y: 9)), .sand)
     }
 
     func testPortraitPixelsAndInputShareCamera() throws {
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 810, drawableHeight: 1440))
         var simulation = Simulation(seed: 0)
-        let position = CellPosition(x: -100, y: 300)
+        let position = CellPosition(x: -100, y: 200)
         try simulation.enqueue(.init(tick: 1, position: position, material: .solid))
         try simulation.advance()
         let column = position.x + viewport.columns / 2
@@ -122,7 +169,8 @@ final class GamePresentationTests: XCTestCase {
         let offset = (row * viewport.columns + column) * 4
         let pixels = FixturePixels.rgba(snapshot: simulation.snapshot, viewport: viewport)
         XCTAssertEqual(Array(pixels[offset..<offset + 4]), [112, 121, 139, 255])
-        XCTAssertEqual(viewport.cell(atX: Double(column * 2 + 1), y: Double(row * 2 + 1)), position)
+        XCTAssertEqual(viewport.cell(atX: viewport.x + (Double(column) + 0.5) * viewport.width / Double(viewport.columns),
+                                    y: viewport.y + (Double(row) + 0.5) * viewport.height / Double(viewport.rows)), position)
     }
 
     func testRenderedChunkCountTracksVisibleMaterialsAndOrientation() throws {
@@ -132,11 +180,11 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: landscape).renderedChunks, 0)
         for position in [
             CellPosition(x: 0, y: 0),
-            CellPosition(x: 350, y: 0),
-            CellPosition(x: 370, y: 0),
-            CellPosition(x: 384, y: 0),
-            CellPosition(x: 0, y: 250),
-            CellPosition(x: 0, y: 320)
+            CellPosition(x: 240, y: 0),
+            CellPosition(x: 255, y: 0),
+            CellPosition(x: 256, y: 0),
+            CellPosition(x: 0, y: 160),
+            CellPosition(x: 0, y: 220)
         ] {
             try simulation.enqueue(.init(tick: 1, position: position, material: .solid))
         }
@@ -145,11 +193,11 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: landscape).renderedChunks, 2)
         XCTAssertEqual(FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: portrait).renderedChunks, 3)
 
-        try simulation.enqueue(.init(tick: 2, position: .init(x: 350, y: 0), material: .empty))
+        try simulation.enqueue(.init(tick: 2, position: .init(x: 240, y: 0), material: .empty))
         try simulation.advance()
         XCTAssertEqual(simulation.snapshot.chunks.count, 5)
         XCTAssertEqual(FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: landscape).renderedChunks, 1)
-        try simulation.enqueue(.init(tick: 3, position: .init(x: 370, y: 0), material: .empty))
+        try simulation.enqueue(.init(tick: 3, position: .init(x: 255, y: 0), material: .empty))
         try simulation.advance()
         XCTAssertEqual(simulation.snapshot.chunks.count, 4)
     }
@@ -163,9 +211,9 @@ final class GamePresentationTests: XCTestCase {
         ])
         XCTAssertEqual(FixtureStroke.cells(from: end, to: end), [])
         XCTAssertEqual(FixtureStroke.cells(from: end, to: start).last, start)
-        XCTAssertEqual(FixtureStroke.cells(from: CellPosition(x: 359, y: 0),
-                                           to: CellPosition(x: 357, y: 0)), [
-            CellPosition(x: 358, y: 0), CellPosition(x: 357, y: 0)
+        XCTAssertEqual(FixtureStroke.cells(from: CellPosition(x: 254, y: 0),
+                                           to: CellPosition(x: 252, y: 0)), [
+            CellPosition(x: 253, y: 0), CellPosition(x: 252, y: 0)
         ])
     }
 

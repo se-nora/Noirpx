@@ -23,6 +23,7 @@ private final class GameModel: ObservableObject {
     @Published var selectedMaterial: SimulationCore.Material = .sand
     private var simulation: Simulation?
     private var scheduler = FixedTickScheduler()
+    private var activeChunks: ChunkRegion?
 
     init() {
         restart()
@@ -51,6 +52,11 @@ private final class GameModel: ObservableObject {
         framesPerSecond = 0
     }
 
+    func setViewport(_ viewport: FixtureViewport) {
+        if activeChunks == nil { scheduler.reset() }
+        activeChunks = viewport.activeChunks
+    }
+
     func paint(_ position: CellPosition) {
         guard simulation != nil, let snapshot, errorMessage == nil else { return }
         do {
@@ -63,12 +69,12 @@ private final class GameModel: ObservableObject {
     }
 
     func update(at time: Double) {
-        guard simulation != nil, errorMessage == nil else { return }
+        guard simulation != nil, errorMessage == nil, let activeChunks else { return }
         do {
             let steps = scheduler.steps(at: time)
             guard steps > 0 else { return }
             for _ in 0..<steps {
-                try simulation?.advance()
+                try simulation?.advance(activeChunks: activeChunks)
             }
             snapshot = simulation?.snapshot
         } catch {
@@ -96,6 +102,7 @@ private struct HostView: View {
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },
+                    onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) }
                 )
                 .id(model.renderGeneration)
@@ -109,7 +116,7 @@ private struct HostView: View {
                 Text("FPS  \(model.framesPerSecond, specifier: "%.1f")")
                 Text("Tick  \(model.snapshot?.tick ?? 0)")
                 Text("Chunks rendered  \(model.renderedChunks.map(String.init) ?? "unavailable")")
-                Text("Chunks simulated  \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
+                Text("Chunks allocated  \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
                 Text("Character  unavailable")
                 Button("Restart fixture") { model.restart() }
                 HStack(spacing: 6) {
@@ -158,11 +165,12 @@ private struct MetalSurface {
     let onFPS: (Double) -> Void
     let onRenderedChunks: (Int) -> Void
     let onError: (String) -> Void
+    let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
 
     func makeCoordinator() -> MetalRenderer {
         MetalRenderer(device: device, snapshot: snapshot, onFPS: onFPS,
-                      onRenderedChunks: onRenderedChunks, onError: onError)
+                      onRenderedChunks: onRenderedChunks, onError: onError, onViewport: onViewport)
     }
 
     func configure(_ view: MTKView, coordinator: MetalRenderer) {
@@ -288,6 +296,8 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private let onFPS: (Double) -> Void
     private let onRenderedChunks: (Int) -> Void
     private let onError: (String) -> Void
+    private let onViewport: (FixtureViewport) -> Void
+    private var lastActiveChunks: ChunkRegion?
     private var lastRenderedChunks: Int?
     private var fpsStart = ProcessInfo.processInfo.systemUptime
     private var frameCount = 0
@@ -295,12 +305,13 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
 
     init(device: MTLDevice, snapshot: SimulationSnapshot, onFPS: @escaping (Double) -> Void,
          onRenderedChunks: @escaping (Int) -> Void,
-         onError: @escaping (String) -> Void) {
+         onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void) {
         self.device = device
         self.snapshot = snapshot
         self.onFPS = onFPS
         self.onRenderedChunks = onRenderedChunks
         self.onError = onError
+        self.onViewport = onViewport
         super.init()
         do {
             guard let queue = device.makeCommandQueue() else {
@@ -321,11 +332,15 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
+        guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
+                                             drawableHeight: Double(view.drawableSize.height)) else { return }
+        if lastActiveChunks != viewport.activeChunks {
+            lastActiveChunks = viewport.activeChunks
+            DispatchQueue.main.async { [onViewport] in onViewport(viewport) }
+        }
         guard let queue, let pipeline,
               let drawable = view.currentDrawable,
               let descriptor = view.currentRenderPassDescriptor else { return }
-        guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
-                                             drawableHeight: Double(view.drawableSize.height)) else { return }
         let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba8Unorm, width: viewport.columns, height: viewport.rows, mipmapped: false
         )

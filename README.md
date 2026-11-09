@@ -19,18 +19,25 @@ chunks, or its stable `digest`. Commands replace one material at a position on
 an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
-The app shows a view centered on the origin with 720 simulation cells along the
-long edge of the drawable. A landscape Mac or iPhone therefore shows 720 cells
-across; in portrait, 720 cells are visible vertically. The other dimension follows
+The app shows a view centered on the origin with 509 simulation cells along the
+long edge of the drawable. A landscape Mac or iPhone therefore shows 509 cells
+across; in portrait, 509 cells are visible vertically. This shows approximately
+half the area of the earlier 720-cell-long-edge view. The other dimension follows
 the drawable's aspect ratio, rounded to whole cells, so small margins may appear.
 Resizing and rotation update the view and brush mapping. Nearest-neighbor
 sampling keeps cells distinct, although non-integer display scaling can produce
 uneven pixel widths. Its overlay shows
 the app version, submitted render frames per second, completed simulation tick,
-chunks rendered and simulated, and character position as unavailable (there is
+chunks rendered and allocated, and character position as unavailable (there is
 no character yet). Rendered chunks contain at least one nonempty cell in the
-last submitted camera frame; simulated chunks are all allocated nonempty chunks
-in the latest completed simulation snapshot, including off-screen chunks. Restart
+last submitted camera frame; allocated chunks are all nonempty chunks
+in the latest completed simulation snapshot, including frozen chunks. Physics
+updates chunks intersecting the camera and extends two viewport chunk widths
+beyond each visible edge (independently on each axis). More distant chunks stay
+resident but are frozen until the viewport's active region includes them again;
+they do not catch up on missed ticks. Physics cannot move or react across the
+active region boundary. Explicit commands still apply to frozen chunks. The
+renderer skips chunks outside the visible camera. Restart
 replays the fixture from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
 This is a diagnostic scene, not a movable camera or gameplay input.

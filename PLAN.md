@@ -149,7 +149,8 @@ performance choice; larger chunks increase per-chunk memory and scanning cost.
 The digest version changed with the layout. Commands,
 rule ordering, SplitMix64, full immutable snapshots, and the digest format are
 documented in [INTERFACES.md](INTERFACES.md). It scans allocated chunks on each
-tick; activity and dirty tracking, streaming, resource budgets, and GPU
+tick, but the host limits physics to a viewport-based region; activity and dirty
+tracking, streaming, resource budgets, and GPU
 uploads are not implemented. Full snapshots make skipped revisions and chunk
 removal unambiguous but require memory and upload measurements.
 
@@ -189,14 +190,17 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 ### 2. Renderable world and platform hosts
 
 **Incremental prototype:** The Apple host renders the deterministic fixture in a
-centered camera with 720 cells along the drawable's long edge, adapting the other
-dimension to its aspect ratio. It uses a 60 Hz host accumulator, four-step catch-up cap,
+centered camera with 509 cells along the drawable's long edge, adapting the other
+dimension to its aspect ratio. This approximately halves the visible area from
+the earlier 720-cell view. It uses a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
-version, rendered and simulated chunk counts, and the absence of a character;
+version, rendered and allocated chunk counts, and the absence of a character;
 the fixture can be restarted. The
 overlay also selects a material brush; mouse and touch strokes enqueue cell
 replacements for the next deterministic tick. This is diagnostic interaction,
-not character controls. The renderer rebuilds a texture per frame from a
+not character controls. Chunks beyond two viewport chunk spans from each camera edge are frozen until
+they re-enter the active region, and physics cannot cross its boundary. The
+renderer skips chunks outside the camera and rebuilds a texture per frame from a
 complete snapshot. This is
 not the planned 480 × 270 resident viewport, a movable camera, gameplay input,
 or a performance-validated renderer. Independent contract review, resident

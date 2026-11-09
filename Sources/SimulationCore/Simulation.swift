@@ -38,8 +38,8 @@ public struct Simulation {
         commands[command.tick, default: []].append(command)
     }
 
-    /// Advances exactly one tick; scheduling is the host's responsibility.
-    public mutating func advance() throws {
+    /// Advances one tick, restricting physics to the optional chunk region.
+    public mutating func advance(activeChunks: ChunkRegion? = nil) throws {
         let (nextTick, overflow) = tick.addingReportingOverflow(1)
         guard !overflow else {
             throw SimulationError.tickOverflow
@@ -49,7 +49,7 @@ public struct Simulation {
         }
 
         var positions: [CellPosition] = []
-        for (chunk, contents) in chunks {
+        for (chunk, contents) in chunks where activeChunks?.contains(chunk) ?? true {
             for (index, material) in contents.cells.enumerated() where material != .empty {
                 positions.append(CellPosition(
                     x: chunk.x * Self.chunkWidth + index % Self.chunkWidth,
@@ -72,7 +72,8 @@ public struct Simulation {
                 }
                 for (dx, dy) in offsets {
                     let destination = CellPosition(x: position.x + dx, y: position.y + dy)
-                    if isInBounds(destination) && self.material(at: destination) == .empty {
+                    if isInBounds(destination) && isActive(destination, in: activeChunks)
+                        && self.material(at: destination) == .empty {
                         set(.empty, at: position)
                         set(material, at: destination)
                         moved.insert(destination)
@@ -82,7 +83,8 @@ public struct Simulation {
             case .fire:
                 for (dx, dy) in [(0, -1), (-1, 0), (1, 0), (0, 1)] {
                     let neighbor = CellPosition(x: position.x + dx, y: position.y + dy)
-                    if isInBounds(neighbor) && material(at: neighbor) == .water {
+                    if isInBounds(neighbor) && isActive(neighbor, in: activeChunks)
+                        && material(at: neighbor) == .water {
                         set(.empty, at: neighbor)
                         break
                     }
@@ -95,6 +97,10 @@ public struct Simulation {
 
     private func isInBounds(_ position: CellPosition) -> Bool {
         Self.coordinateBounds.contains(position.x) && Self.coordinateBounds.contains(position.y)
+    }
+
+    private func isActive(_ position: CellPosition, in region: ChunkRegion?) -> Bool {
+        region?.contains(SimulationGrid.locate(position).0) ?? true
     }
 
     private func material(at position: CellPosition) -> Material {

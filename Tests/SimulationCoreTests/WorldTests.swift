@@ -150,6 +150,63 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(simulation.snapshot.chunks.first?.position.y, -1)
     }
 
+    func testRestrictedPhysicsFreezesAndResumesChunksWithoutCatchingUp() throws {
+        var simulation = Simulation(seed: 0)
+        let region = ChunkRegion(x: 0...0, y: 0...0)
+        try place(.sand, 10, 10, in: &simulation)
+        try place(.sand, 64, 10, in: &simulation)
+        try place(.fire, -1, 10, in: &simulation)
+        try simulation.advance(activeChunks: region)
+        let first = simulation.snapshot
+        XCTAssertEqual(try cell(first, 10, 9), .sand)
+        XCTAssertEqual(try cell(first, 64, 10), .sand)
+        XCTAssertEqual(try cell(first, -1, 10), .fire)
+        try simulation.advance(activeChunks: region)
+        XCTAssertEqual(try cell(simulation.snapshot, 64, 10), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .fire)
+        try simulation.advance()
+        XCTAssertEqual(try cell(simulation.snapshot, 64, 9), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .empty)
+        XCTAssertEqual(try cell(first, 64, 10), .sand)
+    }
+
+    func testPhysicsCannotMoveIntoOrReactAcrossFrozenBoundary() throws {
+        var simulation = Simulation(seed: 0)
+        let region = ChunkRegion(x: 0...0, y: 0...0)
+        try place(.sand, 10, 0, in: &simulation)
+        try place(.fire, 63, 10, in: &simulation)
+        try place(.water, 64, 10, in: &simulation)
+        try simulation.advance(activeChunks: region)
+        XCTAssertEqual(try cell(simulation.snapshot, 10, 0), .sand)
+        XCTAssertEqual(try cell(simulation.snapshot, 10, -1), .empty)
+        XCTAssertEqual(try cell(simulation.snapshot, 64, 10), .water)
+        XCTAssertEqual(try cell(simulation.snapshot, 63, 10), .empty)
+    }
+
+    func testFrozenChunksDoNotConsumeRandomNumbers() throws {
+        var withFrozen = Simulation(seed: 4)
+        var withoutFrozen = Simulation(seed: 4)
+        let region = ChunkRegion(x: 0...0, y: 0...0)
+        try place(.sand, 1, 10, in: &withFrozen)
+        try place(.sand, 1, 10, in: &withoutFrozen)
+        try place(.water, -1, 10, in: &withFrozen)
+        try withFrozen.advance(activeChunks: region)
+        try withoutFrozen.advance(activeChunks: region)
+        XCTAssertEqual(withFrozen.snapshot.randomState, withoutFrozen.snapshot.randomState)
+        XCTAssertEqual(try cell(withFrozen.snapshot, 1, 9), try cell(withoutFrozen.snapshot, 1, 9))
+    }
+
+    func testCommandsApplyInFrozenChunks() throws {
+        var simulation = Simulation(seed: 0)
+        let region = ChunkRegion(x: 0...0, y: 0...0)
+        try place(.water, -1, 10, in: &simulation)
+        try simulation.advance(activeChunks: region)
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .water)
+        try place(.solid, -1, 10, tick: 2, in: &simulation)
+        try simulation.advance(activeChunks: region)
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 10), .solid)
+    }
+
     func testDiagonalMovementAcrossNegativeChunkEdge() throws {
         var simulation = Simulation(seed: 2)
         try place(.solid, -64, -64, in: &simulation)

@@ -13,7 +13,8 @@ public enum FixturePixels {
         let height = viewport.rows
         var pixels = [UInt32](repeating: UInt32(0xff1f140f).littleEndian, count: width * height)
         var renderedChunks = 0
-        for chunk in snapshot.chunks {
+        let visibleChunks = viewport.visibleChunks
+        for chunk in snapshot.chunks where visibleChunks.contains(chunk.position) {
             var chunkVisible = false
             for (index, material) in chunk.cells.enumerated() where material != .empty {
                 let worldX = chunk.position.x * Simulation.chunkWidth + index % Simulation.chunkWidth

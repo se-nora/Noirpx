@@ -2,7 +2,7 @@ import SimulationCore
 
 /// The centered fixture viewport in drawable pixels, with a top-left origin.
 public struct FixtureViewport {
-    public static let longEdgeCells = 720
+    public static let longEdgeCells = 509
 
     public let x: Double
     public let y: Double
@@ -35,6 +35,27 @@ public struct FixtureViewport {
         let row = min(rows - 1, Int((pointY - y) / height * Double(rows)))
         return CellPosition(x: column - columns / 2,
                             y: rows / 2 - 1 - row)
+    }
+
+    /// Includes every chunk intersecting the camera.
+    public var visibleChunks: ChunkRegion {
+        func chunk(_ cell: Int) -> Int {
+            let quotient = cell / Simulation.chunkWidth
+            return cell % Simulation.chunkWidth < 0 ? quotient - 1 : quotient
+        }
+        return ChunkRegion(
+            x: chunk(-columns / 2)...chunk(columns - 1 - columns / 2),
+            y: chunk(rows / 2 - rows)...chunk(rows / 2 - 1)
+        )
+    }
+
+    /// Keeps two viewport-sized bands of chunks active beyond each visible edge.
+    public var activeChunks: ChunkRegion {
+        let visible = visibleChunks
+        let xPadding = 2 * (visible.x.upperBound - visible.x.lowerBound + 1)
+        let yPadding = 2 * (visible.y.upperBound - visible.y.lowerBound + 1)
+        return ChunkRegion(x: (visible.x.lowerBound - xPadding)...(visible.x.upperBound + xPadding),
+                           y: (visible.y.lowerBound - yPadding)...(visible.y.upperBound + yPadding))
     }
 }
 

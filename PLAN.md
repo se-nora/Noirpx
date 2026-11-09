@@ -11,6 +11,12 @@ Initial platforms are macOS and iOS, with keyboard/mouse and touch controls
 respectively. Keep the core portable enough to evaluate additional platforms
 later; no non-Apple platform is promised by the first release.
 
+For now, development and validation run locally on the Mac. Build and launch
+the macOS app and run applicable automated tests locally; physical iPhone
+deployment is not required for routine iterations. The physical-device checks
+and performance targets below remain future platform-release goals, not
+current iteration gates.
+
 ## Technology direction
 
 - Implement the simulation as a Swift module with no dependency on Metal,

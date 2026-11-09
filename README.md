@@ -106,7 +106,8 @@ be recorded.
 
 ## Build and test
 
-From the repository root with Xcode selected by `xcode-select`:
+For current development, run tests and the app locally on the Mac. From the
+repository root with Xcode selected by `xcode-select`:
 
 ```sh
 swift build --target SimulationCore
@@ -114,25 +115,23 @@ swift test
 xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
+open DerivedData/mac/Build/Products/Debug/Noirpx.app
+```
+
+An iOS Simulator build is optional for platform-specific work and also runs
+locally:
+
+```sh
 xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath DerivedData/ios-simulator CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
-  -destination 'generic/platform=iOS' \
-  -derivedDataPath DerivedData/ios-device CODE_SIGNING_ALLOWED=NO build
 ```
 
 The Xcode project builds the active architecture, rather than a universal Mac
-binary. The last command builds an **unsigned** device app and does not prove
-it can be installed. To run on a simulator, open the project in Xcode and run
-the shared `Noirpx` scheme on an available iPhone 16 Pro simulator. For a
-physical iPhone, connect and trust the device and enable Developer Mode if
-requested. The project includes a default Apple Developer team; if you do not
-belong to it, select your own team under Signing & Capabilities and choose a
-bundle identifier unique to your team instead of `com.example.Noirpx`. Allow
-Xcode to create a provisioning profile, select the device, and run. Signing
-requires a suitable Apple developer account and local credentials. Do not commit
-certificates, private keys, or provisioning profiles.
+binary. To run on a simulator, open the project in Xcode and run the shared
+`Noirpx` scheme on an available simulator. Physical iPhone builds, installation,
+and launch are not required for current development. Local results do not
+establish physical-device behavior or performance.
 
 Swift sources use four-space indentation and standard Swift naming. The Xcode
 project uses Xcode's tab-indented project format. No formatter or CI is

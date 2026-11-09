@@ -49,16 +49,14 @@
   version once before building (for example, 0.1.0 becomes 0.2.0), resetting
   the patch component to zero. Keep `MARKETING_VERSION` consistent across
   the app's Debug and Release build configurations.
-- After each implementation iteration, build the app and install and launch it
-  on the connected physical iPhone, in addition to the applicable automated
-  checks. Use the signing and device setup in [README.md](README.md). Report
-  the build and launch results; if the device, signing, or another prerequisite
-  prevents this, state the blocker explicitly rather than treating a Simulator
-  run or an unsigned build as physical-device validation.
-- Measure performance on real target hardware before optimizing; preserve
-  simulation correctness and snapshot ownership when changing threading.
+- For now, run applicable automated checks locally, build the macOS app, and
+  launch it locally after each implementation iteration. Report the results and
+  any blocker. Do not build, install, or launch on a physical iPhone as part of
+  routine validation unless the project owner explicitly requests it.
+- Treat local performance measurements as local results, not evidence of
+  iPhone performance. Preserve simulation correctness and snapshot ownership
+  when changing threading.
 - Keep build/test instructions current when tooling is introduced or changes.
-  Until then, there are no project build or test commands to run.
 - Do not add a dependency, platform requirement, generated asset, or new
   architecture solely on speculation; record consequential decisions and
   tradeoffs in the plan.

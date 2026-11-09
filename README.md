@@ -49,12 +49,13 @@ The Xcode project builds the active architecture, rather than a universal Mac
 binary. The last command builds an **unsigned** device app and does not prove
 it can be installed. To run on a simulator, open the project in Xcode and run
 the shared `Noirpx` scheme on an available iPhone 16 Pro simulator. For a
-physical iPhone, connect and trust the device, enable Developer Mode if
-requested, select an Apple Developer team under Signing & Capabilities, and
-choose a unique bundle identifier instead of `com.example.Noirpx`. Allow
+physical iPhone, connect and trust the device and enable Developer Mode if
+requested. The project includes a default Apple Developer team; if you do not
+belong to it, select your own team under Signing & Capabilities and choose a
+bundle identifier unique to your team instead of `com.example.Noirpx`. Allow
 Xcode to create a provisioning profile, select the device, and run. Signing
-requires a suitable Apple developer account and local credentials; do not commit
-personal team IDs or profiles.
+requires a suitable Apple developer account and local credentials. Do not commit
+certificates, private keys, or provisioning profiles.
 
 Swift sources use four-space indentation and standard Swift naming. The Xcode
 project uses Xcode's tab-indented project format. No formatter or CI is

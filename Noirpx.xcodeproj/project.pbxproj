@@ -96,6 +96,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AppleHost/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -115,6 +116,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AppleHost/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

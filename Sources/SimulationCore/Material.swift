@@ -5,4 +5,11 @@ public enum Material: UInt8, CaseIterable, Sendable {
     case sand = 2
     case water = 3
     case fire = 4
+
+    public var blocksCharacter: Bool {
+        switch self {
+        case .solid, .sand: return true
+        case .empty, .water, .fire: return false
+        }
+    }
 }

@@ -21,9 +21,14 @@ private final class GameModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
+    @Published private(set) var character = FixtureCharacter()
     private var simulation: Simulation?
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
+    private var keyboard = CharacterControls()
+    private var touch = CharacterControls()
+    private var pendingJump = false
+    private var accessibilityHorizontal = 0
 
     init() {
         restart()
@@ -31,9 +36,14 @@ private final class GameModel: ObservableObject {
 
     func restart() {
         do {
-            let fixture = try HeadlessFixture.make(seed: 42)
+            var fixture = try HeadlessFixture.make(seed: 42)
+            for x in -120...120 where !(-4...4).contains(x) {
+                try fixture.enqueue(.init(tick: 1, position: .init(x: x, y: -2), material: .solid))
+            }
             simulation = fixture
             snapshot = fixture.snapshot
+            character = FixtureCharacter()
+            clearControls()
             errorMessage = nil
             scheduler.reset()
             framesPerSecond = 0
@@ -50,6 +60,44 @@ private final class GameModel: ObservableObject {
     func resetClock() {
         scheduler.reset()
         framesPerSecond = 0
+        clearControls()
+    }
+
+    func setKeyboard(_ controls: CharacterControls) {
+        updateControls(keyboard: controls, touch: touch)
+    }
+
+    func setTouch(_ control: CharacterControl, pressed: Bool) {
+        var updated = touch
+        switch control {
+        case .left: updated.left = pressed
+        case .right: updated.right = pressed
+        case .jump: updated.jump = pressed
+        }
+        updateControls(keyboard: keyboard, touch: updated)
+    }
+
+    func activateControl(_ control: CharacterControl) {
+        switch control {
+        case .left: accessibilityHorizontal = -1
+        case .right: accessibilityHorizontal = 1
+        case .jump: pendingJump = true
+        }
+    }
+
+    private func updateControls(keyboard: CharacterControls, touch: CharacterControls) {
+        if !(self.keyboard.jump || self.touch.jump) && (keyboard.jump || touch.jump) {
+            pendingJump = true
+        }
+        self.keyboard = keyboard
+        self.touch = touch
+    }
+
+    private func clearControls() {
+        keyboard = CharacterControls()
+        touch = CharacterControls()
+        pendingJump = false
+        accessibilityHorizontal = 0
     }
 
     func setViewport(_ viewport: FixtureViewport) {
@@ -59,6 +107,7 @@ private final class GameModel: ObservableObject {
 
     func paint(_ position: CellPosition) {
         guard simulation != nil, let snapshot, errorMessage == nil else { return }
+        if selectedMaterial.blocksCharacter && character.contains(position) { return }
         do {
             let (tick, overflow) = snapshot.tick.addingReportingOverflow(1)
             guard !overflow else { throw SimulationError.tickOverflow }
@@ -75,12 +124,29 @@ private final class GameModel: ObservableObject {
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 try simulation?.advance(activeChunks: activeChunks)
+                guard let completed = simulation?.snapshot else { return }
+                let heldHorizontal = (keyboard.right || touch.right ? 1 : 0)
+                    - (keyboard.left || touch.left ? 1 : 0)
+                let horizontal = heldHorizontal == 0 ? accessibilityHorizontal : heldHorizontal
+                try character.advance(snapshot: completed, horizontal: horizontal, jump: pendingJump)
+                pendingJump = false
+                accessibilityHorizontal = 0
+                snapshot = completed
             }
-            snapshot = simulation?.snapshot
         } catch {
             errorMessage = "Simulation stopped: \(error)"
         }
     }
+}
+
+private enum CharacterControl {
+    case left, right, jump
+}
+
+private struct CharacterControls {
+    var left = false
+    var right = false
+    var jump = false
 }
 
 private struct HostView: View {
@@ -99,11 +165,13 @@ private struct HostView: View {
                 MetalSurface(
                     device: device,
                     snapshot: snapshot,
+                    character: model.character,
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },
                     onViewport: { model.setViewport($0) },
-                    onPaint: { model.paint($0) }
+                    onPaint: { model.paint($0) },
+                    onKeyboard: { model.setKeyboard($0) }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -117,7 +185,7 @@ private struct HostView: View {
                 Text("Tick  \(model.snapshot?.tick ?? 0)")
                 Text("Chunks rendered  \(model.renderedChunks.map(String.init) ?? "unavailable")")
                 Text("Chunks allocated  \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
-                Text("Character  unavailable")
+                Text("Character  \(model.character.position.x), \(model.character.position.y)")
                 Button("Restart fixture") { model.restart() }
                 HStack(spacing: 6) {
                     materialButton("Erase", material: .empty, key: "1")
@@ -127,6 +195,9 @@ private struct HostView: View {
                     materialButton("Fire", material: .fire, key: "5")
                 }
                 Text("Paint: click or touch and drag (keys 1–5)")
+                #if os(macOS)
+                Text("Move: A/D or arrows; jump: W, up or space")
+                #endif
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
@@ -139,6 +210,18 @@ private struct HostView: View {
             .padding(10)
             .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
             .padding()
+            #if os(iOS)
+            VStack {
+                Spacer()
+                HStack {
+                    controlButton("Left", symbol: "chevron.left", control: .left)
+                    controlButton("Right", symbol: "chevron.right", control: .right)
+                    Spacer()
+                    controlButton("Jump", symbol: "arrow.up", control: .jump)
+                }
+                .padding()
+            }
+            #endif
         }
         .onAppear { model.resetClock() }
         .onChange(of: scenePhase) { _, _ in model.resetClock() }
@@ -157,19 +240,38 @@ private struct HostView: View {
             .accessibilityLabel("\(title) material")
             .accessibilityAddTraits(model.selectedMaterial == material ? .isSelected : [])
     }
+
+    #if os(iOS)
+    private func controlButton(_ title: String, symbol: String, control: CharacterControl) -> some View {
+        Image(systemName: symbol)
+            .font(.title2.bold())
+            .frame(width: 64, height: 64)
+            .foregroundStyle(.white)
+            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in model.setTouch(control, pressed: true) }
+                .onEnded { _ in model.setTouch(control, pressed: false) })
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { model.activateControl(control) }
+    }
+    #endif
 }
 
 private struct MetalSurface {
     let device: MTLDevice
     let snapshot: SimulationSnapshot
+    let character: FixtureCharacter
     let onFPS: (Double) -> Void
     let onRenderedChunks: (Int) -> Void
     let onError: (String) -> Void
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
+    let onKeyboard: (CharacterControls) -> Void
 
     func makeCoordinator() -> MetalRenderer {
-        MetalRenderer(device: device, snapshot: snapshot, onFPS: onFPS,
+        MetalRenderer(device: device, snapshot: snapshot, character: character, onFPS: onFPS,
                       onRenderedChunks: onRenderedChunks, onError: onError, onViewport: onViewport)
     }
 
@@ -184,7 +286,46 @@ private struct MetalSurface {
 #if os(macOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var onKeyboard: ((CharacterControls) -> Void)?
     private var lastCell: CellPosition?
+    private var keys: Set<UInt16> = []
+    private var keyMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+        keys.removeAll()
+        onKeyboard?(CharacterControls())
+        guard let window else { return }
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            self?.keys.removeAll()
+            self?.onKeyboard?(CharacterControls())
+        }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+            guard let self, event.window === self.window,
+                  [UInt16(0), 2, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
+            if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
+                return event
+            }
+            if event.type == .keyDown { self.keys.insert(event.keyCode) }
+            else { self.keys.remove(event.keyCode) }
+            self.onKeyboard?(CharacterControls(
+                left: self.keys.contains(0) || self.keys.contains(123),
+                right: self.keys.contains(2) || self.keys.contains(124),
+                jump: self.keys.contains(13) || self.keys.contains(49) || self.keys.contains(126)
+            ))
+            return nil
+        }
+    }
+
+    deinit {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
+    }
 
     override func mouseDown(with event: NSEvent) {
         lastCell = nil
@@ -205,13 +346,16 @@ extension MetalSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.onKeyboard = onKeyboard
         configure(view, coordinator: context.coordinator)
         return view
     }
 
     func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
+        context.coordinator.character = character
         view.onPaint = onPaint
+        view.onKeyboard = onKeyboard
     }
 }
 #elseif os(iOS)
@@ -263,6 +407,7 @@ extension MetalSurface: UIViewRepresentable {
 
     func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
+        context.coordinator.character = character
         view.onPaint = onPaint
     }
 }
@@ -302,12 +447,15 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private var fpsStart = ProcessInfo.processInfo.systemUptime
     private var frameCount = 0
     var snapshot: SimulationSnapshot
+    var character: FixtureCharacter
 
-    init(device: MTLDevice, snapshot: SimulationSnapshot, onFPS: @escaping (Double) -> Void,
+    init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
+         onFPS: @escaping (Double) -> Void,
          onRenderedChunks: @escaping (Int) -> Void,
          onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void) {
         self.device = device
         self.snapshot = snapshot
+        self.character = character
         self.onFPS = onFPS
         self.onRenderedChunks = onRenderedChunks
         self.onError = onError
@@ -351,7 +499,7 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character)
         frame.pixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,

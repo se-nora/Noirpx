@@ -160,7 +160,7 @@ the simulation waits for a valid viewport before ticking. Rendering skips chunks
 outside the visible rectangle. Frozen chunks remain in complete snapshots.
 
 The overlay shows the bundle version, submitted frames per second, completed
-tick, rendered and allocated chunk counts, and an unavailable character position.
+tick, rendered and allocated chunk counts, and the character's lower-left position.
 Rendered counts reflect chunks with at least one nonempty cell in the last
 submitted camera frame; allocated counts reflect all allocated nonempty chunks
 in the latest completed snapshot, including those outside the camera. The two
@@ -173,5 +173,24 @@ the next tick. A stroke leaving the viewport is disconnected until it re-enters.
 The host surfaces enqueue and tick-overflow failures; inputs are not recorded
 for replay. Missing Metal devices, renderer initialization failures, simulation
 errors and GPU command errors are displayed; a missing drawable skips a frame.
-The host still needs character gameplay input, a movable camera, resident-mode
-integration, and physical-device lifecycle and performance validation.
+The app also extends the fixture floor to x = -120...120. The separate
+`FixtureCharacter` starts at (-2, 6), has a 5 × 9-cell body, and advances once
+after each completed material tick using that tick's snapshot. One horizontal
+cell is attempted per tick; vertical velocity uses quarter-cell integer units,
+with gravity and a bounded fall speed. When grounded horizontal movement is
+blocked, the character can step up at most three cells, provided the upward and
+horizontal paths are clear and the destination has support. Movement checks each newly entered edge,
+including intermediate vertical cells, against rock, sand, and world bounds.
+Empty space, water, and fire do not block the character; the character does not affect
+material rules. Jump presses are buffered until the next tick and only take
+effect while grounded. Simultaneous opposite directions cancel. Controls reset
+on lifecycle changes and window focus loss. Painting rock or sand inside the
+character is ignored, but an earlier queued edit or moving sand can overlap it;
+edge-only collision permits it to leave such an overlap.
+
+Character state and input are separate from `SimulationSnapshot` and its digest,
+so the digest does not represent a complete gameplay state. The renderer draws
+the character over the material frame without affecting rendered-chunk counts.
+The camera remains fixed, with no respawn except restart. Resident-mode
+integration, richer gameplay, physical-device lifecycle and performance
+validation remain open.

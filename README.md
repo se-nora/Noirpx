@@ -1,8 +1,8 @@
 # Noirpx
 
 Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
-It is not yet playable. The Apple app displays the deterministic fixture with
-Metal, advances it at a fixed tick rate, and shows a diagnostics overlay.
+It is not yet a complete game. The Apple app displays the deterministic fixture
+with Metal, advances it at a fixed tick rate, and includes a basic character.
 The standalone core also has an opt-in parallel resident-world prototype,
 which is not connected to the app.
 
@@ -28,8 +28,7 @@ Resizing and rotation update the view and brush mapping. Nearest-neighbor
 sampling keeps cells distinct, although non-integer display scaling can produce
 uneven pixel widths. Its overlay shows
 the app version, submitted render frames per second, completed simulation tick,
-chunks rendered and allocated, and character position as unavailable (there is
-no character yet). Rendered chunks contain at least one nonempty cell in the
+chunks rendered and allocated, and character position. Rendered chunks contain at least one nonempty cell in the
 last submitted camera frame; allocated chunks are all nonempty chunks
 in the latest completed simulation snapshot, including frozen chunks. Physics
 updates chunks intersecting the camera and extends two viewport chunk widths
@@ -38,9 +37,21 @@ resident but are frozen until the viewport's active region includes them again;
 they do not catch up on missed ticks. Physics cannot move or react across the
 active region boundary. Explicit commands still apply to frozen chunks. The
 renderer skips chunks outside the visible camera. Restart
-replays the fixture from tick zero. The initial fire is consumed on the first
+replays the fixture and character from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
-This is a diagnostic scene, not a movable camera or gameplay input.
+This is a diagnostic scene, not a movable camera or complete gameplay loop.
+
+Move with A/D or the left/right arrow keys and jump with W, up, or space on
+macOS. On iOS, hold the on-screen left and right controls and tap jump; movement
+and jumping can be used together. The character is a 5 × 9-cell rectangle that
+collides with rock, sand, and world bounds, but not water or fire. It advances after
+each material tick, automatically steps up obstacles at most three cells high
+while grounded (if there is headroom), can jump only while grounded, and does not affect the
+materials. The app extends the fixture's rock floor from x = -120 to 120.
+The camera remains fixed, so the character can leave the view or fall off the
+floor; restart to return. Painting rock or sand directly inside the character is
+ignored. A queued edit or moving sand can still overlap it: the character does
+not block material movement.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,

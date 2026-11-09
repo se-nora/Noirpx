@@ -7,7 +7,8 @@ public enum FixturePixels {
     }
 
     /// Counts chunks with at least one nonempty cell in the camera.
-    public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport)
+    public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport,
+                                 character: FixtureCharacter? = nil)
         -> (pixels: [UInt8], renderedChunks: Int) {
         let width = viewport.columns
         let height = viewport.rows
@@ -34,6 +35,16 @@ public enum FixturePixels {
                 pixels[y * width + x] = color.littleEndian
             }
             if chunkVisible { renderedChunks += 1 }
+        }
+        if let character {
+            for dy in 0..<FixtureCharacter.height {
+                for dx in 0..<FixtureCharacter.width {
+                    let x = character.position.x + dx + width / 2
+                    let y = height / 2 - 1 - character.position.y - dy
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    pixels[y * width + x] = UInt32(0xffe6e2b4).littleEndian
+                }
+            }
         }
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)
     }

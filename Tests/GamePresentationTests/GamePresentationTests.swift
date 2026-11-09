@@ -3,6 +3,37 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testCharacterRendersWithoutChangingChunkCount() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
+        let snapshot = Simulation(seed: 0).snapshot
+        let character = FixtureCharacter()
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character)
+        let offset = ((viewport.rows / 2 - 1 - character.position.y) * viewport.columns
+                      + character.position.x + viewport.columns / 2) * 4
+        XCTAssertEqual(Array(frame.pixels[offset..<offset + 4]), [180, 226, 230, 255])
+        XCTAssertEqual(frame.renderedChunks, 0)
+        XCTAssertEqual(snapshot.chunks.count, 0)
+    }
+
+    func testCharacterUsesTheSameTicksAtDifferentDisplayRates() throws {
+        func run(rate: Int) throws -> FixtureCharacter {
+            var scheduler = FixedTickScheduler()
+            var simulation = try HeadlessFixture.make(seed: 42)
+            var character = FixtureCharacter()
+            for frame in 0...rate * 2 {
+                for _ in 0..<scheduler.steps(at: Double(frame) / Double(rate)) {
+                    try simulation.advance()
+                    let tick = simulation.snapshot.tick
+                    try character.advance(snapshot: simulation.snapshot,
+                                          horizontal: tick >= 30 && tick < 40 ? 1 : 0,
+                                          jump: tick == 30)
+                }
+            }
+            return character
+        }
+        XCTAssertEqual(try run(rate: 30), try run(rate: 120))
+    }
+
     func testSchedulerProducesSameFixtureAtDifferentCallbackRates() throws {
         func run(rate: Int) throws -> SimulationSnapshot {
             var scheduler = FixedTickScheduler()

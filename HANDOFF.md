@@ -1,5 +1,29 @@
 # Handoff: deterministic simulation prototype
 
+## Character controls increment
+
+The deterministic fixture app has a basic fixed-tick character, rock and sand collision, three-cell step-up,
+keyboard movement and jump on macOS, and on-screen controls on iOS. The host
+extends the fixture floor; the camera remains fixed and restart returns the
+character. Character state is separate from the material snapshot and digest.
+See [README.md](README.md) and [INTERFACES.md](INTERFACES.md) for controls,
+semantics, and limitations. The playable vertical slice remains incomplete.
+
+For the initial character increment, the full Swift package suite passed (55 tests, one
+optional benchmark skipped), as did Debug macOS, iOS Simulator, and signed iOS
+device builds. The signed app installed and launched on the connected physical
+iPhone 16 Pro, and its process remained running. Xcode reported a placeholder
+OS-version warning for the generic iOS destinations. Actual control interaction,
+visual appearance, lifecycle behavior, and performance were not verified on
+the phone.
+
+For the sand-collision and stair increment, the full Swift package suite and
+focused character tests passed, as did Debug macOS, iOS Simulator, and signed
+iOS device builds. The updated app installed and launched on the physical
+iPhone 16 Pro and its process remained running; visual and touch interaction
+were not verified. The generic iOS builds emitted the placeholder OS-version
+warning.
+
 ## Fixture input increment
 
 The deterministic fixture has a material brush on macOS and iOS. The overlay

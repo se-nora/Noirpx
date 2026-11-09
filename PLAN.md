@@ -236,6 +236,13 @@ than hiding the result. Simulator results do not replace device measurements.
 
 ### 4. Small playable vertical slice
 
+**First increment:** The deterministic fixture host now has a fixed-tick,
+5 × 9-cell character, rock and sand collision, three-cell step-up, jumping, Mac keyboard controls, and
+iPhone touch controls. It remains a diagnostic scene with a fixed camera;
+character state is not part of the material snapshot or digest. There is no
+level generation, damage, tool/weapon, goal, failure loop, or automatic respawn.
+See [INTERFACES.md](INTERFACES.md) for the provisional collision and input rules.
+
 Add a controllable character, a compact generated level, basic collision and
 damage, one original tool/weapon, material interactions, a goal/failure loop,
 and readable mobile controls. Keep the slice small enough to profile and test.

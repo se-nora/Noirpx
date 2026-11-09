@@ -167,6 +167,23 @@ class FlameBehavior: ReactiveBehavior, @unchecked Sendable {
         material == .water || MaterialBehavior.forMaterial(material).ignitionThreshold != nil
     }
 
+    override func destinations(source: CellPosition, direction: Int,
+                               canVisit: (CellPosition) -> Bool,
+                               material: (CellPosition) -> Material) -> [CellPosition] {
+        let cardinal = super.destinations(source: source, direction: direction,
+                                          canVisit: canVisit, material: material)
+        let diagonal = [(-1, -1), (1, -1), (-1, 1), (1, 1)].compactMap { dx, dy in
+            let target = CellPosition(x: source.x + dx, y: source.y + dy)
+            return canVisit(target) && MaterialBehavior.forMaterial(material(target)).ignitionThreshold != nil
+                ? target : nil
+        }
+        return cardinal + diagonal
+    }
+
+    func isCardinal(_ target: CellPosition, to source: CellPosition) -> Bool {
+        abs(target.x - source.x) + abs(target.y - source.y) == 1
+    }
+
     func spread(destinations: [CellPosition], age: UInt16, canVisit: (CellPosition) -> Bool,
                 material: (CellPosition) -> Material, thermal: (CellPosition) -> ThermalCellState,
                 moved: Set<CellPosition>, action: inout MaterialAction) {
@@ -198,7 +215,7 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
                           secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
-        if let water = destinations.first(where: { material($0) == .water }) {
+        if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }) {
             action.writes.append((water, .empty))
             action.writes.append((source, .empty))
             return action
@@ -222,7 +239,7 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
                               canVisit: (CellPosition) -> Bool,
                               material: (CellPosition) -> Material) -> MaterialAction {
         let neighbors = super.destinations(source: target, direction: 0, canVisit: canVisit, material: material)
-        if let water = neighbors.first(where: { material($0) == .water }) {
+        if let water = neighbors.first(where: { isCardinal($0, to: target) && material($0) == .water }) {
             return MaterialAction(writes: [(water, .empty)], moved: [target],
                                   thermalWrites: [(target, .zero)])
         }
@@ -238,7 +255,7 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
         var state = thermal(source)
-        if let water = destinations.first(where: { material($0) == .water }),
+        if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }),
            state.isBurning || state.heat > 0 {
             action.writes.append((water, .empty))
             action.thermalWrites.append((source, .zero))

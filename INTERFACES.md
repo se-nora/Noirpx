@@ -105,15 +105,16 @@ Each source checks down, left, right, up for water first. Fire consumes the
 first water and extinguishes; hot or burning pitch or oil consumes the first water and
 resets its thermal state to zero, retaining its material. Cold flammable material ignores water.
 Water can have moved earlier in the tick. Without quenching, a source transfers
-to at most one eligible adjacent nonburning flammable cell per tick. Eligible
-targets are sorted in down/left/right/up order, rotated by source age modulo
+to at most one eligible nonburning flammable cell among all eight neighbors per tick. Eligible
+targets are ordered down, left, right, up, down-left, down-right, up-left,
+up-right, then rotated by source age modulo
 eligible count; the warmest target is selected, using the first rotated target
 for equal heat. Completing warmer targets avoids endlessly diluting heat, while
 excluding burning targets permits branches to be served. This is bounded
 fairness for stable neighborhoods with sufficient source lifetime, not a
 promise under moving water, competing sources, deferral, or changing terrain.
 Before applying heat to the selected flammable cell, that cell checks its own currently
-adjacent accessible water in down/left/right/up order. If present, it consumes
+edge-adjacent accessible water in down/left/right/up order. If present, it consumes
 the first water and resets to zero instead of receiving heat, even if it was
 cold before this attempt. This still spends the source's one target for the
 tick; the source does not try another target and does not extinguish. That
@@ -130,8 +131,10 @@ liquid move; quenching consumes the turn, and burnout removes the cell without
 moving. Otherwise its updated thermal state follows it to its destination.
 Heating or quenching an oil target claims it for the tick and prevents its
 movement or own reaction in that tick; if it already moved it cannot be heated.
-Newly ignited cells never spread on their ignition tick. No diagonals or random
-thermal choices are involved. Beacon Run separately samples the completed
+Newly ignited cells never spread on their ignition tick. Diagonal heat passes
+between solid corners; diagonal water never quenches either source or target.
+Thermal choices are not random. This expanded neighborhood intentionally changes
+old seeded replays when diagonal candidates are present. Beacon Run separately samples the completed
 material state for character damage as described below. Frozen chunks neither
 cool nor age, and cannot exchange heat across the active boundary.
 
@@ -174,10 +177,9 @@ more slowly and interact with current neighbors.
 
 Within a batch, chunk proposals are calculated in parallel from the same
 immutable world state. Sand, water and oil propose their normal movement preferences
-using a seed/tick/position-derived direction; fire, pitch and oil propose adjacent
-water and flammable materials. Destinations empty, water for sand, or water or flammable for flames
-at the start of the batch are proposed, subject to the same diagonal corner
-rule. Proposals commit in world y/x order; each source must still hold its
+using a seed/tick/position-derived direction; fire, pitch and oil propose edge-adjacent
+water and eight-neighbor flammable materials. Movement proposals obey the
+diagonal side-cell rule; heat does not. Proposals commit in world y/x order; each source must still hold its
 original material, and destinations and diagonal side cells must still be
 available. Water displacement is resolved against the current committed world
 and cannot relocate water already moved that tick. A move tries its remaining proposed destinations if an earlier
@@ -186,7 +188,7 @@ including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
 not record schedules or promise reproducible replay across runs or devices.
 
-Flames and oil propose all adjacent water and flammable materials visible at batch
+Flames and oil propose edge-adjacent water and all eight-neighbor flammable materials visible at batch
 start. Commit checks still-present candidates and current thermal state using
 the thermal rules above. New direct neighbors of the source created since
 proposal are not considered. The selected target's water check instead reads

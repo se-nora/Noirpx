@@ -53,6 +53,8 @@
   launch it locally after each implementation iteration. Report the results and
   any blocker. Do not build, install, or launch on a physical iPhone as part of
   routine validation unless the project owner explicitly requests it.
+- After validation, close only game instances started by the agent for that
+  task, verify they exited, and leave unrelated or user-owned instances alone.
 - Treat local performance measurements as local results, not evidence of
   iPhone performance. Preserve simulation correctness and snapshot ownership
   when changing threading.

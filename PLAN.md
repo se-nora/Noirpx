@@ -250,7 +250,10 @@ The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
 cooldown and visible feedback; rock shields sand and is never destroyed.
 Five suspended pitch cells near the start provide an optional brush experiment:
 fire heats them until they ignite into a 64-processed-turn orange burning state;
-burning cells transfer heat to adjacent pitch, and water quenches hot pitch.
+burning cells transfer heat to eight neighboring flammable cells, and edge-adjacent
+water quenches hot pitch. Diagonal heat can pass solid corners; diagonal water
+does not quench. This intentional rule change alters older seeded replays when
+diagonal targets participate.
 Pitch retains its identity and is blocking until burned away; see
 the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
 The optional lamp-oil brush adds a nonblocking, flowing flammable material;

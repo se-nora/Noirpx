@@ -120,8 +120,11 @@ displace water into an empty side cell, or upward if both sides are occupied;
 the upward search may pass occupied cells. The displaced water does not move
 again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
 resident-mode ordering.
-Fire prioritizes adjacent water over heating; hot pitch consumes adjacent
+Fire prioritizes edge-adjacent water over heating; hot pitch consumes edge-adjacent
 water and cools, while unquenched burning pitch eventually disappears.
+Fire and burning pitch or oil heat one of eight neighbors per turn, including
+diagonally past solid corners. Water at a corner never quenches the source or
+the heated target. This changes older seeded replays involving diagonal heat.
 Fire lasts 32 processed turns and transfers 40 heat starting at age 2;
 pitch ignites at 100 and cools by 1 when not burning. Processed ticks are not necessarily displayed frames.
 Oil ignites at 80, cools by 1 when unburning, spreads heat from age 2 and

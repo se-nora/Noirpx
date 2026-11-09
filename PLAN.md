@@ -186,7 +186,8 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 centered camera with 720 cells along the drawable's long edge, adapting the other
 dimension to its aspect ratio. It uses a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
-version and the absence of a character; the fixture can be restarted. The
+version, rendered and simulated chunk counts, and the absence of a character;
+the fixture can be restarted. The
 overlay also selects a material brush; mouse and touch strokes enqueue cell
 replacements for the next deterministic tick. This is diagnostic interaction,
 not character controls. The renderer rebuilds a texture per frame from a

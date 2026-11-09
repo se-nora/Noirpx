@@ -27,7 +27,10 @@ Resizing and rotation update the view and brush mapping. Nearest-neighbor
 sampling keeps cells distinct, although non-integer display scaling can produce
 uneven pixel widths. Its overlay shows
 the app version, submitted render frames per second, completed simulation tick,
-and character position as unavailable (there is no character yet). Restart
+chunks rendered and simulated, and character position as unavailable (there is
+no character yet). Rendered chunks contain at least one nonempty cell in the
+last submitted camera frame; simulated chunks are all allocated nonempty chunks
+in the latest completed simulation snapshot, including off-screen chunks. Restart
 replays the fixture from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
 This is a diagnostic scene, not a movable camera or gameplay input.

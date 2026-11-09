@@ -17,6 +17,7 @@ struct NoirpxApp: App {
 private final class GameModel: ObservableObject {
     @Published private(set) var snapshot: SimulationSnapshot?
     @Published var framesPerSecond: Double = 0
+    @Published var renderedChunks: Int?
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
@@ -35,10 +36,12 @@ private final class GameModel: ObservableObject {
             errorMessage = nil
             scheduler.reset()
             framesPerSecond = 0
+            renderedChunks = nil
             renderGeneration += 1
         } catch {
             simulation = nil
             snapshot = nil
+            renderedChunks = nil
             errorMessage = "Could not create fixture: \(error)"
         }
     }
@@ -91,6 +94,7 @@ private struct HostView: View {
                     device: device,
                     snapshot: snapshot,
                     onFPS: { model.framesPerSecond = $0 },
+                    onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },
                     onPaint: { model.paint($0) }
                 )
@@ -104,6 +108,8 @@ private struct HostView: View {
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
                 Text("FPS  \(model.framesPerSecond, specifier: "%.1f")")
                 Text("Tick  \(model.snapshot?.tick ?? 0)")
+                Text("Chunks rendered  \(model.renderedChunks.map(String.init) ?? "unavailable")")
+                Text("Chunks simulated  \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
                 Text("Character  unavailable")
                 Button("Restart fixture") { model.restart() }
                 HStack(spacing: 6) {
@@ -150,11 +156,13 @@ private struct MetalSurface {
     let device: MTLDevice
     let snapshot: SimulationSnapshot
     let onFPS: (Double) -> Void
+    let onRenderedChunks: (Int) -> Void
     let onError: (String) -> Void
     let onPaint: (CellPosition) -> Void
 
     func makeCoordinator() -> MetalRenderer {
-        MetalRenderer(device: device, snapshot: snapshot, onFPS: onFPS, onError: onError)
+        MetalRenderer(device: device, snapshot: snapshot, onFPS: onFPS,
+                      onRenderedChunks: onRenderedChunks, onError: onError)
     }
 
     func configure(_ view: MTKView, coordinator: MetalRenderer) {
@@ -278,16 +286,20 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private var queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
     private let onFPS: (Double) -> Void
+    private let onRenderedChunks: (Int) -> Void
     private let onError: (String) -> Void
+    private var lastRenderedChunks: Int?
     private var fpsStart = ProcessInfo.processInfo.systemUptime
     private var frameCount = 0
     var snapshot: SimulationSnapshot
 
     init(device: MTLDevice, snapshot: SimulationSnapshot, onFPS: @escaping (Double) -> Void,
+         onRenderedChunks: @escaping (Int) -> Void,
          onError: @escaping (String) -> Void) {
         self.device = device
         self.snapshot = snapshot
         self.onFPS = onFPS
+        self.onRenderedChunks = onRenderedChunks
         self.onError = onError
         super.init()
         do {
@@ -324,8 +336,8 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let pixels = FixturePixels.rgba(snapshot: snapshot, viewport: viewport)
-        pixels.withUnsafeBytes { bytes in
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+        frame.pixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,
                             bytesPerRow: viewport.columns * 4)
@@ -343,6 +355,11 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             }
         }
         buffer.commit()
+        if lastRenderedChunks != frame.renderedChunks {
+            let count = frame.renderedChunks
+            lastRenderedChunks = count
+            DispatchQueue.main.async { [onRenderedChunks] in onRenderedChunks(count) }
+        }
         let now = ProcessInfo.processInfo.systemUptime
         let elapsed = now - fpsStart
         if elapsed > 2 {

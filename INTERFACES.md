@@ -145,7 +145,11 @@ handles skipped snapshots and removed chunks; it is not a measured upload
 strategy for a larger world.
 
 The overlay shows the bundle version, submitted frames per second, completed
-tick and an unavailable character position. Restart creates the same fixture
+tick, rendered and simulated chunk counts, and an unavailable character position.
+Rendered counts reflect chunks with at least one nonempty cell in the last
+submitted camera frame; simulated counts reflect all allocated nonempty chunks
+in the latest completed snapshot, including those outside the camera. The two
+counts can refer to different ticks. Restart creates the same fixture
 again. The material brush maps mouse or single-touch strokes through the same
 centered drawable viewport as the renderer, ignores letterboxing, and fills
 gaps between sampled cells. The overlay selects empty, solid, sand, water or

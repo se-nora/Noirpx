@@ -136,9 +136,11 @@ monotonic 60 Hz accumulator, independently of display callbacks. It performs at
 most four ticks per timer callback and discards excess elapsed time rather than
 skipping ticks. Lifecycle changes reset the time baseline and accumulated time.
 The Metal renderer reads complete immutable snapshots; each frame uses a fresh
-32 × 18 RGBA texture held by its command buffer through GPU completion.
-The fixed camera covers x -16...15 and y -9...8. Integer scaling and nearest
-sampling keep cells crisp when the drawable is large enough. Full re-rasterizing
+RGBA texture held by its command buffer through GPU completion. The centered
+camera covers 720 cells along the drawable's long edge, with the short edge
+rounded to the nearest whole cell (at least one). Its viewport is uniformly
+scaled to fit and may have small margins; nearest-neighbor sampling does not
+guarantee equal-sized display pixels at fractional scales. Full re-rasterizing
 handles skipped snapshots and removed chunks; it is not a measured upload
 strategy for a larger world.
 

@@ -19,12 +19,18 @@ chunks, or its stable `digest`. Commands replace one material at a position on
 an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
-The app shows a fixed 32 × 18-cell view around the origin. Its overlay shows
+The app shows a view centered on the origin with 720 simulation cells along the
+long edge of the drawable. A landscape Mac or iPhone therefore shows 720 cells
+across; in portrait, 720 cells are visible vertically. The other dimension follows
+the drawable's aspect ratio, rounded to whole cells, so small margins may appear.
+Resizing and rotation update the view and brush mapping. Nearest-neighbor
+sampling keeps cells distinct, although non-integer display scaling can produce
+uneven pixel widths. Its overlay shows
 the app version, submitted render frames per second, completed simulation tick,
 and character position as unavailable (there is no character yet). Restart
 replays the fixture from tick zero. The initial fire is consumed on the first
 tick and the materials eventually settle; restart to see the motion again.
-This is a diagnostic scene, not the planned camera or gameplay input.
+This is a diagnostic scene, not a movable camera or gameplay input.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,

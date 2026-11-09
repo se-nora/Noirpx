@@ -1,11 +1,10 @@
 import SimulationCore
 
-/// A fixed camera around the origin, with RGBA rows ordered from top to bottom.
+/// Rasterizes the centered camera with RGBA rows ordered from top to bottom.
 public enum FixturePixels {
-    public static let width = 32
-    public static let height = 18
-
-    public static func rgba(snapshot: SimulationSnapshot) -> [UInt8] {
+    public static func rgba(snapshot: SimulationSnapshot, viewport: FixtureViewport) -> [UInt8] {
+        let width = viewport.columns
+        let height = viewport.rows
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
         for y in 0..<height {
             for x in 0..<width {

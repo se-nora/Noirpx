@@ -312,8 +312,10 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
         guard let queue, let pipeline,
               let drawable = view.currentDrawable,
               let descriptor = view.currentRenderPassDescriptor else { return }
+        guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
+                                             drawableHeight: Double(view.drawableSize.height)) else { return }
         let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba8Unorm, width: FixturePixels.width, height: FixturePixels.height, mipmapped: false
+            pixelFormat: .rgba8Unorm, width: viewport.columns, height: viewport.rows, mipmapped: false
         )
         textureDescriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: textureDescriptor),
@@ -322,16 +324,11 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let pixels = FixturePixels.rgba(snapshot: snapshot)
+        let pixels = FixturePixels.rgba(snapshot: snapshot, viewport: viewport)
         pixels.withUnsafeBytes { bytes in
-            texture.replace(region: MTLRegionMake2D(0, 0, FixturePixels.width, FixturePixels.height),
+            texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,
-                            bytesPerRow: FixturePixels.width * 4)
-        }
-        guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
-                                             drawableHeight: Double(view.drawableSize.height)) else {
-            encoder.endEncoding()
-            return
+                            bytesPerRow: viewport.columns * 4)
         }
         encoder.setViewport(MTLViewport(originX: viewport.x, originY: viewport.y,
                                         width: viewport.width, height: viewport.height, znear: 0, zfar: 1))

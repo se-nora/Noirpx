@@ -183,12 +183,13 @@ batch overrun, thermals, and real iPhone behavior still need measurement.
 ### 2. Renderable world and platform hosts
 
 **Incremental prototype:** The Apple host renders the deterministic fixture in a
-fixed 32 × 18-cell camera with a 60 Hz host accumulator, four-step catch-up cap,
+centered camera with 720 cells along the drawable's long edge, adapting the other
+dimension to its aspect ratio. It uses a 60 Hz host accumulator, four-step catch-up cap,
 and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
 version and the absence of a character; the fixture can be restarted. The
 overlay also selects a material brush; mouse and touch strokes enqueue cell
 replacements for the next deterministic tick. This is diagnostic interaction,
-not character controls. The renderer rebuilds a small texture per frame from a
+not character controls. The renderer rebuilds a texture per frame from a
 complete snapshot. This is
 not the planned 480 × 270 resident viewport, a movable camera, gameplay input,
 or a performance-validated renderer. Independent contract review, resident

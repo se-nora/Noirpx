@@ -3,6 +3,30 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testVentRasterReflectsCoolingWithoutMutatingSimulation() throws {
+        var run = try BeaconRun()
+        try run.advance(horizontal: 0, jump: false)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     center: .init(x: 100, y: 0), longEdgeCells: 200))
+        let position = CellPosition(x: BeaconRun.ventX.lowerBound, y: BeaconRun.ventY.upperBound)
+        func pixel() -> [UInt8] {
+            let frame = FixturePixels.rasterize(snapshot: run.simulation.snapshot, viewport: viewport,
+                                                character: run.character, challenge: run)
+            let offset = ((viewport.rows / 2 - 1 - position.y + viewport.center.y) * viewport.columns
+                          + position.x - viewport.center.x + viewport.columns / 2) * 4
+            return Array(frame.pixels[offset..<offset + 4])
+        }
+        let before = run.simulation.snapshot
+        XCTAssertEqual(pixel(), [255, 105, 61, 255])
+        XCTAssertEqual(run.simulation.snapshot, before)
+        try run.paint(.water, at: .init(x: 126, y: 1))
+        try run.advance(horizontal: 0, jump: false)
+        let cooled = run.simulation.snapshot
+        XCTAssertGreaterThan(run.ventCooling, 0)
+        XCTAssertEqual(pixel(), [91, 196, 230, 255])
+        XCTAssertEqual(run.simulation.snapshot, cooled)
+    }
+
     func testPulseInputBufferHoldAndReset() {
         var input = GameplayInput()
         input.setKeyboard(.init(pulse: true))

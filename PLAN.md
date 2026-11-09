@@ -243,12 +243,14 @@ than hiding the result. Simulator results do not replace device measurements.
 ### 4. Small playable vertical slice
 
 **Current increment:** Beacon Run is an original fixed course with a gap, a
-sand pile, two collectible markers, a locked goal, fall failure and restart.
+sand pile, two collectible markers, a locked goal, fall and health failure and
+restart. A visible heat vent before the goal can be jumped or cooled with water;
+health, hit protection and cooling run on fixed ticks.
 The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
 cooldown and visible feedback; rock shields sand and is never destroyed.
 Painting remains unrestricted and can change or bypass obstacles. The fixed-tick
 character and course state live in the platform-independent core; the material
-snapshot digest does not include them. There is no generation, damage,
+snapshot digest does not include them. There is no generation,
 save or automatic respawn. See [INTERFACES.md](INTERFACES.md) for exact rules.
 Enjoyment, mobile readability, physical touch behavior and performance are not
 established by automated tests; milestone exit remains open.

@@ -20,14 +20,19 @@ an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
 In Beacon Run, collect both amber outlined beacons and touch the gate; it turns
-green when unlocked. Jump the gap and climb, paint away, or pulse through the sand pile. Falling
-below the course ends the run; win and fall both freeze the world until Restart.
+green when unlocked. Jump the gap and climb, paint away, or pulse through the sand pile.
+The red striped heat vent before the gate damages on contact: jump over it, or
+paint water at its base to cool it (blue). You start with three health; one
+hit grants 30 ticks of protection. Water in the base refreshes 120 ticks of
+cooling; the sensor includes water that falls just below the visible base onto
+the floor. The HUD shows both timers. Health does not regenerate. Falling
+below the course or losing all health ends the run; win and failure freeze the world until Restart.
 The beacons and gate are nonphysical markers, not materials. They are collected
 by touching them with the character, in either order. The gate can be visited
 early, but only wins when both beacons have been collected and the character
-touches it again. There is no timer, damage, enemy, score, or save. Painting
+touches it again. There is no overall time limit, enemy, score, or save. Painting
 can bridge the gap or alter the course: this is an open-ended tool, not a
-restricted scoring challenge. Fire and water do not hurt the character.
+restricted scoring challenge. Ordinary fire and water do not hurt the character.
 
 The app shows a view following the character with 200 simulation cells along the
 long edge of the drawable. The other dimension follows
@@ -71,7 +76,7 @@ Select a brush in the overlay, then click and drag on the scene on macOS or
 touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
 water, or fire; number keys 1–5 select them as well. Strokes are applied on the
 next simulation tick, and moving materials may immediately fall or react. Input
-outside the displayed scene is ignored. Painting is disabled after a win or fall.
+outside the displayed scene is ignored. Painting is disabled after a win or failure.
 
 Sand and water cannot move diagonally past an occupied side cell. Sand can
 displace water into an empty side cell, or upward if both sides are occupied;

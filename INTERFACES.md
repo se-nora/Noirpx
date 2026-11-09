@@ -198,18 +198,45 @@ on lifecycle changes and window focus loss. Painting rock or sand inside the
 character is ignored, but an earlier queued edit or moving sand can overlap it;
 edge-only collision permits it to leave such an overlap.
 
-`BeaconRun` owns the simulation, character, two collected flags and outcome.
+`BeaconRun` owns the simulation, character, health, vent, two collected flags and outcome.
 At tick 1 it installs a rock floor x=-40...150 at y=-2 except the 36...47
 gap, a 3-cell-high step at x=14...18, and sand x=65...70, y=-1...14.
 Materials update before the character. After movement, a lower-left character
-y of -20 or below loses, taking precedence over marker checks. Otherwise,
+y of -20 or below loses, taking precedence over damage and marker checks. Otherwise,
+the vent and health rules below run before marker checks; lethal damage also
+takes precedence over a simultaneous goal. If alive,
 overlap of the 5 × 9 body with each 5 × 12 marker at (22, 0) and (92, 0)
 collects it. Overlap with the gate at (130, 0) wins only once both flags are
 set; visiting early does not automatically win later. Markers are not cells and
 cannot be painted away. The renderer draws uncollected amber outlines and a
 gray locked or green unlocked gate over materials, then the character. A win
-or fall freezes ticks and ignores paint until restart. Brushes otherwise remain
-unrestricted, so players can bridge or erase obstacles. There is no damage.
+or failure freezes ticks and ignores paint until restart. Brushes otherwise remain
+unrestricted, so players can bridge or erase obstacles.
+
+The original heat vent is a non-material course fixture occupying x=123...129,
+y=0...6, just before the gate. Its striped red area is hot; blue means cooled.
+Its contact rectangle uses inclusive cells against the character's half-open
+body rectangle; touching only an edge is not contact. It can be jumped over.
+After material physics and character movement on each playing tick, the vent
+samples post-physics water in x=123...129, y=-1...3. The sensor includes the
+space immediately above the floor, so water painted on the visible base at
+y=0 can fall to y=-1 and still cool it. Any water there resets
+cooling to 120 ticks without consuming the water; otherwise the cooling timer
+decrements toward zero. It is safe on the wet tick and while the remaining timer
+is positive; it becomes hot on the tick the timer reaches zero. Water can move
+out of the sensor, be erased or react with fire according to normal rules. The
+fixture and sensor are evaluated every gameplay tick, including if their chunk
+is frozen; frozen material itself still obeys the active-region rules.
+
+The character starts with three health. Hot contact deals one damage immediately
+when the global protection timer is zero, setting it to 30 ticks. It decrements
+on each subsequent playing tick, including outside the vent or while cooled;
+contact can damage again on the tick it reaches zero. A pink character and the
+HUD show the remaining protection; health does not regenerate. Zero health
+ends the run as `exhausted`. Restart restores all health and timers. Neither
+ordinary water nor ordinary fire damages the character: active fire expires in
+the material tick, before gameplay checks, and frozen fire is also harmless.
+No material rule or material snapshot digest is changed.
 
 The Silt Pulse fires in the last nonzero horizontal movement direction (initially
 right), even if movement is blocked. Holding F on macOS or the iOS bolt button
@@ -221,7 +248,7 @@ the start of each subsequent completed gameplay tick; holding fires again when
 it reaches zero. The overlay displays remaining ticks or READY.
 
 After material commands and physics, character movement, timer decrements, and
-fall/goal checks, a playing run may fire. Thus a winning or falling tick cannot
+fall/damage/goal checks, a playing run may fire. Thus a winning or failing tick cannot
 fire; terminal runs freeze cooldown and flash until restart. Five horizontal
 lanes at character lower-left y+2...y+6 start immediately outside the facing
 edge, extending at most 18 cells each. Each lane stops at the world boundary,
@@ -235,7 +262,7 @@ cells, including hits, lasts four gameplay ticks (the firing tick included);
 the renderer only reads it. Restart recreates the initial facing, cooldown and
 empty flash.
 
-Character, pulse and progression state and queued input are separate from
+Character, health, vent, pulse and progression state and queued input are separate from
 `SimulationSnapshot` and its digest, so the digest does not represent a
 complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance

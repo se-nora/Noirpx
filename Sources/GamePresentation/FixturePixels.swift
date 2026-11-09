@@ -37,6 +37,16 @@ public enum FixturePixels {
             if chunkVisible { renderedChunks += 1 }
         }
         if let challenge {
+            for worldY in BeaconRun.ventY {
+                for worldX in BeaconRun.ventX where worldY == BeaconRun.ventY.lowerBound
+                    || worldY == BeaconRun.ventY.upperBound || (worldX + worldY) % 4 == 0 {
+                    let x = worldX - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - worldY + viewport.center.y
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    let color: UInt32 = challenge.ventCooling > 0 ? 0xffe6c45b : 0xff3d69ff
+                    pixels[y * width + x] = color.littleEndian
+                }
+            }
             let markers = BeaconRun.beaconPositions.enumerated().compactMap { index, position in
                 challenge.collected[index] ? nil : position
             }
@@ -67,7 +77,9 @@ public enum FixturePixels {
                     let x = character.position.x + dx - viewport.center.x + width / 2
                     let y = height / 2 - 1 - character.position.y - dy + viewport.center.y
                     guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
-                    pixels[y * width + x] = UInt32(0xffe6e2b4).littleEndian
+                    let color: UInt32 = (challenge?.damageCooldown ?? 0) > 0
+                        ? 0xffa4a4ff : 0xffe6e2b4
+                    pixels[y * width + x] = color.littleEndian
                 }
             }
         }

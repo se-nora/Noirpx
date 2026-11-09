@@ -165,6 +165,10 @@ private struct HostView: View {
                 Text("BEACON RUN").fontWeight(.bold)
                 Text("Collect 2 amber beacons, then reach the green gate.")
                 Text("Jump the gap; pulse through sand.")
+                Text("Red vent: jump or paint water at base (blue = cool).")
+                Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
+                Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
+                        "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
                 Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
                 Text(model.challenge?.pulseCooldown == 0 ? "Pulse READY" :
                         "Pulse cooling \(model.challenge?.pulseCooldown ?? 0)")
@@ -172,6 +176,8 @@ private struct HostView: View {
                     Text("You made it!").foregroundStyle(.green).fontWeight(.bold)
                 } else if model.challenge?.outcome == .fell {
                     Text("You fell. Try again!").foregroundStyle(.orange).fontWeight(.bold)
+                } else if model.challenge?.outcome == .exhausted {
+                    Text("Out of health. Restart to try again!").foregroundStyle(.red).fontWeight(.bold)
                 }
                 HStack {
                     Button("Restart") { model.restart() }

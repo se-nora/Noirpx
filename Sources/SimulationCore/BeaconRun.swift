@@ -1,7 +1,7 @@
 /// A fixed, replayable course. All game state advances on completed material ticks.
 public struct BeaconRun {
     public enum Outcome: Equatable, Sendable {
-        case playing, won, fell
+        case playing, won, fell, exhausted
     }
 
     public static let beaconPositions = [CellPosition(x: 22, y: 0), CellPosition(x: 92, y: 0)]
@@ -12,6 +12,12 @@ public struct BeaconRun {
     public static let pulseRange = 18
     public static let pulseCooldownTicks = 18
     public static let pulseFlashTicks = 4
+    public static let maximumHealth = 3
+    public static let damageIntervalTicks = 30
+    public static let ventCoolingTicks = 120
+    public static let ventX = 123...129
+    public static let ventY = 0...6
+    public static let ventSensorY = -1...3
 
     public private(set) var simulation: Simulation
     public private(set) var character = FixtureCharacter()
@@ -21,6 +27,9 @@ public struct BeaconRun {
     public private(set) var pulseCooldown = 0
     public private(set) var pulseFlash: [CellPosition] = []
     public private(set) var pulseFlashRemaining = 0
+    public private(set) var health = maximumHealth
+    public private(set) var damageCooldown = 0
+    public private(set) var ventCooling = 0
 
     public init(seed: UInt64 = 42) throws {
         simulation = Simulation(seed: seed)
@@ -54,6 +63,15 @@ public struct BeaconRun {
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
         if horizontal != 0 { facing = horizontal.signum() }
         if pulseCooldown > 0 { pulseCooldown -= 1 }
+        if damageCooldown > 0 { damageCooldown -= 1 }
+        if ventCooling > 0 { ventCooling -= 1 }
+        if Self.ventX.contains(where: { x in
+            Self.ventSensorY.contains(where: { y in
+                simulation.materialForGameplay(at: CellPosition(x: x, y: y)) == .water
+            })
+        }) {
+            ventCooling = Self.ventCoolingTicks
+        }
         if pulseFlashRemaining > 0 {
             pulseFlashRemaining -= 1
             if pulseFlashRemaining == 0 { pulseFlash = [] }
@@ -61,6 +79,14 @@ public struct BeaconRun {
         if character.position.y <= Self.fallLimit {
             outcome = .fell
             return
+        }
+        if ventCooling == 0 && damageCooldown == 0 && Self.touchesVent(character.position) {
+            health -= 1
+            damageCooldown = Self.damageIntervalTicks
+            if health == 0 {
+                outcome = .exhausted
+                return
+            }
         }
         for index in collected.indices where overlaps(Self.beaconPositions[index]) {
             collected[index] = true
@@ -71,6 +97,11 @@ public struct BeaconRun {
         if outcome == .playing && pulse && pulseCooldown == 0 {
             firePulse()
         }
+    }
+
+    static func touchesVent(_ position: CellPosition) -> Bool {
+        position.x <= ventX.upperBound && position.x + FixtureCharacter.width > ventX.lowerBound
+            && position.y <= ventY.upperBound && position.y + FixtureCharacter.height > ventY.lowerBound
     }
 
     private mutating func firePulse() {

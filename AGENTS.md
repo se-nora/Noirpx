@@ -45,6 +45,12 @@
 - Follow the repository's existing patterns and the milestone acceptance
   criteria. Prefer small, testable changes and add focused tests for behavior,
   boundaries, deterministic replay, and regressions as relevant.
+- After each implementation iteration, build the app and install and launch it
+  on the connected physical iPhone, in addition to the applicable automated
+  checks. Use the signing and device setup in [README.md](README.md). Report
+  the build and launch results; if the device, signing, or another prerequisite
+  prevents this, state the blocker explicitly rather than treating a Simulator
+  run or an unsigned build as physical-device validation.
 - Measure performance on real target hardware before optimizing; preserve
   simulation correctness and snapshot ownership when changing threading.
 - Keep build/test instructions current when tooling is introduced or changes.

@@ -81,6 +81,11 @@ current iteration gates.
   Define rules, state transitions, and boundary behavior before expanding the
   material set. World generation, entities, and tools communicate through
   explicit simulation commands.
+- The current discrete density rule lets water sink through oil and sand through
+  either liquid, using the existing bounded liquid displacement search. This
+  changes old replays and approximates buoyancy rather than simulating pressure;
+  quenching and resident batch order can change the outcome. See INTERFACES.md
+  for ordering, thermal state, and boundary details.
 
 ### Rendering and scheduling
 

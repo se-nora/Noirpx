@@ -98,15 +98,15 @@ final class MaterialMovementTests: XCTestCase {
         func material(_ position: CellPosition) -> Material {
             occupied.contains(position) ? .solid : .empty
         }
-        XCTAssertEqual(MaterialMovement.displacedWaterDestination(
+        XCTAssertEqual(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 4,
             canVisit: { _ in true }, material: material
         ), CellPosition(x: 0, y: 3))
-        XCTAssertNil(MaterialMovement.displacedWaterDestination(
+        XCTAssertNil(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 2,
             canVisit: { _ in true }, material: material
         ))
-        XCTAssertNil(MaterialMovement.displacedWaterDestination(
+        XCTAssertNil(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 4,
             canVisit: { $0.y <= 2 }, material: material
         ))

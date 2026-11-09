@@ -34,7 +34,7 @@ changes do. A no-op thermal write does not wake them.
 
 Explicit material replacement resets thermal state even when replacing a
 material with itself. Moving material carries its thermal state, including
-both participants in sand/water displacement; removing material clears it.
+both participants in liquid displacement; removing material clears it.
 Deleting a chunk deletes its sidecar.
 There is no chunk or command-queue budget, streaming, or recoverable
 out-of-memory API; Swift allocation failure is not caught. Callers must bound
@@ -70,16 +70,21 @@ world y, then increasing x. A cell displaced into a position is marked so it
 cannot be processed again that tick. Updates are immediate: the first actor to
 claim an empty cell wins, and later actors see prior movement and reactions.
 Empty and solid do not act. Sand attempts down, then the two down-diagonals;
-water and oil do the same and then attempt the two horizontal neighbors. Oil
-cannot displace water, sand, or other oil; sand cannot displace oil.
-Diagonal
-movement requires the adjacent horizontal cell to be empty and active. Sand can
-enter water that has not already moved this tick: it relocates that water to
-the first empty side cell of the destination in the sand's preferred direction,
-then the opposite side, or searches upward for the first empty cell, passing
-through occupied cells if needed. The sand's vacated cell is available. The
-search stays within the world and active region; if it finds no cell, that
-destination is rejected. Both relocated water and sand are marked moved.
+water and oil do the same and then attempt the two horizontal neighbors. In
+this discrete density approximation sand may displace water or oil, and water
+may displace oil only when moving down or diagonally down. Oil displaces neither
+water nor sand; no liquid displaces its own kind. The ordered movement candidates
+are tried as usual, so an earlier empty candidate beats a later displacement.
+Diagonal movement requires the adjacent horizontal cell to be empty and active.
+Only a target that has not already moved can be displaced. The displaced liquid
+is relocated to the first empty side of the destination in the actor's preferred
+direction, then the opposite side, or to the first empty cell found searching
+upward in the destination column, passing occupied cells. The actor's vacated
+cell is available. The search stops at the world or active-region boundary; if
+no slot exists that candidate is rejected and later candidates are tried.
+Both relocated liquid and actor are marked moved. Their thermal states are
+captured before any writes, including when the displaced cell takes the actor's
+vacated position; no aliasing or duplication is intended.
 Otherwise the first empty in-bounds destination wins. The left/right
 preference for both diagonal and horizontal choices comes from one SplitMix64
 draw per processed sand, water, or oil cell, even when blocked or falling straight
@@ -104,6 +109,16 @@ ignite pitch from a single paint, and burning cells can independently spread.
 Each source checks down, left, right, up for water first. Fire consumes the
 first water and extinguishes; hot or burning pitch or oil consumes the first water and
 resets its thermal state to zero, retaining its material. Cold flammable material ignores water.
+Oil resolves its quench, burning/cooling and heat callbacks before its own
+movement. If hot oil acts while cardinal water is present, quenching consumes
+that water and the oil does not move that turn. A water or sand actor that
+displaces oil first carries its current state without invoking an oil callback;
+the moved oil cannot act again that tick. It may quench on a later tick.
+Resident batches can visit water before lower oil, unlike the usual y-ordered
+deterministic pass; within a batch proposals use a snapshot but conflicts and
+callbacks resolve against the current world in order. A moved destination is
+woken for later resident processing. Thus batch/budget choices can affect
+whether quenching precedes displacement.
 Water can have moved earlier in the tick. Without quenching, a source transfers
 to at most one eligible nonburning flammable cell among all eight neighbors per tick. Eligible
 targets are ordered down, left, right, up, down-left, down-right, up-left,
@@ -181,8 +196,8 @@ using a seed/tick/position-derived direction; fire, pitch and oil propose edge-a
 water and eight-neighbor flammable materials. Movement proposals obey the
 diagonal side-cell rule; heat does not. Proposals commit in world y/x order; each source must still hold its
 original material, and destinations and diagonal side cells must still be
-available. Water displacement is resolved against the current committed world
-and cannot relocate water already moved that tick. A move tries its remaining proposed destinations if an earlier
+available. Liquid displacement is resolved against the current committed world
+and cannot relocate a liquid already moved that tick. A move tries its remaining proposed destinations if an earlier
 choice was claimed. A moved cell cannot move again in the same global tick,
 including across batches. Later batches see earlier commits. Consequently,
 batch size, focus, and deadline decisions can change outcomes. The mode does
@@ -242,7 +257,8 @@ even for zero-thermal worlds; version 2 distinguished the 64-wide layout from
 version 1's 16-wide layout. The stage-3 physics change keeps the stage-2 v3
 byte layout but changes the simulation rules and therefore is not replay
 compatible; old digests are not comparable as evidence of equal future behavior.
-The later target-side water-priority correction and oil addition also change replay outcomes
+The later target-side water-priority correction, oil addition and liquid-density
+rules also change replay outcomes
 without changing the v3 byte layout.
 Prior digest versions are not compatible. It includes the
 completed world and RNG state, **not queued future commands**; equal digests

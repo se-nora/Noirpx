@@ -1,5 +1,5 @@
 enum MaterialMovement {
-    static func displacedWaterDestination(
+    static func displacedLiquidDestination(
         source: CellPosition, destination: CellPosition, direction: Int, maximumY: Int,
         canVisit: (CellPosition) -> Bool, material: (CellPosition) -> Material
     ) -> CellPosition? {

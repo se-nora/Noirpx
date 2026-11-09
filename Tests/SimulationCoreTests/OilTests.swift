@@ -207,8 +207,8 @@ final class OilTests: XCTestCase {
             XCTAssertFalse(oil.destinations(source: p(0), direction: 1, canVisit: { _ in true },
                                             material: world).contains(below))
             if blocker == .oil {
-                XCTAssertFalse(sand.destinations(source: p(0), direction: 1, canVisit: { _ in true },
-                                                 material: world).contains(below))
+                XCTAssertTrue(sand.destinations(source: p(0), direction: 1, canVisit: { _ in true },
+                                                material: world).contains(below))
             }
         }
         var s = Simulation(seed: 0)
@@ -234,8 +234,8 @@ final class OilTests: XCTestCase {
         try r.advance(focus: p(0, 1), batchSize: 1) { true }
         for material in [s.snapshot.material, r.snapshot.material] {
             XCTAssertEqual(try material(p(0)), .water)
-            XCTAssertEqual(try material(p(0, 1)), .oil)
-            XCTAssertEqual(try material(p(0, 2)), .sand)
+            XCTAssertEqual(try material(p(0, 1)), .sand)
+            XCTAssertEqual(try material(p(0, 2)), .oil)
         }
     }
 

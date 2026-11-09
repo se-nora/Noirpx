@@ -76,7 +76,11 @@ jump, pulse and painting controls; once both beacons are collected it points to
 the green gate. Open **Help** for the fuller controls, hazards and pitch
 instructions. Select **Lamp oil** to paint an optional flowing fuel; fire or
 burning pitch can ignite it, and adjacent water quenches hot oil. The oil remains
-nonblocking and is not placed in the course automatically. Open **Stats** to see submitted FPS, completed tick, rendered and
+nonblocking and is not placed in the course automatically. Water sinks through
+oil and sand sinks through both liquids, so oil tends to float above water in
+containers. This is a discrete cell rule, not continuous fluid physics; tick
+order can make hot oil consume adjacent water before it is displaced. Existing
+replays can change under these new rules. Open **Stats** to see submitted FPS, completed tick, rendered and
 allocated chunk counts, and the character's lower-left position. Rendered
 chunks contain at least one nonempty cell in the last submitted camera frame;
 allocated chunks are all nonempty chunks in the latest completed simulation
@@ -115,9 +119,10 @@ next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Painting is disabled after a win or failure.
 
 Sand, water and oil cannot move diagonally past an occupied side cell. Oil
-does not displace water, sand or other oil, and sand does not displace oil. Sand can
-displace water into an empty side cell, or upward if both sides are occupied;
-the upward search may pass occupied cells. The displaced water does not move
+does not displace water, sand or other oil. Sand can displace water or oil;
+water can displace oil downward. The displaced liquid moves into an empty side
+cell, or upward if both sides are occupied; the upward search may pass occupied
+cells. The displaced liquid does not move
 again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
 resident-mode ordering.
 Fire prioritizes edge-adjacent water over heating; hot pitch consumes edge-adjacent

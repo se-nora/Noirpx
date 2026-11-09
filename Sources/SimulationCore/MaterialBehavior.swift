@@ -78,7 +78,7 @@ final class SolidBehavior: MaterialBehavior, @unchecked Sendable {}
 class MovingBehavior: MaterialBehavior, @unchecked Sendable {
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
-    var displacesWater: Bool { false }
+    func canDisplace(_ material: Material, dy: Int) -> Bool { false }
 
     func offsets(direction: Int) -> [(Int, Int)] { [] }
 
@@ -93,7 +93,7 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
                 guard canVisit(side), material(side) == .empty else { return nil }
             }
             let targetMaterial = material(target)
-            return targetMaterial == .empty || (displacesWater && targetMaterial == .water) ? target : nil
+            return targetMaterial == .empty || canDisplace(targetMaterial, dy: dy) ? target : nil
         }
     }
 
@@ -110,8 +110,8 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
             }
             let target = material(destination)
             var displaced: CellPosition?
-            if displacesWater && target == .water && !moved.contains(destination) {
-                displaced = MaterialMovement.displacedWaterDestination(
+            if canDisplace(target, dy: destination.y - source.y) && !moved.contains(destination) {
+                displaced = MaterialMovement.displacedLiquidDestination(
                     source: source, destination: destination, direction: direction,
                     maximumY: maximumY, canVisit: canVisit, material: material
                 )
@@ -123,7 +123,7 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
                                         moved: [destination],
                                         thermalTransfers: [(source, destination)])
             if let displaced {
-                action.writes.append((displaced, .water))
+                action.writes.append((displaced, target))
                 action.moved.append(displaced)
                 action.thermalTransfers.append((destination, displaced))
             }
@@ -134,15 +134,23 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
 }
 
 final class SandBehavior: MovingBehavior, @unchecked Sendable {
-    override var displacesWater: Bool { true }
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .water || material == .oil
+    }
     override func offsets(direction: Int) -> [(Int, Int)] {
         [(0, -1), (direction, -1), (-direction, -1)]
     }
 }
 
-final class WaterBehavior: MovingBehavior, @unchecked Sendable {
+class LiquidMovementBehavior: MovingBehavior, @unchecked Sendable {
     override func offsets(direction: Int) -> [(Int, Int)] {
         [(0, -1), (direction, -1), (-direction, -1), (direction, 0), (-direction, 0)]
+    }
+}
+
+final class WaterBehavior: LiquidMovementBehavior, @unchecked Sendable {
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .oil && dy < 0
     }
 }
 
@@ -282,6 +290,7 @@ final class PitchBehavior: FlammableBehavior, @unchecked Sendable {
 }
 
 final class OilBehavior: FlammableBehavior, @unchecked Sendable {
+    private static let movement = LiquidMovementBehavior()
     override var ignitionThreshold: UInt16? { 80 }
     override var burnoutAge: UInt16 { 48 }
     override var usesDirection: Bool { true }
@@ -289,8 +298,8 @@ final class OilBehavior: FlammableBehavior, @unchecked Sendable {
     override func destinations(source: CellPosition, direction: Int,
                                canVisit: (CellPosition) -> Bool,
                                material: (CellPosition) -> Material) -> [CellPosition] {
-        MaterialBehavior.water.destinations(source: source, direction: direction,
-                                            canVisit: canVisit, material: material)
+        Self.movement.destinations(source: source, direction: direction,
+                                   canVisit: canVisit, material: material)
     }
 
     override func secondaryDestinations(source: CellPosition, direction: Int,
@@ -311,7 +320,7 @@ final class OilBehavior: FlammableBehavior, @unchecked Sendable {
         if reaction.moved.contains(source) || reaction.writes.contains(where: { $0.0 == source }) {
             return reaction
         }
-        let movement = MaterialBehavior.water.resolve(
+        let movement = Self.movement.resolve(
             source: source, current: current, destinations: destinations, direction: direction,
             maximumY: maximumY, canVisit: canVisit, material: material,
             moved: moved.union(reaction.moved), secondary: [], thermal: thermal

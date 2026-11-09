@@ -26,10 +26,7 @@ private final class GameModel: ObservableObject {
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
-    private var keyboard = CharacterControls()
-    private var touch = CharacterControls()
-    private var pendingJump = false
-    private var accessibilityHorizontal = 0
+    private var input = GameplayInput()
 
     init() {
         restart()
@@ -61,41 +58,20 @@ private final class GameModel: ObservableObject {
         clearControls()
     }
 
-    func setKeyboard(_ controls: CharacterControls) {
-        updateControls(keyboard: controls, touch: touch)
+    func setKeyboard(_ controls: GameplayControls) {
+        input.setKeyboard(controls)
     }
 
-    func setTouch(_ control: CharacterControl, pressed: Bool) {
-        var updated = touch
-        switch control {
-        case .left: updated.left = pressed
-        case .right: updated.right = pressed
-        case .jump: updated.jump = pressed
-        }
-        updateControls(keyboard: keyboard, touch: updated)
+    func setTouch(_ control: GameplayControl, pressed: Bool) {
+        input.setTouch(control, pressed: pressed)
     }
 
-    func activateControl(_ control: CharacterControl) {
-        switch control {
-        case .left: accessibilityHorizontal = -1
-        case .right: accessibilityHorizontal = 1
-        case .jump: pendingJump = true
-        }
-    }
-
-    private func updateControls(keyboard: CharacterControls, touch: CharacterControls) {
-        if !(self.keyboard.jump || self.touch.jump) && (keyboard.jump || touch.jump) {
-            pendingJump = true
-        }
-        self.keyboard = keyboard
-        self.touch = touch
+    func activateControl(_ control: GameplayControl) {
+        input.activate(control)
     }
 
     private func clearControls() {
-        keyboard = CharacterControls()
-        touch = CharacterControls()
-        pendingJump = false
-        accessibilityHorizontal = 0
+        input.reset()
     }
 
     func setViewport(_ viewport: FixtureViewport) {
@@ -128,14 +104,11 @@ private final class GameModel: ObservableObject {
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 guard let activeChunks else { return }
-                let heldHorizontal = (keyboard.right || touch.right ? 1 : 0)
-                    - (keyboard.left || touch.left ? 1 : 0)
-                let horizontal = heldHorizontal == 0 ? accessibilityHorizontal : heldHorizontal
-                try run.advance(horizontal: horizontal, jump: pendingJump, activeChunks: activeChunks)
+                let controls = input.consumeTick()
+                try run.advance(horizontal: controls.horizontal, jump: controls.jump, pulse: controls.pulse,
+                                activeChunks: activeChunks)
                 challenge = run
                 updateActiveChunks()
-                pendingJump = false
-                accessibilityHorizontal = 0
                 snapshot = run.simulation.snapshot
                 if run.outcome != .playing {
                     clearControls()
@@ -146,16 +119,6 @@ private final class GameModel: ObservableObject {
             errorMessage = "Simulation stopped: \(error)"
         }
     }
-}
-
-private enum CharacterControl {
-    case left, right, jump
-}
-
-private struct CharacterControls {
-    var left = false
-    var right = false
-    var jump = false
 }
 
 private extension FixtureCharacter {
@@ -188,7 +151,8 @@ private struct HostView: View {
                     onError: { model.errorMessage = $0 },
                     onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) },
-                    onKeyboard: { model.setKeyboard($0) }
+                    onKeyboard: { model.setKeyboard($0) },
+                    onInputReset: { model.resetClock() }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -200,8 +164,10 @@ private struct HostView: View {
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
                 Text("BEACON RUN").fontWeight(.bold)
                 Text("Collect 2 amber beacons, then reach the green gate.")
-                Text("Jump the gap; erase or climb the sand.")
+                Text("Jump the gap; pulse through sand.")
                 Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
+                Text(model.challenge?.pulseCooldown == 0 ? "Pulse READY" :
+                        "Pulse cooling \(model.challenge?.pulseCooldown ?? 0)")
                 if model.challenge?.outcome == .won {
                     Text("You made it!").foregroundStyle(.green).fontWeight(.bold)
                 } else if model.challenge?.outcome == .fell {
@@ -224,7 +190,9 @@ private struct HostView: View {
                 }
                 Text("Paint: drag; keys 1–5")
                 #if os(macOS)
-                Text("Move: A/D or arrows; jump: W, up or space")
+                Text("Move: A/D or arrows; jump: W, up or space; pulse: F")
+                #else
+                Text("Move, jump and hold bolt to pulse")
                 #endif
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
@@ -245,6 +213,7 @@ private struct HostView: View {
                     controlButton("Left", symbol: "chevron.left", control: .left)
                     controlButton("Right", symbol: "chevron.right", control: .right)
                     Spacer()
+                    controlButton("Pulse", symbol: "bolt.fill", control: .pulse)
                     controlButton("Jump", symbol: "arrow.up", control: .jump)
                 }
                 .padding()
@@ -273,7 +242,7 @@ private struct HostView: View {
     }
 
     #if os(iOS)
-    private func controlButton(_ title: String, symbol: String, control: CharacterControl) -> some View {
+    private func controlButton(_ title: String, symbol: String, control: GameplayControl) -> some View {
         Image(systemName: symbol)
             .font(.title2.bold())
             .frame(width: 64, height: 64)
@@ -324,7 +293,8 @@ private struct MetalSurface {
     let onError: (String) -> Void
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
-    let onKeyboard: (CharacterControls) -> Void
+    let onKeyboard: (GameplayControls) -> Void
+    let onInputReset: () -> Void
 
     func makeCoordinator() -> MetalRenderer {
         MetalRenderer(device: device, snapshot: snapshot, character: character, challenge: challenge, onFPS: onFPS,
@@ -342,7 +312,8 @@ private struct MetalSurface {
 #if os(macOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
-    var onKeyboard: ((CharacterControls) -> Void)?
+    var onKeyboard: ((GameplayControls) -> Void)?
+    var onInputReset: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
@@ -354,26 +325,28 @@ private final class InputMetalView: MTKView {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
         keys.removeAll()
-        onKeyboard?(CharacterControls())
+        onKeyboard?(GameplayControls())
         guard let window else { return }
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: window, queue: .main
         ) { [weak self] _ in
             self?.keys.removeAll()
-            self?.onKeyboard?(CharacterControls())
+            self?.onKeyboard?(GameplayControls())
+            self?.onInputReset?()
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self, event.window === self.window,
-                  [UInt16(0), 2, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
+                  [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
                 return event
             }
             if event.type == .keyDown { self.keys.insert(event.keyCode) }
             else { self.keys.remove(event.keyCode) }
-            self.onKeyboard?(CharacterControls(
+            self.onKeyboard?(GameplayControls(
                 left: self.keys.contains(0) || self.keys.contains(123),
                 right: self.keys.contains(2) || self.keys.contains(124),
-                jump: self.keys.contains(13) || self.keys.contains(49) || self.keys.contains(126)
+                jump: self.keys.contains(13) || self.keys.contains(49) || self.keys.contains(126),
+                pulse: self.keys.contains(3)
             ))
             return nil
         }
@@ -404,6 +377,7 @@ extension MetalSurface: NSViewRepresentable {
         let view = InputMetalView()
         view.onPaint = onPaint
         view.onKeyboard = onKeyboard
+        view.onInputReset = onInputReset
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -415,6 +389,7 @@ extension MetalSurface: NSViewRepresentable {
         context.coordinator.challenge = challenge
         view.onPaint = onPaint
         view.onKeyboard = onKeyboard
+        view.onInputReset = onInputReset
         view.cameraCenter = character.cameraCenter
     }
 }

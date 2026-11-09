@@ -53,6 +53,12 @@ public enum FixturePixels {
                         pixels[y * width + x] = color.littleEndian
                     }
                 }
+                for cell in challenge.pulseFlash {
+                    let x = cell.x - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - cell.y + viewport.center.y
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    pixels[y * width + x] = UInt32(0xfff9f56a).littleEndian
+                }
             }
         }
         if let character {

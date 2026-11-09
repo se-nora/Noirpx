@@ -20,7 +20,7 @@ an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
 world limits, snapshot ownership, digest format, and prototype limitations.
 
 In Beacon Run, collect both amber outlined beacons and touch the gate; it turns
-green when unlocked. Jump the gap and climb or erase the sand pile. Falling
+green when unlocked. Jump the gap and climb, paint away, or pulse through the sand pile. Falling
 below the course ends the run; win and fall both freeze the world until Restart.
 The beacons and gate are nonphysical markers, not materials. They are collected
 by touching them with the character, in either order. The gate can be visited
@@ -52,12 +52,18 @@ The simulation continues while diagnostics are open; controls and the timing
 baseline reset when opening and closing the panel.
 
 Move with A/D or the left/right arrow keys and jump with W, up, or space on
-macOS. On iOS, hold the on-screen left and right controls and tap jump; movement
-and jumping can be used together. The character is a 5 × 9-cell rectangle that
+macOS; hold F to fire the **Silt Pulse** in the last movement direction. On iOS,
+hold the on-screen left and right controls, tap jump, and tap or hold the bolt
+button for the pulse; controls can be used together. A cyan flash shows its
+path and the overlay shows readiness or remaining cooldown ticks. The pulse
+reaches 18 cells ahead in five horizontal lanes, removing the first sand in
+each lane. Rock stops it without damage; water and fire let it pass. It can
+open a route through sand but cannot break the floor or rock step. It fires at
+most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
 collides with rock, sand, and world bounds, but not water or fire. It advances after
 each material tick, automatically steps up obstacles at most three cells high
-while grounded (if there is headroom), can jump only while grounded, and does not affect the
-materials. Painting rock or sand directly inside the character is
+while grounded (if there is headroom), and can jump only while grounded.
+Painting rock or sand directly inside the character is
 ignored. A queued edit or moving sand can still overlap it: the character does
 not block material movement.
 

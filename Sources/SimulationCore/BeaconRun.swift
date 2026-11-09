@@ -9,11 +9,18 @@ public struct BeaconRun {
     public static let markerWidth = 5
     public static let markerHeight = 12
     public static let fallLimit = -20
+    public static let pulseRange = 18
+    public static let pulseCooldownTicks = 18
+    public static let pulseFlashTicks = 4
 
     public private(set) var simulation: Simulation
     public private(set) var character = FixtureCharacter()
     public private(set) var collected = [false, false]
     public private(set) var outcome: Outcome = .playing
+    public private(set) var facing = 1
+    public private(set) var pulseCooldown = 0
+    public private(set) var pulseFlash: [CellPosition] = []
+    public private(set) var pulseFlashRemaining = 0
 
     public init(seed: UInt64 = 42) throws {
         simulation = Simulation(seed: seed)
@@ -40,10 +47,17 @@ public struct BeaconRun {
         try simulation.enqueue(.init(tick: tick, position: position, material: material))
     }
 
-    public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws {
+    public mutating func advance(horizontal: Int, jump: Bool, pulse: Bool = false,
+                                 activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
         try simulation.advance(activeChunks: activeChunks)
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
+        if horizontal != 0 { facing = horizontal.signum() }
+        if pulseCooldown > 0 { pulseCooldown -= 1 }
+        if pulseFlashRemaining > 0 {
+            pulseFlashRemaining -= 1
+            if pulseFlashRemaining == 0 { pulseFlash = [] }
+        }
         if character.position.y <= Self.fallLimit {
             outcome = .fell
             return
@@ -54,6 +68,41 @@ public struct BeaconRun {
         if collected.allSatisfy({ $0 }) && overlaps(Self.goalPosition) {
             outcome = .won
         }
+        if outcome == .playing && pulse && pulseCooldown == 0 {
+            firePulse()
+        }
+    }
+
+    private mutating func firePulse() {
+        let trace = Self.tracePulse(from: character.position, facing: facing) {
+            simulation.materialForGameplay(at: $0)
+        }
+        for cell in trace.sand { simulation.excavateSand(at: cell) }
+        pulseFlash = trace.cells
+        pulseFlashRemaining = Self.pulseFlashTicks
+        pulseCooldown = Self.pulseCooldownTicks
+    }
+
+    static func tracePulse(from p: CellPosition, facing: Int,
+                           materialAt: (CellPosition) -> Material) -> (cells: [CellPosition], sand: [CellPosition]) {
+        let startX = facing > 0 ? p.x + FixtureCharacter.width : p.x - 1
+        var flash: [CellPosition] = []
+        var sand: [CellPosition] = []
+        for dy in 2...6 {
+            for distance in 0..<Self.pulseRange {
+                let cell = CellPosition(x: startX + facing * distance, y: p.y + dy)
+                guard Simulation.coordinateBounds.contains(cell.x),
+                      Simulation.coordinateBounds.contains(cell.y) else { break }
+                flash.append(cell)
+                let material = materialAt(cell)
+                if material == .sand {
+                    sand.append(cell)
+                    break
+                }
+                if material == .solid { break }
+            }
+        }
+        return (flash, sand)
     }
 
     private func overlaps(_ marker: CellPosition) -> Bool {

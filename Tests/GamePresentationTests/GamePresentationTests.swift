@@ -3,6 +3,44 @@ import GamePresentation
 @testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
+    func testPulseInputBufferHoldAndReset() {
+        var input = GameplayInput()
+        input.setKeyboard(.init(pulse: true))
+        input.setKeyboard(.init())
+        XCTAssertTrue(input.consumeTick().pulse)
+        XCTAssertFalse(input.consumeTick().pulse)
+        input.setTouch(.pulse, pressed: true)
+        XCTAssertTrue(input.consumeTick().pulse)
+        XCTAssertTrue(input.consumeTick().pulse)
+        input.setTouch(.pulse, pressed: false)
+        XCTAssertFalse(input.consumeTick().pulse)
+        input.activate(.pulse)
+        input.reset()
+        XCTAssertFalse(input.consumeTick().pulse)
+        input.setKeyboard(.init(left: true, pulse: true))
+        input.setTouch(.right, pressed: true)
+        XCTAssertEqual(input.consumeTick().horizontal, 0)
+        input.reset()
+        let reset = input.consumeTick()
+        XCTAssertEqual(reset.horizontal, 0)
+        XCTAssertFalse(reset.pulse)
+    }
+
+    func testPulseRasterIsVisibleAndDoesNotMutateSnapshot() throws {
+        var run = try BeaconRun()
+        try run.advance(horizontal: 0, jump: false, pulse: true)
+        let snapshot = run.simulation.snapshot
+        let cell = try XCTUnwrap(run.pulseFlash.first)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
+                                                     longEdgeCells: 200))
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport,
+                                            character: run.character, challenge: run)
+        let offset = ((viewport.rows / 2 - 1 - cell.y) * viewport.columns
+                      + cell.x + viewport.columns / 2) * 4
+        XCTAssertEqual(Array(frame.pixels[offset..<offset + 4]), [106, 245, 249, 255])
+        XCTAssertEqual(run.simulation.snapshot, snapshot)
+    }
+
     func testChallengeMarkersAndZoomedMapping() throws {
         var run = try BeaconRun()
         try run.advance(horizontal: 0, jump: false)
@@ -35,7 +73,7 @@ final class GamePresentationTests: XCTestCase {
             for frame in 0...rate * 2 {
                 for _ in 0..<scheduler.steps(at: Double(frame) / Double(rate)) {
                     let tick = run.simulation.snapshot.tick
-                    try run.advance(horizontal: 1, jump: tick == 33 || tick == 62)
+                    try run.advance(horizontal: 1, jump: tick == 33 || tick == 62, pulse: tick % 7 < 4)
                 }
             }
             return run
@@ -46,6 +84,9 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(slow.character, fast.character)
         XCTAssertEqual(slow.collected, fast.collected)
         XCTAssertEqual(slow.outcome, fast.outcome)
+        XCTAssertEqual(slow.facing, fast.facing)
+        XCTAssertEqual(slow.pulseCooldown, fast.pulseCooldown)
+        XCTAssertEqual(slow.pulseFlash, fast.pulseFlash)
     }
 
     func testFollowingViewportMapsAndRendersShiftedWorld() throws {

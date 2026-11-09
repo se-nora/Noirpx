@@ -38,6 +38,16 @@ public struct Simulation {
         commands[command.tick, default: []].append(command)
     }
 
+    /// Game rules may remove sand after physics, before publishing the completed game tick.
+    mutating func excavateSand(at position: CellPosition) {
+        guard isInBounds(position), material(at: position) == .sand else { return }
+        set(.empty, at: position)
+    }
+
+    func materialForGameplay(at position: CellPosition) -> Material {
+        material(at: position)
+    }
+
     /// Advances one tick, restricting physics to the optional chunk region.
     public mutating func advance(activeChunks: ChunkRegion? = nil) throws {
         let (nextTick, overflow) = tick.addingReportingOverflow(1)

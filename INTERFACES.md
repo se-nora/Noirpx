@@ -211,7 +211,31 @@ gray locked or green unlocked gate over materials, then the character. A win
 or fall freezes ticks and ignores paint until restart. Brushes otherwise remain
 unrestricted, so players can bridge or erase obstacles. There is no damage.
 
-Character and progression state and queued input are separate from
+The Silt Pulse fires in the last nonzero horizontal movement direction (initially
+right), even if movement is blocked. Holding F on macOS or the iOS bolt button
+repeats; a tap between ticks is buffered. Accessibility activation fires once.
+Controls, held state, and buffered presses clear on restart, lifecycle changes,
+diagnostics transitions, and macOS focus loss. A press during cooldown is not
+queued for later unless held. A pulse costs 18 ticks of cooldown, decremented at
+the start of each subsequent completed gameplay tick; holding fires again when
+it reaches zero. The overlay displays remaining ticks or READY.
+
+After material commands and physics, character movement, timer decrements, and
+fall/goal checks, a playing run may fire. Thus a winning or falling tick cannot
+fire; terminal runs freeze cooldown and flash until restart. Five horizontal
+lanes at character lower-left y+2...y+6 start immediately outside the facing
+edge, extending at most 18 cells each. Each lane stops at the world boundary,
+the first rock, or the first sand. Rock is unchanged; the first sand is removed;
+empty, water and fire are transparent and unchanged. Each pulse inspects at
+most 90 cells and removes at most five. It uses the post-physics snapshot, so
+paint commands applied this tick affect occlusion; removed sand affects physics
+on the next tick. Like painting, this explicit action can modify frozen chunks.
+The completed material snapshot includes removals. A cyan flash of the traced
+cells, including hits, lasts four gameplay ticks (the firing tick included);
+the renderer only reads it. Restart recreates the initial facing, cooldown and
+empty flash.
+
+Character, pulse and progression state and queued input are separate from
 `SimulationSnapshot` and its digest, so the digest does not represent a
 complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance

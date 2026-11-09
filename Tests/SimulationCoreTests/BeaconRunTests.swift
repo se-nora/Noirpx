@@ -12,18 +12,21 @@ final class BeaconRunTests: XCTestCase {
             let sand = !jumpedSand && x >= 59 && run.character.grounded
             if gap { jumpedGap = true }
             if sand { jumpedSand = true }
-            try run.advance(horizontal: 1, jump: gap || sand)
+            try run.advance(horizontal: 1, jump: gap || sand, pulse: x >= 125)
         }
         XCTAssertTrue(jumpedGap)
         XCTAssertTrue(jumpedSand)
         XCTAssertEqual(run.collected, [true, true])
         XCTAssertEqual(run.outcome, .won)
+        XCTAssertEqual(run.pulseCooldown, 0)
+        XCTAssertTrue(run.pulseFlash.isEmpty)
         let snapshot = run.simulation.snapshot
         let character = run.character
         try run.paint(.solid, at: .init(x: 0, y: 30))
-        try run.advance(horizontal: -1, jump: true)
+        try run.advance(horizontal: -1, jump: true, pulse: true)
         XCTAssertEqual(run.simulation.snapshot, snapshot)
         XCTAssertEqual(run.character, character)
+        XCTAssertEqual(run.pulseCooldown, 0)
         run = try BeaconRun()
         XCTAssertEqual(run.outcome, .playing)
         XCTAssertEqual(run.collected, [false, false])

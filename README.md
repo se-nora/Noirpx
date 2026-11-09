@@ -1,6 +1,6 @@
-# PixelGame
+# Noirpx
 
-PixelGame is an early-stage original 2D pixel-simulation game for macOS and iOS.
+Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
 It is not yet playable. The current Apple app displays a Metal clear color; the
 core only tracks a seed and tick count. There is no world, scheduler, input, or
 material rendering yet.
@@ -34,13 +34,13 @@ From the repository root with Xcode selected by `xcode-select`:
 ```sh
 swift build --target SimulationCore
 swift test
-xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath DerivedData/ios-simulator CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
+xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'generic/platform=iOS' \
   -derivedDataPath DerivedData/ios-device CODE_SIGNING_ALLOWED=NO build
 ```
@@ -48,10 +48,10 @@ xcodebuild -project PixelGame.xcodeproj -scheme PixelGame -configuration Debug \
 The Xcode project builds the active architecture, rather than a universal Mac
 binary. The last command builds an **unsigned** device app and does not prove
 it can be installed. To run on a simulator, open the project in Xcode and run
-the shared `PixelGame` scheme on an available iPhone 16 Pro simulator. For a
+the shared `Noirpx` scheme on an available iPhone 16 Pro simulator. For a
 physical iPhone, connect and trust the device, enable Developer Mode if
 requested, select an Apple Developer team under Signing & Capabilities, and
-choose a unique bundle identifier instead of `com.example.PixelGame`. Allow
+choose a unique bundle identifier instead of `com.example.Noirpx`. Allow
 Xcode to create a provisioning profile, select the device, and run. Signing
 requires a suitable Apple developer account and local credentials; do not commit
 personal team IDs or profiles.

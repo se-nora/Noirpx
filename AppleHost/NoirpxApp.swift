@@ -3,7 +3,7 @@ import SimulationCore
 import SwiftUI
 
 @main
-struct PixelGameApp: App {
+struct NoirpxApp: App {
     var body: some Scene {
         WindowGroup {
             HostView()

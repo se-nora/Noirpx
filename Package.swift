@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "PixelGame",
+    name: "Noirpx",
     platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "SimulationCore", targets: ["SimulationCore"])

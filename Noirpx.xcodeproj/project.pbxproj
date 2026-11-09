@@ -4,10 +4,10 @@
 	classes = {};
 	objectVersion = 56;
 	objects = {
-		A10000000000000000000001 /* PixelGameApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* PixelGameApp.swift */; };
+		A10000000000000000000001 /* NoirpxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* NoirpxApp.swift */; };
 		A10000000000000000000002 /* SimulationCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SimulationCore */; };
-		A20000000000000000000001 /* PixelGameApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelGameApp.swift; sourceTree = "<group>"; };
-		A20000000000000000000002 /* PixelGame.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PixelGame.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000001 /* NoirpxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoirpxApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* Noirpx.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noirpx.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A30000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -21,26 +21,26 @@
 		};
 		A40000000000000000000002 /* AppleHost */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000001 /* PixelGameApp.swift */,);
+			children = (A20000000000000000000001 /* NoirpxApp.swift */,);
 			path = AppleHost;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000002 /* PixelGame.app */,);
+			children = (A20000000000000000000002 /* Noirpx.app */,);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000001 /* PixelGame */ = {
+		A50000000000000000000001 /* Noirpx */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "PixelGame" */;
+			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Noirpx" */;
 			buildPhases = (A60000000000000000000001 /* Sources */, A30000000000000000000001 /* Frameworks */,);
 			buildRules = ();
 			dependencies = ();
-			name = PixelGame;
+			name = Noirpx;
 			packageProductDependencies = (A90000000000000000000001 /* SimulationCore */,);
-			productName = PixelGame;
-			productReference = A20000000000000000000002 /* PixelGame.app */;
+			productName = Noirpx;
+			productReference = A20000000000000000000002 /* Noirpx.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A50000000000000000000002 /* Project object */ = {
@@ -50,7 +50,7 @@
 				LastUpgradeCheck = 2720;
 				TargetAttributes = { A50000000000000000000001 = {CreatedOnToolsVersion = 27.2; }; };
 			};
-			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "PixelGame" */;
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "Noirpx" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -60,21 +60,21 @@
 			productRefGroup = A40000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* PixelGame */,);
+			targets = (A50000000000000000000001 /* Noirpx */,);
 		};
 		A60000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000001 /* PixelGameApp.swift in Sources */,);
+			files = (A10000000000000000000001 /* NoirpxApp.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A70000000000000000000001 /* Build configuration list for PBXProject "PixelGame" */ = {
+		A70000000000000000000001 /* Build configuration list for PBXProject "Noirpx" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */,);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "PixelGame" */ = {
+		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Noirpx" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */,);
 			defaultConfigurationIsVisible = 0;
@@ -101,7 +101,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.PixelGame;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
@@ -120,7 +120,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.PixelGame;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";

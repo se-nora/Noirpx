@@ -25,7 +25,7 @@
 - Example, from the main worktree after confirming the branch name is unused:
 
   ```sh
-  git worktree add -b agent/my-task ../PixelGame-worktrees/my-task main
+  git worktree add -b agent/my-task ../Noirpx-worktrees/my-task main
   ```
 
 - Do not check out `main` in multiple worktrees. Coordinate integration: only one

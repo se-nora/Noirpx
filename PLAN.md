@@ -1,4 +1,4 @@
-# PixelGame development plan
+# Noirpx development plan
 
 ## Vision and scope
 

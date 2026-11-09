@@ -153,6 +153,12 @@ tick; activity and dirty tracking, streaming, resource budgets, and GPU
 uploads are not implemented. Full snapshots make skipped revisions and chunk
 removal unambiguous but require memory and upload measurements.
 
+An iPhone 16 Pro Debug Time Profiler capture of an interactive scene identified
+repeated empty-chunk scans during cell movement and full-frame background
+rasterization as CPU hot spots. The deterministic mode now tracks occupied-cell
+counts, and the renderer initializes packed RGBA pixels in bulk. This does not
+change the resident mode or establish a target-device performance guarantee.
+
 The contract is provisional and has not been agreed by separate core and
 renderer contributors. Their independent review remains open; neither
 cross-device determinism nor target-device performance has been established.

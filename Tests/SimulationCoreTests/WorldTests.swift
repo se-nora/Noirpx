@@ -116,6 +116,32 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(try cell(previous, -65, -1), .solid)
     }
 
+    func testChunkOccupancyTracksOverwritesAndEmptyCommands() throws {
+        var simulation = Simulation(seed: 0)
+        try place(.empty, 0, 0, in: &simulation)
+        try place(.solid, 0, 0, in: &simulation)
+        try place(.solid, 0, 0, in: &simulation)
+        try place(.solid, 1, 0, in: &simulation)
+        try simulation.advance()
+        let retained = simulation.snapshot
+        XCTAssertEqual(retained.chunks.count, 1)
+
+        try place(.empty, 0, 0, tick: 2, in: &simulation)
+        try place(.empty, 0, 0, tick: 2, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(simulation.snapshot.chunks.count, 1)
+        XCTAssertEqual(try cell(simulation.snapshot, 1, 0), .solid)
+        XCTAssertEqual(try cell(retained, 0, 0), .solid)
+
+        try place(.sand, 1, 0, tick: 3, in: &simulation)
+        try place(.solid, 1, 0, tick: 3, in: &simulation)
+        try simulation.advance()
+        XCTAssertEqual(simulation.snapshot.chunks.count, 1)
+        try place(.empty, 1, 0, tick: 4, in: &simulation)
+        try simulation.advance()
+        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+    }
+
     func testMovementAcrossChunkEdge() throws {
         var simulation = Simulation(seed: 0)
         try place(.sand, -64, 0, in: &simulation)

@@ -2,6 +2,11 @@ private func ordered(_ left: ChunkPosition, _ right: ChunkPosition) -> Bool {
     left.y == right.y ? left.x < right.x : left.y < right.y
 }
 
+private struct SimulationChunk {
+    var cells = [Material](repeating: .empty, count: SimulationGrid.cellCount)
+    var occupiedCount = 0
+}
+
 /// The single owner of authoritative simulation state.
 public struct Simulation {
     public static let chunkWidth = SimulationGrid.chunkSize
@@ -10,7 +15,7 @@ public struct Simulation {
     private let seed: UInt64
     private var tick: UInt64 = 0
     private var randomState: UInt64
-    private var chunks: [ChunkPosition: [Material]] = [:]
+    private var chunks: [ChunkPosition: SimulationChunk] = [:]
     private var commands: [UInt64: [SimulationCommand]] = [:]
 
     public init(seed: UInt64) {
@@ -20,7 +25,7 @@ public struct Simulation {
 
     public var snapshot: SimulationSnapshot {
         let published = chunks.keys.sorted(by: ordered).map {
-            ChunkSnapshot(position: $0, cells: chunks[$0]!)
+            ChunkSnapshot(position: $0, cells: chunks[$0]!.cells)
         }
         return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published)
     }
@@ -44,8 +49,8 @@ public struct Simulation {
         }
 
         var positions: [CellPosition] = []
-        for (chunk, cells) in chunks {
-            for (index, material) in cells.enumerated() where material != .empty {
+        for (chunk, contents) in chunks {
+            for (index, material) in contents.cells.enumerated() where material != .empty {
                 positions.append(CellPosition(
                     x: chunk.x * Self.chunkWidth + index % Self.chunkWidth,
                     y: chunk.y * Self.chunkWidth + index / Self.chunkWidth
@@ -94,17 +99,24 @@ public struct Simulation {
 
     private func material(at position: CellPosition) -> Material {
         let (chunk, index) = SimulationGrid.locate(position)
-        return chunks[chunk]?[index] ?? .empty
+        return chunks[chunk]?.cells[index] ?? .empty
     }
 
     private mutating func set(_ material: Material, at position: CellPosition) {
         let (chunk, index) = SimulationGrid.locate(position)
         if chunks[chunk] == nil {
             guard material != .empty else { return }
-            chunks[chunk] = Array(repeating: .empty, count: SimulationGrid.cellCount)
+            chunks[chunk] = SimulationChunk()
         }
-        chunks[chunk]![index] = material
-        if material == .empty && chunks[chunk]!.allSatisfy({ $0 == .empty }) {
+        let previous = chunks[chunk]!.cells[index]
+        guard previous != material else { return }
+        chunks[chunk]!.cells[index] = material
+        if previous == .empty {
+            chunks[chunk]!.occupiedCount += 1
+        } else if material == .empty {
+            chunks[chunk]!.occupiedCount -= 1
+        }
+        if chunks[chunk]!.occupiedCount == 0 {
             chunks.removeValue(forKey: chunk)
         }
     }

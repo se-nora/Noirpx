@@ -1,6 +1,6 @@
 import XCTest
 import GamePresentation
-import SimulationCore
+@testable import SimulationCore
 
 final class GamePresentationTests: XCTestCase {
     func testSchedulerProducesSameFixtureAtDifferentCallbackRates() throws {
@@ -46,6 +46,26 @@ final class GamePresentationTests: XCTestCase {
         try simulation.advance()
         XCTAssertEqual(Array(FixturePixels.rgba(snapshot: simulation.snapshot, viewport: viewport)[offset..<offset + 4]), [15, 20, 31, 255])
         XCTAssertEqual(Array(FixturePixels.rgba(snapshot: retained, viewport: viewport)[offset..<offset + 4]), [112, 121, 139, 255])
+    }
+
+    func testRasterPreservesAllMaterialRGBAValues() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1440, drawableHeight: 810))
+        var cells = [Material](repeating: .empty, count: Simulation.chunkWidth * Simulation.chunkWidth)
+        let materials: [Material] = [.solid, .sand, .water, .fire]
+        for (index, material) in materials.enumerated() {
+            cells[index] = material
+        }
+        let snapshot = SimulationSnapshot(tick: 0, seed: 0, randomState: 0,
+                                          chunks: [ChunkSnapshot(position: .init(x: 0, y: 0), cells: cells)])
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+        let colors: [[UInt8]] = [[112, 121, 139, 255], [235, 193, 109, 255],
+                                 [66, 156, 224, 255], [255, 105, 50, 255]]
+        let start = ((viewport.rows / 2 - 1) * viewport.columns + viewport.columns / 2) * 4
+        for (index, color) in colors.enumerated() {
+            XCTAssertEqual(Array(frame.pixels[start + index * 4..<start + index * 4 + 4]), color)
+        }
+        XCTAssertEqual(Array(frame.pixels[0..<4]), [15, 20, 31, 255])
+        XCTAssertEqual(frame.renderedChunks, 1)
     }
 
     func testViewportMapsDrawablePixelsAndRejectsLetterbox() throws {

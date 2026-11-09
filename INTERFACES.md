@@ -16,7 +16,8 @@ arithmetic is safe on supported Swift platforms; it is not a streaming policy.
 
 Chunks are provisionally 64 by 64, row-major from local (0, 0), using floor
 division and nonnegative local coordinates. Each chunk stores 4,096 `Material`
-values; empty chunks are removed. Boundary chunks include empty padding outside
+values; the deterministic simulation tracks each chunk's occupied-cell count
+and removes it when the count reaches zero. Boundary chunks include empty padding outside
 the world. The change from 16 to 64 increases the memory and scanning cost of
 individual chunks; it has not been performance-tested on target devices. Chunk
 size, layout, allocation and snapshot costs need measurement before being permanent.

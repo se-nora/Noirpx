@@ -35,6 +35,21 @@ public struct BeaconCourse: Equatable, Sendable {
         patrolX = 104...112
         patrolSpawn = .init(x: 107 + choice(8, 3), y: -1)
     }
+
+    /// Internal memberwise initializer for save decoding.
+    init(gap: ClosedRange<Int>, step: ClosedRange<Int>, sand: ClosedRange<Int>,
+         sandHeight: Int, beacons: [CellPosition], ventX: ClosedRange<Int>,
+         goal: CellPosition, patrolX: ClosedRange<Int>, patrolSpawn: CellPosition) {
+        self.gap = gap
+        self.step = step
+        self.sand = sand
+        self.sandHeight = sandHeight
+        self.beacons = beacons
+        self.ventX = ventX
+        self.goal = goal
+        self.patrolX = patrolX
+        self.patrolSpawn = patrolSpawn
+    }
 }
 
 /// Local run selection; restart reconstructs the current seed, new run advances it.

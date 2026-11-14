@@ -15,6 +15,14 @@ public struct ChimeWarden: Equatable, Sendable {
 
     init(position: CellPosition) { self.position = position }
 
+    /// Internal restoring initializer for save decoding.
+    init(position: CellPosition, direction: Int, phase: Int, alive: Bool) {
+        self.position = position
+        self.direction = direction
+        self.phase = phase
+        self.alive = alive
+    }
+
     public func contains(_ cell: CellPosition) -> Bool {
         alive && cell.x >= position.x && cell.x < position.x + Self.width
             && cell.y >= position.y && cell.y < position.y + Self.height

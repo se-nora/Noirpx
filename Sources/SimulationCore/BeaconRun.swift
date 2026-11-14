@@ -244,4 +244,28 @@ public struct BeaconRun {
         return p.x < marker.x + Self.markerWidth && p.x + FixtureCharacter.width > marker.x
             && p.y < marker.y + Self.markerHeight && p.y + FixtureCharacter.height > marker.y
     }
+
+    /// Internal restoring initializer for save decoding.
+    /// Sets all stored fields without generating a course or queueing fixtures.
+    init(seed: UInt64, course: BeaconCourse, simulation: Simulation,
+         character: FixtureCharacter, collected: [Bool], outcome: Outcome,
+         facing: Int, pulseCooldown: Int, pulseFlash: [CellPosition],
+         pulseFlashRemaining: Int, health: Int, damageCooldown: Int,
+         lastDamageSource: DamageSource?, ventCooling: Int, warden: ChimeWarden) {
+        self.seed = seed
+        self.course = course
+        self.simulation = simulation
+        self.character = character
+        self.collected = collected
+        self.outcome = outcome
+        self.facing = facing
+        self.pulseCooldown = pulseCooldown
+        self.pulseFlash = pulseFlash
+        self.pulseFlashRemaining = pulseFlashRemaining
+        self.health = health
+        self.damageCooldown = damageCooldown
+        self.lastDamageSource = lastDamageSource
+        self.ventCooling = ventCooling
+        self.warden = warden
+    }
 }

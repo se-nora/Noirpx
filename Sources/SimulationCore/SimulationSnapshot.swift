@@ -5,6 +5,8 @@ public struct SimulationSnapshot: Equatable, Sendable {
     public let randomState: UInt64
     public let chunks: [ChunkSnapshot]
 
+    public static let digestVersion: UInt64 = 3
+
     public func material(at position: CellPosition) throws -> Material {
         try SimulationGrid.validate(position)
         let (chunk, index) = SimulationGrid.locate(position)
@@ -28,7 +30,7 @@ public struct SimulationSnapshot: Equatable, Sendable {
                 appendByte(UInt8(truncatingIfNeeded: word >> shift))
             }
         }
-        appendWord(3)
+        appendWord(Self.digestVersion)
         appendWord(seed)
         appendWord(tick)
         appendWord(randomState)

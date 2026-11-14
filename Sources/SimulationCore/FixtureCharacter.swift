@@ -6,11 +6,19 @@ public struct FixtureCharacter: Equatable, Sendable {
 
     public private(set) var position: CellPosition
     public private(set) var grounded = false
-    private var verticalVelocity = 0
-    private var verticalRemainder = 0
+    internal var verticalVelocity = 0
+    internal var verticalRemainder = 0
 
     public init() {
         position = CellPosition(x: -2, y: 6)
+    }
+
+    /// Internal restoring initializer for save decoding.
+    init(position: CellPosition, grounded: Bool, verticalVelocity: Int, verticalRemainder: Int) {
+        self.position = position
+        self.grounded = grounded
+        self.verticalVelocity = verticalVelocity
+        self.verticalRemainder = verticalRemainder
     }
 
     /// Advances after the material tick. Jump is a one-tick press, not a held state.

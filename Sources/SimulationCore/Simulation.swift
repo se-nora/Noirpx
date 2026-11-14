@@ -24,6 +24,46 @@ public struct Simulation {
         self.randomState = seed
     }
 
+    /// Internal restoring initializer for save decoding.
+    /// - Parameters:
+    ///   - seed: The world seed.
+    ///   - tick: The completed tick count.
+    ///   - randomState: The SplitMix64 RNG state.
+    ///   - chunks: Dictionary of chunk positions to their cell and thermal arrays.
+    ///   - commands: Grouped pending commands keyed by tick, already in enqueue order per tick.
+    init(seed: UInt64, tick: UInt64, randomState: UInt64,
+         chunks: [ChunkPosition: (cells: [Material], thermalStates: [ThermalCellState])],
+         commands: [UInt64: [SimulationCommand]]) {
+        self.seed = seed
+        self.tick = tick
+        self.randomState = randomState
+        self.chunks = [:]
+        self.commands = commands
+
+        for (position, (cells, thermalStates)) in chunks {
+            // Decoder guarantees cells/thermalStates are exactly SimulationGrid.cellCount
+            // by validating cellCount <= 4096 per chunk and materializing fixed-size arrays.
+            var chunk = SimulationChunk()
+            var occupied = 0
+            for (index, material) in cells.enumerated() where material != .empty {
+                chunk.cells[index] = material
+                chunk.thermalStates[index] = thermalStates[index]
+                occupied += 1
+            }
+            chunk.occupiedCount = occupied
+            if occupied > 0 {
+                self.chunks[position] = chunk
+            }
+        }
+    }
+
+    /// Internal accessor returning all pending commands in (tick, enqueue order) order.
+    var pendingCommands: [SimulationCommand] {
+        commands.keys.sorted().flatMap { tick in
+            commands[tick] ?? []
+        }
+    }
+
     public var snapshot: SimulationSnapshot {
         let published = chunks.keys.sorted(by: ordered).map {
             ChunkSnapshot(position: $0, cells: chunks[$0]!.cells, thermalStates: chunks[$0]!.thermalStates)

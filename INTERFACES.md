@@ -968,3 +968,20 @@ API: `CaveWorldGenerator(seed:width:height:)`, `.generate() -> CaveWorld`, and
 in chunked 512-cell batches (no giant intermediate array). `CaveWorld` exposes
 `cells`, `spawn`, `goal`, `extents`, and `materialCounts`. Same seed yields an
 identical `CaveWorld`.
+
+---
+
+## APPENDED: Cave materials (agent/cave-materials)
+
+`CaveWorldGenerator` now places all 16 materials. New placement rules:
+- Safety margins: dangerous materials (lava, acid, gunpowder, magicLiquid, fire) stay ≥6 cells (Chebyshev) from spawn/goal; lava keeps ≥8 cells.
+- Protected materials (water, sand, lava, acid, gunpowder, magicLiquid, pitch, oil, blood, ice, slime, gold) are never carved through by connectivity repair.
+- Magic liquid: 1-3 single-cell doses buried deep in rock.
+- Gold: veins inside solid rock plus surface nuggets on cave floors.
+- Gunpowder: thin seams adjacent to pitch/oil pockets.
+- Ice: patches in upper, shallow caves.
+- Slime: small pockets at mid depth.
+- Acid: rare sealed pockets in lower rock.
+- Lava: rare deep pools walled by solid rock; contained by `sealHazards` after carving.
+- Blood: small pools next to oil pockets.
+- Connectivity repair runs after material placement; fallback direct route carves if spawn cannot reach goal; borders and spawn/goal are re-enforced after all carving.

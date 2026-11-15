@@ -24,6 +24,16 @@ public enum HUDGuideText {
         case .touch: return ["←/→ move • ↑ jump", "⚡ pulse • drag paints"]
         }
     }
+
+    /// Status of the Chime Warden, including its material damage state.
+    public static func warden(_ warden: ChimeWarden?) -> String {
+        guard let warden else { return "Warden none" }
+        guard warden.alive else { return "Warden down" }
+        var text = "Warden shield \(warden.shield)/\(ChimeWarden.maximumShield)"
+        if warden.burning { text += " • burning" }
+        if let hazard = warden.lastHazard { text += " • hit by \(hazard.rawValue)" }
+        return text
+    }
 }
 
 #if canImport(SwiftUI)

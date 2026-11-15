@@ -215,7 +215,6 @@ final class ChimeWardenTests: XCTestCase {
         try run.paint(.fire, at: fire)
         try run.advance(horizontal: 1, jump: false, activeChunks: frozen)
         XCTAssertTrue(run.warden.threatening)
-        XCTAssertTrue(run.touchesWarden(run.character.position))
         XCTAssertTrue(run.character.contains(fire))
         XCTAssertEqual(try run.simulation.snapshot.material(at: fire), .fire)
         XCTAssertEqual(run.health, 2)

@@ -911,3 +911,22 @@ vent, pulse and progression state and queued input are separate from
 complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance
 validation remain open.
+
+---
+
+## APPENDED: Seeded cave world generation (agent/cave-worldgen)
+
+`CaveWorldGenerator` (in `Sources/SimulationCore/WorldGeneration.swift`) produces a
+larger multi-material grid deterministically from a seed and a bounded world size.
+It uses only the 8 existing materials (empty, solid, sand, water, oil, pitch,
+fire, steam). Terrain is layered solid carved by 4-octave value noise, with
+flood-fill connectivity repair carving L-shaped tunnels (deterministic). Sand
+fills shallow depressions, sealed water pools are walled in solid, and small
+3-8 cell pitch/oil pockets are scattered. Extents stay within
+`Simulation.coordinateBounds`.
+
+API: `CaveWorldGenerator(seed:width:height:)`, `.generate() -> CaveWorld`, and
+`.stamp(into:tick:)` which enqueues one `SimulationCommand` per non-empty cell
+in chunked 512-cell batches (no giant intermediate array). `CaveWorld` exposes
+`cells`, `spawn`, `goal`, `extents`, and `materialCounts`. Same seed yields an
+identical `CaveWorld`.

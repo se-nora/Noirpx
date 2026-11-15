@@ -27,6 +27,11 @@ private final class GameModel: ObservableObject {
     private var castMaterial: SimulationCore.Material = .sand
     @Published private(set) var challenge: BeaconRun?
     var character: FixtureCharacter { challenge?.character ?? FixtureCharacter() }
+    private enum WorldMode { case beaconRun, caveWorld }
+    private var worldMode: WorldMode = .beaconRun
+    private var caveSeed: UInt64 = 42
+    private var caveSimulation: Simulation?
+    var isCaveWorld: Bool { worldMode == .caveWorld }
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
@@ -38,11 +43,50 @@ private final class GameModel: ObservableObject {
     }
 
     func restart() {
-        startRun(newSeed: false)
+        if worldMode == .caveWorld { startCaveWorld(newSeed: false) } else { startRun(newSeed: false) }
     }
 
     func newRun() {
-        startRun(newSeed: true)
+        if worldMode == .caveWorld { startCaveWorld(newSeed: true) } else { startRun(newSeed: true) }
+    }
+
+    func toggleWorldMode() {
+        if worldMode == .beaconRun {
+            worldMode = .caveWorld
+            startCaveWorld(newSeed: false)
+        } else {
+            worldMode = .beaconRun
+            startRun(newSeed: false)
+        }
+    }
+
+    private func startCaveWorld(newSeed: Bool) {
+        do {
+            if newSeed { caveSeed = caveSeed &+ 0x9e3779b97f4a7c15 }
+            let generator = CaveWorldGenerator(seed: caveSeed, width: 128, height: 64)
+            var simulation = Simulation(seed: caveSeed)
+            try generator.stamp(into: &simulation, tick: 1)
+            caveSimulation = simulation
+            challenge = nil
+            worldMode = .caveWorld
+            snapshot = simulation.snapshot
+            updateActiveChunks()
+            clearControls()
+            errorMessage = nil
+            scheduler.reset()
+            framesPerSecond = 0
+            renderedChunks = nil
+            renderGeneration += 1
+            isCasting = false
+            castProgress = nil
+            castAim = nil
+        } catch {
+            challenge = nil
+            caveSimulation = nil
+            snapshot = nil
+            renderedChunks = nil
+            errorMessage = "Could not create cave world: \(error)"
+        }
     }
 
     private func startRun(newSeed: Bool) {
@@ -97,6 +141,10 @@ private final class GameModel: ObservableObject {
     }
 
     private func updateActiveChunks() {
+        if worldMode == .caveWorld {
+            activeChunks = nil
+            return
+        }
         guard let drawableSize,
               let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
                                              center: character.cameraCenter, longEdgeCells: 200) else { return }
@@ -104,6 +152,18 @@ private final class GameModel: ObservableObject {
     }
 
     func paint(_ position: CellPosition) {
+        if worldMode == .caveWorld {
+            guard var sim = caveSimulation, errorMessage == nil else { return }
+            do {
+                let (tick, overflow) = sim.snapshot.tick.addingReportingOverflow(1)
+                guard !overflow else { throw SimulationError.tickOverflow }
+                try sim.enqueue(.init(tick: tick, position: position, material: selectedMaterial))
+                caveSimulation = sim
+            } catch {
+                errorMessage = "Could not apply input: \(error)"
+            }
+            return
+        }
         guard var run = challenge, errorMessage == nil else { return }
         do {
             try run.paint(selectedMaterial, at: position)
@@ -135,6 +195,21 @@ private final class GameModel: ObservableObject {
     }
 
     func update(at time: Double) {
+        if worldMode == .caveWorld {
+            guard var sim = caveSimulation, errorMessage == nil else { return }
+            do {
+                let steps = scheduler.steps(at: time)
+                guard steps > 0 else { return }
+                for _ in 0..<steps {
+                    try sim.advance(activeChunks: activeChunks)
+                }
+                caveSimulation = sim
+                snapshot = sim.snapshot
+            } catch {
+                errorMessage = "Simulation stopped: \(error)"
+            }
+            return
+        }
         guard var run = challenge, run.outcome == .playing, errorMessage == nil, activeChunks != nil else { return }
         do {
             let steps = scheduler.steps(at: time)
@@ -236,7 +311,7 @@ private struct HostView: View {
                     Text("Scroll for controls ↓")
                 }
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
-                Text("BEACON RUN").fontWeight(.bold)
+                Text(model.isCaveWorld ? "CAVE WORLD" : "BEACON RUN").fontWeight(.bold)
                 HUDGuide(outcome: model.challenge?.outcome,
                          collected: model.challenge?.collected.filter { $0 }.count ?? 0,
                          controls: hudGuideControls)
@@ -257,6 +332,8 @@ private struct HostView: View {
                 } else if model.challenge?.outcome == .exhausted {
                     Text("Out of health. Restart to try again!").foregroundStyle(.red).fontWeight(.bold)
                 }
+                Button(model.isCaveWorld ? "Beacon Run" : "Cave World") { model.toggleWorldMode() }
+                    .buttonStyle(.bordered)
                 HUDControls(selected: model.selectedMaterial,
                             restart: { model.restart() }, newRun: { model.newRun() },
                             diagnostics: { model.resetClock(); showingDiagnostics = true },

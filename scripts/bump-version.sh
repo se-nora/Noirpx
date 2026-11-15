@@ -16,8 +16,14 @@ pbxproj="$wt/Noirpx.xcodeproj/project.pbxproj"
 [ -f "$pbxproj" ] || { echo "error: $pbxproj not found" >&2; exit 1; }
 
 # Find current MARKETING_VERSION lines; they should all be identical.
-cur=$(grep -E 'MARKETING_VERSION\s*=' "$pbxproj" | head -1 | sed -E 's/.*MARKETING_VERSION\s*=\s*([^;]+);.*/\1/')
+# BSD grep and sed do not understand \s, so use POSIX character classes.
+cur=$(grep -E 'MARKETING_VERSION[[:space:]]*=' "$pbxproj" | head -1 \
+  | sed -E 's/.*MARKETING_VERSION[[:space:]]*=[[:space:]]*([0-9]+)\.([0-9]+)\.([0-9]+);.*/\1.\2.\3/')
 [ -n "$cur" ] || { echo "error: no MARKETING_VERSION found" >&2; exit 1; }
+case "$cur" in
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) echo "error: cannot parse MARKETING_VERSION from '$cur'" >&2; exit 1 ;;
+esac
 
 # Parse major.minor.patch; bump minor, zero patch.
 IFS='.' read -r major minor patch <<EOF
@@ -32,7 +38,13 @@ if $dry_run; then
   exit 0
 fi
 
-# Replace all occurrences.
-sed -i '' -E "s/MARKETING_VERSION\s*=\s*${cur}/MARKETING_VERSION = ${new_version}/g" "$pbxproj"
+# Replace all occurrences. Escape the dots so they match literally.
+pattern=$(printf '%s' "$cur" | sed 's/\./\\./g')
+sed -i '' -E "s/MARKETING_VERSION[[:space:]]*=[[:space:]]*${pattern}/MARKETING_VERSION = ${new_version}/g" "$pbxproj"
+
+if ! grep -q "MARKETING_VERSION = ${new_version};" "$pbxproj"; then
+  echo "error: version bump did not apply to $pbxproj" >&2
+  exit 1
+fi
 
 echo "Bumped $cur -> $new_version in $pbxproj"

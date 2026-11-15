@@ -2,7 +2,7 @@ import SimulationCore
 
 /// Materials the wand can cast.
 public enum WandMaterials {
-    public static let all: [SimulationCore.Material] = [.sand, .water, .fire, .steam]
+    public static let all: [SimulationCore.Material] = [.sand, .water, .fire, .steam, .lava, .acid, .blood, .gunpowder, .gold, .magicLiquid]
 
     public static func contains(_ material: SimulationCore.Material) -> Bool {
         all.contains(material)
@@ -101,6 +101,14 @@ public extension SimulationCore.Material {
         case .pitch: return "Pitch"
         case .oil: return "Lamp oil"
         case .steam: return "Steam"
+        case .lava: return "Lava"
+        case .acid: return "Acid"
+        case .blood: return "Blood"
+        case .slime: return "Slime"
+        case .ice: return "Ice"
+        case .gunpowder: return "Gunpowder"
+        case .gold: return "Gold"
+        case .magicLiquid: return "Magic liquid"
         }
     }
 }

@@ -912,6 +912,44 @@ complete gameplay state. There is no respawn except restart. Resident-mode
 integration, richer gameplay, physical-device lifecycle and performance
 validation remain open.
 
+## Material expansion (identifiers 8-15)
+
+Digest version bumped from 4 to 5 and rules version from 2 to 3 for this change.
+The eight new materials reuse the existing single `heat` field (plus `isBurning`,
+`burnElapsed`, `fireElapsed`) as documented below; no new storage fields were
+added.
+
+- `lava` (8): hot viscous liquid. Moves like a liquid but only one destination
+  per tick, with no diagonal movement unless straight down is blocked. Heat
+  starts at 300 and cools by 1 per processed turn; at heat 0 it becomes solid.
+  Ignites flammable neighbors (pitch/oil/blood) and creates fire in adjacent
+  empty cells. Water adjacency converts lava to solid and that water to steam.
+  Treated as a thermal hazard on body overlap in the host.
+- `acid` (9): liquid like water. Each tick, with small deterministic probability
+  (direction draw plus coordinate hash), dissolves one adjacent solid/sand cell:
+  both the acid cell and the dissolved cell become empty. Does not dissolve pitch
+  or other liquids.
+- `blood` (10): liquid like water (same movement and displacement as water).
+  Flammable with ignition threshold 60 and burnout 24. Otherwise standard
+  flammable reactions.
+- `slime` (11): viscous liquid that moves only every third processed turn
+  (phase counter stored in the heat field: heat increments each turn, movement
+  occurs when the value is divisible by 3). No diagonal movement; moves straight
+  down then spreads sideways. Does not displace other materials.
+- `ice` (12): solid powder falling like sand (displaces water/oil). Melts to
+  water when an adjacent cell has heat > 50 or is fire/lava. Freezes adjacent
+  water with small deterministic probability when its heat is 0 and no heat source
+  is adjacent.
+- `gunpowder` (13): fine powder falling like sand, with a slightly faster fall.
+  Explodes on contact with fire/lava or a burning flammable: the cell and up to
+  12 cells within radius 3 become fire or empty by deterministic ~0.5 probability.
+- `gold` (14): dense inert powder falling like sand, displacing water and oil
+  (not lava). No reactions.
+- `magicLiquid` (15): non-flowing liquid. Each turn transforms one adjacent
+  non-empty, non-magic-liquid cell along the cycle solid->sand->water->oil->
+  pitch->fire->steam->empty. Consumed (becomes empty) after 8 transformations,
+  counted in the heat field.
+
 ---
 
 ## APPENDED: Seeded cave world generation (agent/cave-worldgen)

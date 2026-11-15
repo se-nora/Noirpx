@@ -8,10 +8,18 @@ public enum Material: UInt8, CaseIterable, Sendable {
     case pitch = 5
     case oil = 6
     case steam = 7
+    case lava = 8
+    case acid = 9
+    case blood = 10
+    case slime = 11
+    case ice = 12
+    case gunpowder = 13
+    case gold = 14
+    case magicLiquid = 15
     public var blocksCharacter: Bool {
         switch self {
-        case .solid, .sand, .pitch: return true
-        case .empty, .water, .fire, .oil, .steam: return false
+        case .solid, .sand, .pitch, .ice, .gunpowder, .gold: return true
+        case .empty, .water, .fire, .oil, .steam, .lava, .acid, .blood, .slime, .magicLiquid: return false
         }
     }
 }

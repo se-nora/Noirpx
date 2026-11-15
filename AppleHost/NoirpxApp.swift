@@ -21,6 +21,10 @@ private final class GameModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
+    @Published var isCasting = false
+    @Published private(set) var castAim: CellPosition?
+    private var castProgress: WandCastProgress?
+    private var castMaterial: SimulationCore.Material = .sand
     @Published private(set) var challenge: BeaconRun?
     var character: FixtureCharacter { challenge?.character ?? FixtureCharacter() }
     private var scheduler = FixedTickScheduler()
@@ -53,6 +57,9 @@ private final class GameModel: ObservableObject {
             framesPerSecond = 0
             renderedChunks = nil
             renderGeneration += 1
+            isCasting = false
+            castProgress = nil
+            castAim = nil
         } catch {
             challenge = nil
             snapshot = nil
@@ -106,6 +113,27 @@ private final class GameModel: ObservableObject {
         }
     }
 
+    func setCastAim(_ position: CellPosition?) {
+        castAim = position
+    }
+
+    func startCasting() {
+        guard challenge?.outcome == .playing, errorMessage == nil else { return }
+        isCasting = true
+        castMaterial = selectedMaterial
+        castProgress = nil
+    }
+
+    func stopCasting() {
+        isCasting = false
+        castProgress = nil
+    }
+
+    func cycleWandMaterial(_ direction: Int) {
+        let current = WandMaterials.normalized(selectedMaterial)
+        selectedMaterial = direction >= 0 ? WandMaterials.next(after: current) : WandMaterials.previous(before: current)
+    }
+
     func update(at time: Double) {
         guard var run = challenge, run.outcome == .playing, errorMessage == nil, activeChunks != nil else { return }
         do {
@@ -113,6 +141,31 @@ private final class GameModel: ObservableObject {
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 guard let activeChunks else { return }
+                if isCasting {
+                    if let aim = castAim {
+                        let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
+                                                  y: run.character.position.y + FixtureCharacter.height / 2)
+                        let ray = WandRay.cells(from: origin, toward: aim, maxLength: 12)
+                        if castProgress == nil || castProgress?.cells != ray {
+                            castProgress = WandCastProgress(cells: ray, budget: 3)
+                            castMaterial = selectedMaterial
+                        }
+                        let material = castMaterial
+                        if let progress = castProgress {
+                            var p = progress
+                            let batch = p.nextBatch()
+                            castProgress = p
+                            for cell in batch {
+                                do {
+                                    try run.paint(material, at: cell)
+                                } catch { }
+                            }
+                        }
+                    }
+                } else {
+                    castProgress = nil
+                }
+                if run.outcome != .playing { stopCasting() }
                 let controls = input.consumeTick()
                 try run.advance(horizontal: controls.horizontal, jump: controls.jump, pulse: controls.pulse,
                                 activeChunks: activeChunks)
@@ -162,6 +215,11 @@ private struct HostView: View {
                     onError: { model.errorMessage = $0 },
                     onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) },
+                    onAim: { model.setCastAim($0) },
+                    onCastChanged: { casting in
+                        if casting { model.startCasting() } else { model.stopCasting() }
+                    },
+                    onCycleWandMaterial: { direction in model.cycleWandMaterial(direction) },
                     onKeyboard: { model.setKeyboard($0) },
                     onInputReset: { model.resetClock() }
                 )
@@ -205,6 +263,7 @@ private struct HostView: View {
                             help: { model.resetClock(); showingHelp = true },
                             select: { model.selectedMaterial = $0 })
                 Text("Paint: drag; keys 1–7")
+                Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
                 if device == nil {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
@@ -224,6 +283,7 @@ private struct HostView: View {
                     Spacer()
                     controlButton("Pulse", symbol: "bolt.fill", control: .pulse)
                     controlButton("Jump", symbol: "arrow.up", control: .jump)
+                    castButton
                 }
                 .padding()
             }
@@ -277,6 +337,20 @@ private struct HostView: View {
     }
 
     #if os(iOS)
+    private var castButton: some View {
+        Image(systemName: "wand.and.stars")
+            .font(.title2.bold())
+            .frame(width: 64, height: 64)
+            .foregroundStyle(.white)
+            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in model.startCasting() }
+                .onEnded { _ in model.stopCasting() })
+            .accessibilityLabel("Cast wand")
+            .accessibilityAddTraits(.isButton)
+    }
+
     private func controlButton(_ title: String, symbol: String, control: GameplayControl) -> some View {
         Image(systemName: symbol)
             .font(.title2.bold())
@@ -328,6 +402,9 @@ private struct MetalSurface {
     let onError: (String) -> Void
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
+    let onAim: (CellPosition?) -> Void
+    let onCastChanged: (Bool) -> Void
+    let onCycleWandMaterial: (Int) -> Void
     let onKeyboard: (GameplayControls) -> Void
     let onInputReset: () -> Void
 
@@ -347,6 +424,9 @@ private struct MetalSurface {
 #if os(macOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var onAim: ((CellPosition?) -> Void)?
+    var onCastChanged: ((Bool) -> Void)?
+    var onCycleWandMaterial: ((Int) -> Void)?
     var onKeyboard: ((GameplayControls) -> Void)?
     var onInputReset: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
@@ -371,8 +451,28 @@ private final class InputMetalView: MTKView {
         }
         resignObserver = ScopedRegistration { NotificationCenter.default.removeObserver(observer) }
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp], handler: { [weak self] event in
-            guard let self, event.window === self.window,
-                  [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
+            guard let self, event.window === self.window else { return event }
+            if event.keyCode == 8 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onCastChanged?(true)
+                } else if event.type == .keyUp {
+                    self.onCastChanged?(false)
+                }
+                return nil
+            }
+            if event.keyCode == 33 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onCycleWandMaterial?(-1)
+                }
+                return nil
+            }
+            if event.keyCode == 30 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onCycleWandMaterial?(1)
+                }
+                return nil
+            }
+            guard [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
                 return event
             }
@@ -390,18 +490,55 @@ private final class InputMetalView: MTKView {
         }
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        aim(event)
+    }
+
     override func mouseDown(with event: NSEvent) {
         lastCell = nil
         paint(event)
+        aim(event)
     }
 
-    override func mouseDragged(with event: NSEvent) { paint(event) }
+    override func mouseDragged(with event: NSEvent) {
+        paint(event)
+        aim(event)
+    }
+
     override func mouseUp(with event: NSEvent) { lastCell = nil }
+
+    override func rightMouseDown(with event: NSEvent) {
+        aim(event)
+        onCastChanged?(true)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        aim(event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        onCastChanged?(false)
+    }
 
     private func paint(_ event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
         paintPoint(x: point.x - bounds.minX, y: y)
+    }
+
+    private func aim(_ event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
+        guard bounds.width > 0, bounds.height > 0,
+              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
+                                            drawableHeight: Double(drawableSize.height), center: cameraCenter,
+                                            longEdgeCells: 200),
+              let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
+                                     y: Double(y / bounds.height * drawableSize.height)) else {
+            onAim?(nil)
+            return
+        }
+        onAim?(cell)
     }
 }
 
@@ -409,6 +546,9 @@ extension MetalSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
         view.cameraCenter = character.cameraCenter
@@ -421,6 +561,9 @@ extension MetalSurface: NSViewRepresentable {
         context.coordinator.character = character
         context.coordinator.challenge = challenge
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
         view.cameraCenter = character.cameraCenter
@@ -429,6 +572,9 @@ extension MetalSurface: NSViewRepresentable {
 #elseif os(iOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var onAim: ((CellPosition?) -> Void)?
+    var onCastChanged: ((Bool) -> Void)?
+    var onCycleWandMaterial: ((Int) -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var activeTouch: UITouch?
@@ -463,6 +609,20 @@ private final class InputMetalView: MTKView {
     private func paint(_ touch: UITouch) {
         let point = touch.location(in: self)
         paintPoint(x: point.x - bounds.minX, y: point.y - bounds.minY)
+        aim(point)
+    }
+
+    private func aim(_ point: CGPoint) {
+        guard bounds.width > 0, bounds.height > 0,
+              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
+                                            drawableHeight: Double(drawableSize.height), center: cameraCenter,
+                                            longEdgeCells: 200),
+              let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
+                                     y: Double((point.y - bounds.minY) / bounds.height * drawableSize.height)) else {
+            onAim?(nil)
+            return
+        }
+        onAim?(cell)
     }
 }
 
@@ -470,6 +630,9 @@ extension MetalSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -480,6 +643,9 @@ extension MetalSurface: UIViewRepresentable {
         context.coordinator.character = character
         context.coordinator.challenge = challenge
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
         view.cameraCenter = character.cameraCenter
     }
 }

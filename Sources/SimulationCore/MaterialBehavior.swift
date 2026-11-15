@@ -189,6 +189,11 @@ class ReactiveBehavior: MaterialBehavior, @unchecked Sendable {
 // Shared by stationary flames and burning flammable cells. Candidate order is
 // rotated by source age, but an already heated target is completed first.
 class FlameBehavior: ReactiveBehavior, @unchecked Sendable {
+    /// The eight surrounding cells, shared by the heat and charring rules.
+    static let neighborOffsets: [(Int, Int)] = [
+        (-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)
+    ]
+
     override func accepts(_ material: Material) -> Bool {
         material == .water || MaterialBehavior.forMaterial(material).ignitionThreshold != nil
     }
@@ -208,6 +213,39 @@ class FlameBehavior: ReactiveBehavior, @unchecked Sendable {
 
     func isCardinal(_ target: CellPosition, to source: CellPosition) -> Bool {
         abs(target.x - source.x) + abs(target.y - source.y) == 1
+    }
+
+    /// Burning cells eat into rock: a neighbouring `solid` becomes cold `pitch`
+    /// with a fixed 1/16 chance per turn and per burning neighbour.
+    ///
+    /// The roll is derived from the source position, the source age and the
+    /// neighbour position, so it never consumes the seeded random stream and
+    /// both simulation modes reach the same result for the same scene.
+    func charAdjacentSolids(source: CellPosition, age: UInt16,
+                            canVisit: (CellPosition) -> Bool,
+                            material: (CellPosition) -> Material,
+                            action: inout MaterialAction) {
+        for (dx, dy) in FlameBehavior.neighborOffsets {
+            let neighbor = CellPosition(x: source.x + dx, y: source.y + dy)
+            guard canVisit(neighbor), material(neighbor) == .solid else { continue }
+            guard charsSolid(age: age, source: source, neighbor: neighbor) else { continue }
+            action.writes.append((neighbor, .pitch))
+            action.thermalWrites.append((neighbor, .zero))
+        }
+    }
+
+    private func charsSolid(age: UInt16, source: CellPosition, neighbor: CellPosition) -> Bool {
+        var value = UInt64(bitPattern: Int64(source.x))
+        value = value &* 0x9e3779b97f4a7c15 &+ UInt64(bitPattern: Int64(source.y))
+        value = value &* 0x9e3779b97f4a7c15 &+ UInt64(age)
+        value = value &* 0x9e3779b97f4a7c15 &+ UInt64(bitPattern: Int64(neighbor.x))
+        value = value &* 0x9e3779b97f4a7c15 &+ UInt64(bitPattern: Int64(neighbor.y))
+        value ^= value >> 30
+        value = value &* 0xbf58476d1ce4e5b9
+        value ^= value >> 27
+        value = value &* 0x94d049bb133111eb
+        value ^= value >> 31
+        return (value & 0x0F) == 0
     }
 
     func spread(destinations: [CellPosition], age: UInt16, canVisit: (CellPosition) -> Bool,
@@ -241,14 +279,13 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
                           secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
+        var state = thermal(source)
+        state.fireElapsed = state.fireElapsed == .max ? .max : state.fireElapsed + 1
         if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }) {
             // Fire + water creates steam at water position; fire remains and ages
             action.writes.append((water, .steam))
             action.moved.append(water)
             action.thermalWrites.append((water, ThermalCellState(heat: 200)))
-            // Fire ages on this processed turn
-            var state = thermal(source)
-            state.fireElapsed = state.fireElapsed == .max ? .max : state.fireElapsed + 1
             if state.fireElapsed >= 32 {
                 action.writes.append((source, .empty))
             } else {
@@ -256,8 +293,8 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
             }
             return action
         }
-        var state = thermal(source)
-        state.fireElapsed = state.fireElapsed == .max ? .max : state.fireElapsed + 1
+        charAdjacentSolids(source: source, age: state.fireElapsed,
+                           canVisit: canVisit, material: material, action: &action)
         spread(destinations: destinations, age: state.fireElapsed, canVisit: canVisit, material: material,
                thermal: thermal, moved: moved, action: &action)
         if state.fireElapsed >= 32 {
@@ -298,7 +335,8 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
         var state = thermal(source)
         if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }),
            state.isBurning || state.heat > 0 {
-            // Burning/hot flammable + water creates steam at water position
+            // Burning/hot flammable + water creates steam at water position.
+            // Water takes priority: the source neither spreads nor chars this turn.
             action.writes.append((water, .steam))
             action.moved.append(water)
             action.moved.append(source)
@@ -316,6 +354,8 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
             }
         } else if state.isBurning {
             state.burnElapsed = state.burnElapsed == .max ? .max : state.burnElapsed + 1
+            charAdjacentSolids(source: source, age: state.burnElapsed,
+                               canVisit: canVisit, material: material, action: &action)
             spread(destinations: destinations, age: state.burnElapsed, canVisit: canVisit, material: material,
                    thermal: thermal, moved: moved, action: &action)
             if state.burnElapsed >= burnoutAge {

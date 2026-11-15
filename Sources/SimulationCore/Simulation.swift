@@ -187,6 +187,9 @@ public struct Simulation {
         if material == .steam && thermal == .zero {
             newThermal = ThermalCellState(heat: 200)
         }
+        if material == .lava && thermal == .zero {
+            newThermal = ThermalCellState(heat: 300)
+        }
         chunks[chunk]!.thermalStates[index] = newThermal
         guard previous != material else { return }
         chunks[chunk]!.cells[index] = material

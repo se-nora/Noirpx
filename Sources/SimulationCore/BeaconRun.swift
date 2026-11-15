@@ -155,6 +155,7 @@ public struct BeaconRun {
             let cell = CellPosition(x: x, y: y)
             switch materialAt(cell) {
             case .fire: return body
+            case .lava: return body
             case .oil: return body && burningAt(cell)
             case .pitch: return burningAt(cell)
             default: return false

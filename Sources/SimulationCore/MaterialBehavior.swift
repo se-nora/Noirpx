@@ -9,6 +9,14 @@ class MaterialBehavior: @unchecked Sendable {
     static let pitch = PitchBehavior()
     static let oil = OilBehavior()
     static let steam = SteamBehavior()
+    static let lava = LavaBehavior()
+    static let acid = AcidBehavior()
+    static let blood = BloodBehavior()
+    static let slime = SlimeBehavior()
+    static let ice = IceBehavior()
+    static let gunpowder = GunpowderBehavior()
+    static let gold = GoldBehavior()
+    static let magicLiquid = MagicLiquidBehavior()
 
     static func forMaterial(_ material: Material) -> MaterialBehavior {
         switch material {
@@ -20,6 +28,14 @@ class MaterialBehavior: @unchecked Sendable {
         case .pitch: return pitch
         case .oil: return oil
         case .steam: return steam
+        case .lava: return lava
+        case .acid: return acid
+        case .blood: return blood
+        case .slime: return slime
+        case .ice: return ice
+        case .gunpowder: return gunpowder
+        case .gold: return gold
+        case .magicLiquid: return magicLiquid
         }
     }
 
@@ -420,6 +436,404 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
             for destination in movement.moved {
                 action.thermalWrites.append((destination, state))
             }
+        }
+        return action
+    }
+}
+
+final class LavaBehavior: MaterialBehavior, @unchecked Sendable {
+    private static let movement = LiquidMovementBehavior()
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    func canDisplace(_ material: Material, dy: Int) -> Bool { false }
+
+    override func destinations(source: CellPosition, direction: Int,
+                               canVisit: (CellPosition) -> Bool,
+                               material: (CellPosition) -> Material) -> [CellPosition] {
+        let down = CellPosition(x: source.x, y: source.y - 1)
+        if canVisit(down) {
+            let m = material(down)
+            if m == .empty { return [down] }
+        }
+        return Self.movement.destinations(source: source, direction: direction,
+                                          canVisit: canVisit, material: material)
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        var action = MaterialAction()
+        let cardinals = [(0, -1), (-1, 0), (1, 0), (0, 1)]
+        if let waterPos = cardinals.map({ CellPosition(x: source.x + $0.0, y: source.y + $0.1) })
+            .first(where: { canVisit($0) && material($0) == .water }) {
+            action.writes.append((source, .solid))
+            action.writes.append((waterPos, .steam))
+            action.moved.append(source)
+            action.moved.append(waterPos)
+            action.thermalWrites.append((waterPos, ThermalCellState(heat: 200)))
+            action.thermalWrites.append((source, .zero))
+            return action
+        }
+        var state = thermal(source)
+        let neighbors = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+        for (dx, dy) in neighbors {
+            let target = CellPosition(x: source.x + dx, y: source.y + dy)
+            guard canVisit(target) else { continue }
+            let m = material(target)
+            if m == .empty {
+                action.writes.append((target, .fire))
+                action.moved.append(target)
+                action.thermalWrites.append((target, ThermalCellState()))
+            } else if m == .pitch || m == .oil || m == .blood {
+                let reaction = MaterialBehavior.forMaterial(m).receiveHeat(
+                    at: target, state: thermal(target), amount: 40,
+                    canVisit: canVisit, material: material)
+                action.writes.append(contentsOf: reaction.writes)
+                action.thermalTransfers.append(contentsOf: reaction.thermalTransfers)
+                action.thermalWrites.append(contentsOf: reaction.thermalWrites)
+                action.moved.append(contentsOf: reaction.moved)
+            }
+        }
+        if state.heat > 0 { state.heat -= 1 }
+        if state.heat == 0 {
+            action.writes.append((source, .solid))
+            action.moved.append(source)
+            action.thermalWrites.append((source, .zero))
+            return action
+        }
+        let dests = self.destinations(source: source, direction: direction,
+                                      canVisit: canVisit, material: material)
+        let movement = Self.movement.resolve(
+            source: source, current: .lava, destinations: dests, direction: direction,
+            maximumY: maximumY, canVisit: canVisit, material: material,
+            moved: moved, secondary: [], thermal: thermal)
+        if movement.moved.isEmpty {
+            action.thermalWrites.append((source, state))
+        } else {
+            for d in movement.moved { action.thermalWrites.append((d, state)) }
+        }
+        action.writes.append(contentsOf: movement.writes)
+        action.moved.append(contentsOf: movement.moved)
+        action.thermalTransfers.append(contentsOf: movement.thermalTransfers)
+        return action
+    }
+}
+
+final class AcidBehavior: LiquidMovementBehavior, @unchecked Sendable {
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .oil && dy < 0
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        let cardinals = [(0, -1), (-1, 0), (1, 0), (0, 1)]
+        let candidates = cardinals.map { CellPosition(x: source.x + $0.0, y: source.y + $0.1) }
+            .filter { canVisit($0) && (material($0) == .solid || material($0) == .sand) }
+        let dissolve = !candidates.isEmpty && direction == 1
+            && ((source.x & 3) == 0)
+        if dissolve {
+            let target = candidates[0]
+            var action = MaterialAction()
+            action.writes.append((source, .empty))
+            action.writes.append((target, .empty))
+            action.moved.append(source)
+            action.moved.append(target)
+            action.thermalWrites.append((source, .zero))
+            action.thermalWrites.append((target, .zero))
+            return action
+        }
+        return super.resolve(source: source, current: .acid, destinations: destinations,
+                             direction: direction, maximumY: maximumY, canVisit: canVisit,
+                             material: material, moved: moved, secondary: secondary,
+                             thermal: thermal)
+    }
+}
+
+final class BloodBehavior: FlammableBehavior, @unchecked Sendable {
+    private static let movement = LiquidMovementBehavior()
+    override var ignitionThreshold: UInt16? { 60 }
+    override var burnoutAge: UInt16 { 24 }
+    override var usesDirection: Bool { true }
+
+    func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .oil && dy < 0
+    }
+
+    override func destinations(source: CellPosition, direction: Int,
+                               canVisit: (CellPosition) -> Bool,
+                               material: (CellPosition) -> Material) -> [CellPosition] {
+        Self.movement.destinations(source: source, direction: direction,
+                                   canVisit: canVisit, material: material)
+    }
+
+    override func secondaryDestinations(source: CellPosition, direction: Int,
+                                        canVisit: (CellPosition) -> Bool,
+                                        material: (CellPosition) -> Material) -> [CellPosition] {
+        super.destinations(source: source, direction: direction, canVisit: canVisit, material: material)
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        var reaction = super.resolve(source: source, current: .blood,
+                                     destinations: secondary, direction: direction,
+                                     maximumY: maximumY, canVisit: canVisit, material: material,
+                                     moved: moved, secondary: [], thermal: thermal)
+        let isWaterReaction = reaction.writes.contains { write in
+            secondary.contains(write.0) && write.1 == .steam
+        }
+        let isBurnout = reaction.writes.contains { $0.0 == source && $0.1 == .empty }
+        if reaction.moved.contains(source) || isBurnout || isWaterReaction {
+            return reaction
+        }
+        let movement = Self.movement.resolve(
+            source: source, current: .blood, destinations: destinations, direction: direction,
+            maximumY: maximumY, canVisit: canVisit, material: material,
+            moved: moved.union(reaction.moved), secondary: [], thermal: thermal)
+        if let destination = movement.thermalTransfers.first?.destination {
+            reaction.thermalWrites = reaction.thermalWrites.map {
+                ($0.0 == source ? destination : $0.0, $0.1)
+            }
+        }
+        reaction.writes.append(contentsOf: movement.writes)
+        reaction.moved.append(contentsOf: movement.moved)
+        reaction.thermalTransfers.append(contentsOf: movement.thermalTransfers)
+        return reaction
+    }
+}
+
+final class SlimeBehavior: MovingBehavior, @unchecked Sendable {
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    override func canDisplace(_ material: Material, dy: Int) -> Bool { false }
+    override func offsets(direction: Int) -> [(Int, Int)] {
+        [(0, -1), (direction, 0), (-direction, 0)]
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        var state = thermal(source)
+        state.heat = state.heat == .max ? .max : state.heat + 1
+        let canMove = (state.heat % 3 == 0)
+        if !canMove {
+            return MaterialAction(thermalWrites: [(source, state)])
+        }
+        let action = super.resolve(source: source, current: .slime, destinations: destinations,
+                                   direction: direction, maximumY: maximumY, canVisit: canVisit,
+                                   material: material, moved: moved, secondary: secondary,
+                                   thermal: thermal)
+        if action.moved.isEmpty {
+            var result = action
+            result.thermalWrites.append((source, state))
+            return result
+        }
+        var result = action
+        for d in action.moved { result.thermalWrites.append((d, state)) }
+        return result
+    }
+}
+
+final class IceBehavior: MovingBehavior, @unchecked Sendable {
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .water || material == .oil
+    }
+    override func offsets(direction: Int) -> [(Int, Int)] {
+        [(0, -1), (direction, -1), (-direction, -1)]
+    }
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        let neighbors8 = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+        let hasHeatSource = neighbors8.contains { dx, dy in
+            let t = CellPosition(x: source.x + dx, y: source.y + dy)
+            guard canVisit(t) else { return false }
+            let m = material(t)
+            if m == .fire || m == .lava { return true }
+            return thermal(t).heat > 50
+        }
+        var action = MaterialAction()
+        if hasHeatSource {
+            action.writes.append((source, .water))
+            action.moved.append(source)
+            action.thermalWrites.append((source, .zero))
+            return action
+        }
+        let state = thermal(source)
+        let canFreeze = state.heat == 0 && direction == 1 && ((source.x & 7) == 0)
+        if canFreeze {
+            let waterOffsets = [(0, -1), (-1, 0), (1, 0), (0, 1),
+                                (-1, -1), (1, -1), (-1, 1), (1, 1)]
+            let waterCandidates = waterOffsets.map {
+                CellPosition(x: source.x + $0.0, y: source.y + $0.1)
+            }.filter { canVisit($0) && material($0) == .water }
+            if let target = waterCandidates.first {
+                action.writes.append((target, .ice))
+                action.moved.append(target)
+                action.thermalWrites.append((target, .zero))
+            }
+        }
+        let movement = super.resolve(source: source, current: .ice, destinations: destinations,
+                                     direction: direction, maximumY: maximumY, canVisit: canVisit,
+                                     material: material, moved: moved.union(action.moved),
+                                     secondary: secondary, thermal: thermal)
+        if movement.moved.isEmpty {
+            action.thermalWrites.append((source, state))
+        } else {
+            for d in movement.moved { action.thermalWrites.append((d, state)) }
+        }
+        action.writes.append(contentsOf: movement.writes)
+        action.moved.append(contentsOf: movement.moved)
+        action.thermalTransfers.append(contentsOf: movement.thermalTransfers)
+        return action
+    }
+}
+
+final class GunpowderBehavior: MovingBehavior, @unchecked Sendable {
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .water || material == .oil
+    }
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    override func offsets(direction: Int) -> [(Int, Int)] {
+        [(0, -2), (0, -1), (direction, -1), (-direction, -1)]
+    }
+
+    private func fireOrEmpty(_ pos: CellPosition, _ direction: Int) -> Bool {
+        let hash = (pos.x &* 31) ^ (pos.y &* 17) ^ (direction &* 13)
+        return (hash & 1) == 0
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        let neighbors8 = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+        var explodes = false
+        for (dx, dy) in neighbors8 {
+            let t = CellPosition(x: source.x + dx, y: source.y + dy)
+            guard canVisit(t) else { continue }
+            let m = material(t)
+            if m == .fire || m == .lava { explodes = true; break }
+            if (m == .pitch || m == .oil || m == .blood) && thermal(t).isBurning {
+                explodes = true; break
+            }
+        }
+        if explodes {
+            var action = MaterialAction()
+            var candidates: [CellPosition] = []
+            for dy in -3...3 {
+                for dx in -3...3 {
+                    if dx == 0 && dy == 0 { continue }
+                    let t = CellPosition(x: source.x + dx, y: source.y + dy)
+                    guard canVisit(t) else { continue }
+                    candidates.append(t)
+                }
+            }
+            candidates.sort { a, b in
+                let da = abs(a.x - source.x) + abs(a.y - source.y)
+                let db = abs(b.x - source.x) + abs(b.y - source.y)
+                if da != db { return da < db }
+                if a.y != b.y { return a.y < b.y }
+                return a.x < b.x
+            }
+            let selected = Array(candidates.prefix(12))
+            let sourceMat: Material = fireOrEmpty(source, direction) ? .fire : .empty
+            action.writes.append((source, sourceMat))
+            action.moved.append(source)
+            action.thermalWrites.append((source, .zero))
+            for t in selected {
+                let mat: Material = fireOrEmpty(t, direction) ? .fire : .empty
+                action.writes.append((t, mat))
+                action.moved.append(t)
+                if mat == .fire { action.thermalWrites.append((t, .zero)) }
+            }
+            return action
+        }
+        return super.resolve(source: source, current: .gunpowder, destinations: destinations,
+                             direction: direction, maximumY: maximumY, canVisit: canVisit,
+                             material: material, moved: moved, secondary: secondary,
+                             thermal: thermal)
+    }
+}
+
+final class GoldBehavior: MovingBehavior, @unchecked Sendable {
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        material == .water || material == .oil
+    }
+    override func offsets(direction: Int) -> [(Int, Int)] {
+        [(0, -1), (direction, -1), (-direction, -1)]
+    }
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+}
+
+final class MagicLiquidBehavior: MaterialBehavior, @unchecked Sendable {
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    private static let cycle: [Material: Material] = [
+        .solid: .sand, .sand: .water, .water: .oil, .oil: .pitch,
+        .pitch: .fire, .fire: .steam, .steam: .empty
+    ]
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        let adjOffsets = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0),
+                          (-1, 1), (0, 1), (1, 1)]
+        let candidates = adjOffsets.map { CellPosition(x: source.x + $0.0, y: source.y + $0.1) }
+            .filter { canVisit($0) }
+            .filter { let m = material($0); return m != .empty && m != .magicLiquid }
+        // Actually allow empty? cycle empty->empty; but goal says non-empty adjacent. Keep non-empty.
+        guard !candidates.isEmpty else { return MaterialAction() }
+        let index: Int
+        if candidates.count == 1 {
+            index = 0
+        } else {
+            let r = Int(direction & 1) ^ (abs(source.x) + abs(source.y))
+            index = r % candidates.count
+        }
+        let target = candidates[index]
+        let currentMat = material(target)
+        let newMat = Self.cycle[currentMat] ?? currentMat
+        var state = thermal(source)
+        state.heat = state.heat == .max ? .max : state.heat + 1
+        var action = MaterialAction()
+        action.writes.append((target, newMat))
+        action.moved.append(target)
+        action.thermalWrites.append((target, .zero))
+        if state.heat >= 8 {
+            action.writes.append((source, .empty))
+            action.moved.append(source)
+            action.thermalWrites.append((source, .zero))
+        } else {
+            action.thermalWrites.append((source, state))
         }
         return action
     }

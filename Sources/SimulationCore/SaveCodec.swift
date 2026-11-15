@@ -2,7 +2,7 @@
 public struct SaveCodec: Sendable {
     public static let headerByteCount = 24
     public static let formatVersion: UInt16 = 1
-    public static let rulesVersion: UInt16 = 2
+    public static let rulesVersion: UInt16 = 3
     public static let digestVersion = UInt16(SimulationSnapshot.digestVersion)
 
     public static let maximumPayloadBytes = 16 * 1024 * 1024

@@ -228,6 +228,9 @@ public struct ResidentSimulation {
         if material == .steam && thermal == .zero {
             newThermal = ThermalCellState(heat: 200)
         }
+        if material == .lava && thermal == .zero {
+            newThermal = ThermalCellState(heat: 300)
+        }
         let oldThermal = thermalChunks[chunk]?[index] ?? .zero
         guard previous != material || oldThermal != newThermal else { return }
         if chunks[chunk] == nil {

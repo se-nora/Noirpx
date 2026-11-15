@@ -47,6 +47,7 @@ public enum FixturePixels {
                 case .fire: color = 0xff3269ff
                 case .pitch: color = chunk.thermalStates[index].isBurning ? 0xff44baff : 0xffad5983
                 case .oil: color = chunk.thermalStates[index].isBurning ? 0xff37aaff : 0xff438c9b
+                case .steam: color = 0xffe8e8ff
                 }
                 pixels[y * width + x] = color.littleEndian
                 if let character {

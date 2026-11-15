@@ -8,6 +8,7 @@ class MaterialBehavior: @unchecked Sendable {
     static let fire = FireBehavior()
     static let pitch = PitchBehavior()
     static let oil = OilBehavior()
+    static let steam = SteamBehavior()
 
     static func forMaterial(_ material: Material) -> MaterialBehavior {
         switch material {
@@ -18,6 +19,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .fire: return fire
         case .pitch: return pitch
         case .oil: return oil
+        case .steam: return steam
         }
     }
 
@@ -224,8 +226,18 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         var action = MaterialAction()
         if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }) {
-            action.writes.append((water, .empty))
-            action.writes.append((source, .empty))
+            // Fire + water creates steam at water position; fire remains and ages
+            action.writes.append((water, .steam))
+            action.moved.append(water)
+            action.thermalWrites.append((water, ThermalCellState(heat: 200)))
+            // Fire ages on this processed turn
+            var state = thermal(source)
+            state.fireElapsed = state.fireElapsed == .max ? .max : state.fireElapsed + 1
+            if state.fireElapsed >= 32 {
+                action.writes.append((source, .empty))
+            } else {
+                action.thermalWrites.append((source, state))
+            }
             return action
         }
         var state = thermal(source)
@@ -248,8 +260,13 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
                               material: (CellPosition) -> Material) -> MaterialAction {
         let neighbors = super.destinations(source: target, direction: 0, canVisit: canVisit, material: material)
         if let water = neighbors.first(where: { isCardinal($0, to: target) && material($0) == .water }) {
-            return MaterialAction(writes: [(water, .empty)], moved: [target],
-                                  thermalWrites: [(target, .zero)])
+            // Heat + adjacent water creates steam at the water position and extinguishes
+            // the heated target (preserving burnElapsed for reignition).
+            var targetState = state
+            targetState.isBurning = false
+            targetState.heat = 0
+            return MaterialAction(writes: [(water, .steam)], moved: [water, target],
+                                  thermalWrites: [(water, ThermalCellState(heat: 200)), (target, targetState)])
         }
         return super.receiveHeat(at: target, state: state, amount: amount,
                                  canVisit: canVisit, material: material)
@@ -265,9 +282,22 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
         var state = thermal(source)
         if let water = destinations.first(where: { isCardinal($0, to: source) && material($0) == .water }),
            state.isBurning || state.heat > 0 {
-            action.writes.append((water, .empty))
-            action.thermalWrites.append((source, .zero))
+            // Burning/hot flammable + water creates steam at water position
+            action.writes.append((water, .steam))
+            action.moved.append(water)
             action.moved.append(source)
+            action.thermalWrites.append((water, ThermalCellState(heat: 200)))
+            if state.isBurning {
+                // Extinguish: clear heat and isBurning, but preserve burnElapsed for reignition
+                // Do NOT increment burnElapsed on the extinguish turn
+                state.isBurning = false
+                state.heat = 0
+                action.thermalWrites.append((source, state))
+            } else {
+                // Hot but not burning: clear heat
+                state.heat = 0
+                action.thermalWrites.append((source, state))
+            }
         } else if state.isBurning {
             state.burnElapsed = state.burnElapsed == .max ? .max : state.burnElapsed + 1
             spread(destinations: destinations, age: state.burnElapsed, canVisit: canVisit, material: material,
@@ -316,8 +346,13 @@ final class OilBehavior: FlammableBehavior, @unchecked Sendable {
         var reaction = super.resolve(source: source, current: current, destinations: secondary,
                                      direction: direction, maximumY: maximumY, canVisit: canVisit,
                                      material: material, moved: moved, secondary: [], thermal: thermal)
-        // Quenching and burnout consume this turn; otherwise reaction precedes movement.
-        if reaction.moved.contains(source) || reaction.writes.contains(where: { $0.0 == source }) {
+        // Water reaction (steam created at cardinal neighbor) and burnout (source becomes empty)
+        // consume this turn; otherwise reaction precedes movement.
+        let isWaterReaction = reaction.writes.contains { write in
+            secondary.contains(write.0) && write.1 == .steam
+        }
+        let isBurnout = reaction.writes.contains { $0.0 == source && $0.1 == .empty }
+        if reaction.moved.contains(source) || isBurnout || isWaterReaction {
             return reaction
         }
         let movement = Self.movement.resolve(
@@ -334,5 +369,58 @@ final class OilBehavior: FlammableBehavior, @unchecked Sendable {
         reaction.moved.append(contentsOf: movement.moved)
         reaction.thermalTransfers.append(contentsOf: movement.thermalTransfers)
         return reaction
+    }
+}
+
+// Steam rises upward through empty cells, spreads horizontally along ceilings,
+// cools by 1 heat per processed turn, and condenses into water (zero thermal
+// state) when its heat drops below 50 after cooling. Steam never displaces any
+// material except empty and never moves down. Condensation takes precedence
+// over movement; a condensing steam cell becomes water at its current position.
+final class SteamBehavior: MovingBehavior, @unchecked Sendable {
+    override var acts: Bool { true }
+    override var usesDirection: Bool { true }
+    override func canDisplace(_ material: Material, dy: Int) -> Bool {
+        // Steam rises through liquids like bubbles - can displace water and oil when moving upward
+        (material == .water || material == .oil) && dy > 0
+    }
+    override func offsets(direction: Int) -> [(Int, Int)] {
+        [(0, 1), (direction, 1), (-direction, 1), (direction, 0), (-direction, 0)]
+    }
+
+    override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
+                          direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
+                          material: (CellPosition) -> Material,
+                          moved: Set<CellPosition>,
+                          secondary: [CellPosition],
+                          thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        // 1. Cool first.
+        var state = thermal(source)
+        if state.heat > 0 { state.heat -= 1 }
+
+        // 2. Condensation takes precedence over movement.
+        if state.heat < 50 {
+            return MaterialAction(
+                writes: [(source, .water)],
+                moved: [source],
+                thermalWrites: [(source, .zero)]
+            )
+        }
+
+        // 3. Otherwise attempt movement (only into empty cells).
+        let movement = super.resolve(
+            source: source, current: current, destinations: destinations, direction: direction,
+            maximumY: maximumY, canVisit: canVisit, material: material, moved: moved,
+            secondary: secondary, thermal: thermal
+        )
+        var action = movement
+        if movement.moved.isEmpty {
+            action.thermalWrites.append((source, state))
+        } else {
+            for destination in movement.moved {
+                action.thermalWrites.append((destination, state))
+            }
+        }
+        return action
     }
 }

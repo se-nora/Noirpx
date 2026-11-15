@@ -22,10 +22,13 @@
 - Work in a task-specific branch, preferably in a separate Git worktree. Assign
   one owner per branch/worktree and communicate the scope, dependencies,
   interfaces, and intended files before parallel work begins.
-- Example, from the main worktree after confirming the branch name is unused:
+- All Noirpx worktrees live under `/Users/nora/Noirpx-worktrees`. Do not
+  create worktrees under `~/Desktop` or any other location.
+- Example, from the integration worktree after confirming the branch name is
+  unused:
 
   ```sh
-  git worktree add -b agent/my-task ../Noirpx-worktrees/my-task main
+  git worktree add -b agent/my-task /Users/nora/Noirpx-worktrees/my-task main
   ```
 
 - Do not check out `main` in multiple worktrees. Coordinate integration: only one

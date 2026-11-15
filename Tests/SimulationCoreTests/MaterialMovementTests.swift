@@ -88,7 +88,7 @@ final class MaterialMovementTests: XCTestCase {
         }
     }
 
-    func testUpwardSearchSkipsOccupiedCellsAndStopsAtBoundary() {
+    func testUpwardSearchStopsAtFirstOccupiedCell() {
         let source = CellPosition(x: 1, y: 4)
         let destination = CellPosition(x: 0, y: 0)
         let occupied: Set<CellPosition> = [
@@ -98,14 +98,17 @@ final class MaterialMovementTests: XCTestCase {
         func material(_ position: CellPosition) -> Material {
             occupied.contains(position) ? .solid : .empty
         }
-        XCTAssertEqual(MaterialMovement.displacedLiquidDestination(
+        // Upward search stops at first occupied cell (y=1), returns nil
+        XCTAssertNil(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 4,
             canVisit: { _ in true }, material: material
-        ), CellPosition(x: 0, y: 3))
+        ))
+        // Boundary at y=2 also returns nil
         XCTAssertNil(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 2,
             canVisit: { _ in true }, material: material
         ))
+        // canVisit boundary at y=2 returns nil
         XCTAssertNil(MaterialMovement.displacedLiquidDestination(
             source: source, destination: destination, direction: 1, maximumY: 4,
             canVisit: { $0.y <= 2 }, material: material

@@ -5,7 +5,7 @@ public struct SimulationSnapshot: Equatable, Sendable {
     public let randomState: UInt64
     public let chunks: [ChunkSnapshot]
 
-    public static let digestVersion: UInt64 = 3
+    public static let digestVersion: UInt64 = 4
 
     public func material(at position: CellPosition) throws -> Material {
         try SimulationGrid.validate(position)

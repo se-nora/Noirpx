@@ -15,8 +15,12 @@ final class SaveFormatValidationTests: XCTestCase {
         for version: UInt16 in [0, 2, .max] {
             assertThrows(replaced16(version, at: 4, in: bytes), SaveError.unknownFormatVersion(version))
         }
-        assertThrows(replaced16(2, at: 8, in: bytes), SaveError.unsupportedRulesVersion(2))
-        assertThrows(replaced16(2, at: 10, in: bytes), SaveError.unsupportedDigestVersion(2))
+        // rulesVersion is now 2, so version 1 and 3 should be rejected
+        assertThrows(replaced16(1, at: 8, in: bytes), SaveError.unsupportedRulesVersion(1))
+        assertThrows(replaced16(3, at: 8, in: bytes), SaveError.unsupportedRulesVersion(3))
+        // digestVersion is now 4, so version 3 and 5 should be rejected
+        assertThrows(replaced16(3, at: 10, in: bytes), SaveError.unsupportedDigestVersion(3))
+        assertThrows(replaced16(5, at: 10, in: bytes), SaveError.unsupportedDigestVersion(5))
         assertThrows(replaced16(1, at: 6, in: bytes), SaveError.unsupportedFlags(1))
         assertThrows(replaced16(.max, at: 6, in: bytes), SaveError.unsupportedFlags(.max))
     }
@@ -226,8 +230,8 @@ final class SaveFormatValidationTests: XCTestCase {
             (ChunkPosition(x: 1, y: 1), [CellEntry(localIndex: 0, material: .sand)])
         ])
         let matOffset = cellCountOffset + 4 + 4
-        mat[matOffset] = 7
-        assertThrows(mat, SaveError.unknownMaterial(7))
+        mat[matOffset] = 8
+        assertThrows(mat, SaveError.unknownMaterial(8))
 
         // empty material in sparse entry
         var empty = buildSaveWithChunks([
@@ -326,8 +330,8 @@ final class SaveFormatValidationTests: XCTestCase {
 
         // unknown command material
         var badMat = bytes
-        badMat[firstCommandOffset + 16] = 7 // material byte (tick(8) + x(4) + y(4) + material(1))
-        assertThrows(badMat, SaveError.unknownMaterial(7))
+        badMat[firstCommandOffset + 16] = 8 // material byte (tick(8) + x(4) + y(4) + material(1))
+        assertThrows(badMat, SaveError.unknownMaterial(8))
 
         // command position out of range
         var oobCmd = bytes

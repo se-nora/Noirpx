@@ -183,7 +183,11 @@ public struct Simulation {
             chunks[chunk] = SimulationChunk()
         }
         let previous = chunks[chunk]!.cells[index]
-        chunks[chunk]!.thermalStates[index] = material == .empty ? .zero : thermal
+        var newThermal = material == .empty ? .zero : thermal
+        if material == .steam && thermal == .zero {
+            newThermal = ThermalCellState(heat: 200)
+        }
+        chunks[chunk]!.thermalStates[index] = newThermal
         guard previous != material else { return }
         chunks[chunk]!.cells[index] = material
         if previous == .empty {

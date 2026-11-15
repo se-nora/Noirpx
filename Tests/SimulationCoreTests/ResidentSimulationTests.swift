@@ -158,9 +158,10 @@ final class ResidentSimulationTests: XCTestCase {
         try place(.fire, 0, 0, in: &simulation)
         try place(.water, 1, 0, in: &simulation)
         try simulation.advance(focus: focus) { true }
-        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .empty)
-        XCTAssertEqual(try cell(simulation.snapshot, 1, 0), .empty)
-        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+        // Fire + water creates steam at water position; fire remains
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .fire)
+        XCTAssertEqual(try cell(simulation.snapshot, 1, 0), .steam)
+        XCTAssertFalse(simulation.snapshot.chunks.isEmpty)
     }
 
     func testFireReactsAcrossNegativeChunkBoundary() throws {
@@ -168,7 +169,10 @@ final class ResidentSimulationTests: XCTestCase {
         try place(.fire, -1, 0, in: &simulation)
         try place(.water, 0, 0, in: &simulation)
         try simulation.advance(focus: focus) { true }
-        XCTAssertTrue(simulation.snapshot.chunks.isEmpty)
+        // Fire + water creates steam at water position; fire remains
+        XCTAssertEqual(try cell(simulation.snapshot, -1, 0), .fire)
+        XCTAssertEqual(try cell(simulation.snapshot, 0, 0), .steam)
+        XCTAssertFalse(simulation.snapshot.chunks.isEmpty)
     }
 
     func testWorldBottomStopsMovementAndSnapshotsDescribeRemoval() throws {

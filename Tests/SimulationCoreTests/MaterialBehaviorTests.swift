@@ -12,6 +12,7 @@ final class MaterialBehaviorTests: XCTestCase {
         XCTAssertTrue(MaterialBehavior.forMaterial(.water) is WaterBehavior)
         XCTAssertTrue(MaterialBehavior.forMaterial(.fire) is FireBehavior)
         XCTAssertTrue(MaterialBehavior.forMaterial(.oil) is OilBehavior)
+        XCTAssertTrue(MaterialBehavior.forMaterial(.steam) is SteamBehavior)
         for material in Material.allCases {
             let behavior = MaterialBehavior.forMaterial(material)
             XCTAssertTrue(behavior === MaterialBehavior.forMaterial(material))
@@ -75,8 +76,12 @@ final class MaterialBehaviorTests: XCTestCase {
         let action = fire.resolve(source: origin, current: .fire, destinations: [pitch, water],
                                   direction: 0, maximumY: 10, canVisit: { _ in true },
                                   material: { world[$0] ?? .empty }, moved: [])
-        XCTAssertEqual(action.writes.map(\.0), [water, origin])
-        XCTAssertEqual(action.writes.map(\.1), [.empty, .empty])
-        XCTAssertTrue(action.moved.isEmpty)
+        // Fire creates steam at water position (in writes), fire ages but does not extinguish
+        // (thermal state in thermalWrites).
+        XCTAssertEqual(action.writes.map(\.1), [Material.steam])
+        XCTAssertEqual(action.moved, [water])
+        let thermalWrites = action.thermalWrites.map(\.0)
+        XCTAssertTrue(thermalWrites.contains(origin))
+        XCTAssertTrue(thermalWrites.contains(water))
     }
 }

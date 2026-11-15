@@ -111,22 +111,41 @@ final class OilTests: XCTestCase {
         XCTAssertEqual(oils[0].burnElapsed, 6)
     }
 
-    func testResidentQuenchedOilWakesForMovementAfterSkippedBatch() throws {
+    func testResidentOilWaterCreatesSteamAndExtinguishesOil() throws {
         var r = try ResidentSimulation(seed: 0, chunkWidth: 16)
+        // Add solid at (15,1) to block diagonal down-left movement when fire is removed
         for (m, position) in [(Material.fire, p(15, 2)), (.oil, p(16, 2)),
-                              (.water, p(17, 2)), (.solid, p(16, 1))] {
+                              (.water, p(17, 2)), (.solid, p(16, 1)), (.solid, p(15, 1))] {
             try r.enqueue(.init(tick: 1, position: position, material: m))
         }
-        try r.advance(focus: p(15, 2), batchSize: 1) { false }
+        try r.advance(focus: p(16, 2), batchSize: 1) { false }
         try r.setThermalState(.init(fireElapsed: 1), at: p(15, 2))
         try r.setThermalState(.init(heat: 40), at: p(16, 2))
-        try r.advance(focus: p(15, 2), batchSize: 1) { true }
-        XCTAssertEqual(try r.snapshot.material(at: p(17, 2)), .empty)
-        XCTAssertEqual(try r.snapshot.thermalState(at: p(16, 2)), .zero)
+        // Process oil chunk (focus at oil) so oil reacts with water - only one batch
+        var batches = 0
+        try r.advance(focus: p(16, 2), batchSize: 1) { 
+            batches += 1
+            return batches == 1 
+        }
+        // Oil + water creates steam at water position
+        XCTAssertEqual(try r.snapshot.material(at: p(17, 2)), .steam)
+        // Oil is extinguished (thermal zero, burnElapsed preserved)
+        let oilThermal = try r.snapshot.thermalState(at: p(16, 2))
+        XCTAssertEqual(oilThermal.heat, 0)
+        XCTAssertFalse(oilThermal.isBurning)
         XCTAssertEqual(try r.snapshot.material(at: p(16, 2)), .oil)
+        // Steam has heat 200
+        XCTAssertEqual(try r.snapshot.thermalState(at: p(17, 2)).heat, 200)
+        // Remove fire immediately so it can't re-heat the oil on subsequent ticks
+        // We're at tick 2 after the second advance; next advance will be tick 3.
+        // Enqueue fire removal for tick 3 so it's applied before any chunks process.
         try r.enqueue(.init(tick: 3, position: p(15, 2), material: .empty))
-        try r.advance(focus: p(16, 2), batchSize: 1) { true }
-        XCTAssertEqual(try r.snapshot.material(at: p(16, 2)), .empty)
+        // Next tick: process one batch for steam cooling
+        batches = 0
+        try r.advance(focus: p(16, 2), batchSize: 1) { batches += 1; return batches == 1 }
+        // Oil remains (blocked by solid at y=1 and (15,1), can't move)
+        XCTAssertEqual(try r.snapshot.material(at: p(16, 2)), .oil)
+        XCTAssertEqual(try r.snapshot.thermalState(at: p(16, 2)), .zero)
         XCTAssertEqual(r.snapshot.chunks.flatMap(\.cells).filter { $0 == .oil }.count, 1)
     }
 
@@ -154,7 +173,7 @@ final class OilTests: XCTestCase {
         XCTAssertEqual(try run(), try run())
     }
 
-    func testBurningPitchIgnitesOilAndTargetWaterQuenches() throws {
+    func testBurningPitchIgnitesOilAndTargetWaterCreatesSteam() throws {
         for withWater in [false, true] {
             var s = Simulation(seed: 0)
             for (material, position) in [(Material.pitch, p(0)), (.oil, p(1)),
@@ -166,8 +185,16 @@ final class OilTests: XCTestCase {
             try s.setThermalState(.init(heat: 100, isBurning: true, burnElapsed: 1), at: p(0))
             try s.advance()
             if withWater {
-                XCTAssertEqual(try s.snapshot.thermalState(at: p(1)), .zero)
-                XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .empty)
+                // Oil + water creates steam at water position
+                XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .steam)
+                // Oil is extinguished (thermal zero, burnElapsed preserved)
+                let oilThermal = try s.snapshot.thermalState(at: p(1))
+                XCTAssertEqual(oilThermal.heat, 0)
+                XCTAssertFalse(oilThermal.isBurning)
+                // burnElapsed preserved (was 0 when ignited, now preserved as 0)
+                XCTAssertEqual(oilThermal.burnElapsed, 0)
+                // Steam has heat 200
+                XCTAssertEqual(try s.snapshot.thermalState(at: p(1, 1)).heat, 200)
             } else {
                 XCTAssertEqual(try s.snapshot.thermalState(at: p(1)).heat, 40)
                 try s.advance()
@@ -176,7 +203,7 @@ final class OilTests: XCTestCase {
         }
     }
 
-    func testOilQuenchesBeforeMovementAndColdOilDoesNotConsumeWater() throws {
+    func testOilWaterCreatesSteamAndExtinguishesOil() throws {
         var s = Simulation(seed: 0)
         for (m, position) in [(Material.oil, p(0)), (.water, p(0, 1))] {
             try s.enqueue(.init(tick: 1, position: position, material: m))
@@ -184,17 +211,26 @@ final class OilTests: XCTestCase {
         try s.advance(activeChunks: frozen)
         try s.setThermalState(.init(heat: 80, isBurning: true), at: p(0))
         try s.advance()
+        // Oil + water creates steam at water position
+        XCTAssertEqual(try s.snapshot.material(at: p(0, 1)), .steam)
+        // Oil is extinguished (thermal zero, burnElapsed preserved)
+        let oilThermal = try s.snapshot.thermalState(at: p(0))
+        XCTAssertEqual(oilThermal.heat, 0)
+        XCTAssertFalse(oilThermal.isBurning)
         XCTAssertEqual(try s.snapshot.material(at: p(0)), .oil)
-        XCTAssertEqual(try s.snapshot.material(at: p(0, 1)), .empty)
-        XCTAssertEqual(try s.snapshot.thermalState(at: p(0)), .zero)
+        // Steam has heat 200
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0, 1)).heat, 200)
         try s.advance()
+        // Oil flows down (it's a liquid), steam cools/condenses
         XCTAssertEqual(try s.snapshot.material(at: p(0, -1)), .oil)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0, -1)), .zero)
 
         let behavior = MaterialBehavior.forMaterial(.oil)
         let action = behavior.resolve(source: p(0), current: .oil, destinations: [],
                                       direction: 1, maximumY: 10, canVisit: { _ in true },
                                       material: { $0 == self.p(1) ? .water : .empty }, moved: [],
                                       secondary: [p(1)])
+        // Cold oil doesn't react with water
         XCTAssertTrue(action.writes.isEmpty)
     }
 

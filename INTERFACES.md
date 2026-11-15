@@ -968,3 +968,19 @@ API: `CaveWorldGenerator(seed:width:height:)`, `.generate() -> CaveWorld`, and
 in chunked 512-cell batches (no giant intermediate array). `CaveWorld` exposes
 `cells`, `spawn`, `goal`, `extents`, and `materialCounts`. Same seed yields an
 identical `CaveWorld`.
+
+---
+
+## APPENDED: Enemy material reactions (agent/enemy-material-reactions)
+
+`ChimeWarden` reacts to surrounding materials across its 5x6 area and feet:
+- Water: quenches burning state, halves patrol step rate.
+- Oil / Ice: makes ground slippery, doubling step distance (up to 2 cells).
+- Hazards (`fire`, `lava`, `acid`): deals shield damage with 30-tick damage cooldown.
+  - Fire / burning flammables: 1 shield damage, ignites warden.
+  - Lava: 2 shield damage, ignites warden.
+  - Acid: 2 shield damage, does not ignite.
+  - Burning warden remains on fire until quenched by water.
+  - Taking damage spawns 3 blood cells at warden's feet.
+  - Shield zero removes warden from run.
+

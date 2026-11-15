@@ -86,7 +86,12 @@ public struct BeaconRun {
         guard outcome == .playing else { return }
         try simulation.advance(activeChunks: activeChunks)
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
-        warden.advance(bounds: course.patrolX) { simulation.materialForGameplay(at: $0) }
+        let hazard = warden.advance(bounds: course.patrolX,
+                                    burningAt: { (try? simulation.thermalState(at: $0).isBurning) ?? false },
+                                    materialAt: { simulation.materialForGameplay(at: $0) })
+        if hazard != nil {
+            try spawnBlood(at: warden.bloodCells())
+        }
         if horizontal != 0 { facing = horizontal.signum() }
         if pulseCooldown > 0 { pulseCooldown -= 1 }
         if damageCooldown > 0 {
@@ -238,6 +243,15 @@ public struct BeaconRun {
             }
         }
         return (flash, sand)
+    }
+
+    /// Writes the warden's blood pool through the ordinary material command path.
+    private mutating func spawnBlood(at cells: [CellPosition]) throws {
+        let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { throw SimulationError.tickOverflow }
+        for cell in cells {
+            try simulation.enqueue(.init(tick: tick, position: cell, material: .blood))
+        }
     }
 
     private func overlaps(_ marker: CellPosition) -> Bool {

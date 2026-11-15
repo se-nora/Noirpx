@@ -320,6 +320,7 @@ private struct HostView: View {
                 if let source = model.challenge?.lastDamageSource {
                     Text("Hit: \(source.rawValue)").foregroundStyle(.orange)
                 }
+                Text(HUDGuideText.warden(model.challenge?.warden))
                 Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
                         "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
                 Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
@@ -386,6 +387,7 @@ private struct HostView: View {
                         Text("Lamp oil brush: flowing oil catches fire; water quenches hot oil.")
                         Text("Fire and burning oil hurt inside you; orange burning pitch hurts on contact, even beside it. Black/white marks show contact cells. Water quenches flames. All hits share the shield.")
                         Text("Jump the red vent or paint water at its base. The Chime Warden warns in amber and hurts in red.")
+                        Text("The Chime Warden burns in fire and lava, corrodes in acid, douses itself in water, and slides on oil and ice. It leaves blood where it is hurt.")
                         Text("macOS: A/D or arrows move, W/up/space jumps, F pulses. iOS: use the on-screen controls.")
                     }
                 }

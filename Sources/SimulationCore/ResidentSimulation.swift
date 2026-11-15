@@ -224,7 +224,10 @@ public struct ResidentSimulation {
                               thermal: ThermalCellState = .zero) {
         let (chunk, index) = Self.locate(position, width: chunkWidth)
         let previous = chunks[chunk]?[index] ?? .empty
-        let newThermal = material == .empty ? ThermalCellState.zero : thermal
+        var newThermal = material == .empty ? ThermalCellState.zero : thermal
+        if material == .steam && thermal == .zero {
+            newThermal = ThermalCellState(heat: 200)
+        }
         let oldThermal = thermalChunks[chunk]?[index] ?? .zero
         guard previous != material || oldThermal != newThermal else { return }
         if chunks[chunk] == nil {

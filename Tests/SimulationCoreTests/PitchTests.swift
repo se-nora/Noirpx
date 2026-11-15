@@ -6,8 +6,8 @@ final class PitchTests: XCTestCase {
     func p(_ x: Int, _ y: Int = 0) -> CellPosition { .init(x: x, y: y) }
 
     func testIdentifiersThresholdAndReplay() throws {
-        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...6))
-        XCTAssertNil(Material(rawValue: 7))
+        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...7))
+        XCTAssertNotNil(Material(rawValue: 7))
         XCTAssertTrue(Material.pitch.blocksCharacter)
         func run() throws -> [UInt64] {
             var s = Simulation(seed: 42)
@@ -78,11 +78,17 @@ final class PitchTests: XCTestCase {
         try s.enqueue(.init(tick: 2, position: p(0, 1), material: .water))
         try s.advance()
         XCTAssertEqual(try s.snapshot.material(at: p(0)), .pitch)
-        XCTAssertEqual(try s.snapshot.thermalState(at: p(0)), .zero)
-        XCTAssertEqual(try s.snapshot.material(at: p(0, 1)), .empty)
+        // Pitch is extinguished but preserves burnElapsed
+        let pitchThermal = try s.snapshot.thermalState(at: p(0))
+        XCTAssertEqual(pitchThermal.heat, 0)
+        XCTAssertFalse(pitchThermal.isBurning)
+        XCTAssertEqual(pitchThermal.burnElapsed, 63)
+        // Water becomes steam
+        XCTAssertEqual(try s.snapshot.material(at: p(0, 1)), .steam)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(0, 1)).heat, 200)
     }
 
-    func testHeatingQuenchesAdjacentWaterBeforePitchIsSkipped() throws {
+    func testHeatingCreatesSteamAndExtinguishesPitch() throws {
         var deterministic = Simulation(seed: 0)
         var resident = try ResidentSimulation(seed: 0, chunkWidth: 16)
         for (material, position) in [(Material.fire, p(0)), (.pitch, p(1))] {
@@ -103,34 +109,48 @@ final class PitchTests: XCTestCase {
         try resident.advance(focus: focus) { true }
         for snapshot in [deterministic.snapshot.material, resident.snapshot.material] {
             XCTAssertEqual(try snapshot(p(1)), .pitch)
-            XCTAssertEqual(try snapshot(p(1, 1)), .empty)
+            // Water becomes steam
+            XCTAssertEqual(try snapshot(p(1, 1)), .steam)
             XCTAssertEqual(try snapshot(p(2)), .empty)
             XCTAssertEqual(try snapshot(p(0)), .fire)
         }
         for state in [deterministic.snapshot.thermalState, resident.snapshot.thermalState] {
-            XCTAssertEqual(try state(p(1)), .zero)
+            // Pitch is extinguished, burnElapsed preserved (was 0)
+            let pitchThermal = try state(p(1))
+            XCTAssertEqual(pitchThermal.heat, 0)
+            XCTAssertFalse(pitchThermal.isBurning)
+            XCTAssertEqual(pitchThermal.burnElapsed, 0)
+            // Steam has heat 200
+            XCTAssertEqual(try state(p(1, 1)).heat, 200)
         }
         try deterministic.advance()
         try resident.advance(focus: focus) { true }
+        // Pitch remains extinguished, continues heating from fire
         XCTAssertEqual(try deterministic.snapshot.thermalState(at: p(1)).heat, 40)
         XCTAssertEqual(try resident.snapshot.thermalState(at: p(1)).heat, 40)
         XCTAssertFalse(try deterministic.snapshot.thermalState(at: p(1)).isBurning)
         XCTAssertFalse(try resident.snapshot.thermalState(at: p(1)).isBurning)
     }
 
-    func testColdPitchQuenchesOnFirstHeatAttempt() throws {
+    func testColdPitchCreatesSteamAndExtinguishesOnWaterContact() throws {
         var s = Simulation(seed: 0)
         try s.enqueue(.init(tick: 1, position: p(0), material: .fire))
         try s.enqueue(.init(tick: 1, position: p(1), material: .pitch))
         try s.advance()
         try s.enqueue(.init(tick: 2, position: p(1, 1), material: .water))
         try s.advance()
-        XCTAssertEqual(try s.snapshot.thermalState(at: p(1)), .zero)
-        XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .empty)
+        // Pitch is extinguished (heat=0, not burning), burnElapsed preserved (0)
+        let pitchThermal = try s.snapshot.thermalState(at: p(1))
+        XCTAssertEqual(pitchThermal.heat, 0)
+        XCTAssertFalse(pitchThermal.isBurning)
+        XCTAssertEqual(pitchThermal.burnElapsed, 0)
+        // Water becomes steam
+        XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .steam)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(1, 1)).heat, 200)
         XCTAssertEqual(try s.snapshot.material(at: p(0)), .fire)
     }
 
-    func testHeatQuenchConsumesOneWaterAndClaimsOnlyOneTarget() throws {
+    func testHeatCreatesSteamAndExtinguishesOneTarget() throws {
         for source in [Material.fire, .pitch] {
             var s = Simulation(seed: 0)
             let frozen = ChunkRegion(x: 10...10, y: 10...10)
@@ -146,15 +166,24 @@ final class PitchTests: XCTestCase {
             }
             try s.setThermalState(.init(heat: 40), at: p(1))
             try s.advance()
-            XCTAssertEqual(try s.snapshot.thermalState(at: p(1)), .zero)
-            XCTAssertEqual(try s.snapshot.thermalState(at: p(0, 1)), .zero)
-            XCTAssertEqual(try s.snapshot.material(at: p(2)), .empty)
+            // First water (at p(1,1)) becomes steam, pitch at p(1) is extinguished
+            let pitch1Thermal = try s.snapshot.thermalState(at: p(1))
+            XCTAssertEqual(pitch1Thermal.heat, 0)
+            XCTAssertFalse(pitch1Thermal.isBurning)
+            // Second pitch at p(0,1) also extinguished
+            let pitch2Thermal = try s.snapshot.thermalState(at: p(0, 1))
+            XCTAssertEqual(pitch2Thermal.heat, 0)
+            XCTAssertFalse(pitch2Thermal.isBurning)
+            // Water at p(2) becomes steam (first in priority order)
+            XCTAssertEqual(try s.snapshot.material(at: p(2)), .steam)
+            XCTAssertEqual(try s.snapshot.thermalState(at: p(2)).heat, 200)
+            // Water at p(1,1) remains water (only one water reacted)
             XCTAssertEqual(try s.snapshot.material(at: p(1, 1)), .water)
             XCTAssertEqual(try s.snapshot.material(at: p(0)), source)
         }
     }
 
-    func testHeatQuenchCannotSeeWaterAcrossFrozenBoundary() throws {
+    func testHeatCreatesSteamCannotSeeWaterAcrossFrozenBoundary() throws {
         var s = Simulation(seed: 0)
         for (material, position) in [(Material.fire, p(62)), (.pitch, p(63)), (.water, p(64))] {
             try s.enqueue(.init(tick: 1, position: position, material: material))
@@ -165,8 +194,11 @@ final class PitchTests: XCTestCase {
         XCTAssertEqual(try s.snapshot.thermalState(at: p(63)).heat, 40)
         XCTAssertEqual(try s.snapshot.material(at: p(64)), .water)
         try s.advance()
-        XCTAssertEqual(try s.snapshot.thermalState(at: p(63)), .zero)
-        XCTAssertEqual(try s.snapshot.material(at: p(64)), .empty)
+        // Pitch is extinguished, water becomes steam
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(63)).heat, 0)
+        XCTAssertFalse(try s.snapshot.thermalState(at: p(63)).isBurning)
+        XCTAssertEqual(try s.snapshot.material(at: p(64)), .steam)
+        XCTAssertEqual(try s.snapshot.thermalState(at: p(64)).heat, 200)
     }
 
     func testQuenchedTargetCannotBeClaimedBySecondFlame() throws {
@@ -190,7 +222,7 @@ final class PitchTests: XCTestCase {
             XCTAssertEqual(try state(p(1)), .zero)
         }
         for material in [deterministic.snapshot.material, resident.snapshot.material] {
-            XCTAssertEqual(try material(p(1, 1)), .empty)
+            XCTAssertEqual(try material(p(1, 1)), .steam)
             XCTAssertEqual(try material(p(0)), .fire)
             XCTAssertEqual(try material(p(2)), .fire)
         }
@@ -218,7 +250,7 @@ final class PitchTests: XCTestCase {
         try resident.advance(focus: p(15, 2), batchSize: 8) { true }
         for material in [deterministic.snapshot.material, resident.snapshot.material] {
             XCTAssertEqual(try material(p(17, 1)), .empty)
-            XCTAssertEqual(try material(p(16, 1)), .empty)
+            XCTAssertEqual(try material(p(16, 1)), .steam)
         }
         for state in [deterministic.snapshot.thermalState, resident.snapshot.thermalState] {
             XCTAssertEqual(try state(p(16, 2)), .zero)
@@ -316,7 +348,7 @@ final class PitchTests: XCTestCase {
             }
             XCTAssertEqual(report.chunksProcessed, 1)
             XCTAssertEqual(try s.snapshot.thermalState(at: p(pitchX)), .zero)
-            XCTAssertEqual(try s.snapshot.material(at: p(pitchX, 1)), .empty)
+            XCTAssertEqual(try s.snapshot.material(at: p(pitchX, 1)), .steam)
             XCTAssertEqual(try s.snapshot.material(at: p(fireX)), .fire)
             try s.advance(focus: p(pitchX), batchSize: 1) { true }
             let after = try s.snapshot.thermalState(at: p(pitchX))
@@ -337,7 +369,7 @@ final class PitchTests: XCTestCase {
             let report = try s.advance(focus: fireFirst ? p(15) : p(16), batchSize: 1) { true }
             XCTAssertEqual(report.batchesProcessed, 2)
             XCTAssertEqual(try s.snapshot.thermalState(at: p(16)), .zero)
-            XCTAssertEqual(try s.snapshot.material(at: p(16, 1)), .empty)
+            XCTAssertEqual(try s.snapshot.material(at: p(16, 1)), .steam)
             XCTAssertEqual(try s.snapshot.material(at: p(15)), .fire)
         }
     }

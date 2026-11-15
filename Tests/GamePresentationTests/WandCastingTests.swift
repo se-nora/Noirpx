@@ -49,7 +49,11 @@ final class WandCastingTests: XCTestCase {
         material = WandMaterials.next(after: material)
         XCTAssertEqual(material, .fire)
         material = WandMaterials.next(after: material)
+        XCTAssertEqual(material, .steam)
+        material = WandMaterials.next(after: material)
         XCTAssertEqual(material, .sand)
+        material = WandMaterials.previous(before: material)
+        XCTAssertEqual(material, .steam)
         material = WandMaterials.previous(before: material)
         XCTAssertEqual(material, .fire)
     }

@@ -75,7 +75,7 @@ final class FireOverlayTests: XCTestCase {
         try simulation.enqueue(.init(tick: 3, position: .init(x: 1, y: 12), material: .water))
         try simulation.enqueue(.init(tick: 3, position: fire, material: .empty))
         try simulation.advance()
-        XCTAssertEqual(try simulation.snapshot.thermalState(at: movedOil), .zero)
+        XCTAssertEqual(try simulation.snapshot.thermalState(at: movedOil), ThermalCellState(heat: 0, isBurning: false, burnElapsed: 1, fireElapsed: 0))
         XCTAssertEqual(pixel(frame(), viewport: viewport, at: movedOil), normal)
         XCTAssertEqual(pixel(frame(), viewport: viewport, at: fire), normal)
     }

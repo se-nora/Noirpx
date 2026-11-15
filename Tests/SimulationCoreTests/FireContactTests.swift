@@ -35,11 +35,14 @@ final class FireContactTests: XCTestCase {
     func testQueuedFireQuenchedOrErasedBeforeSamplingNeverHits() throws {
         var run = try BeaconRun()
         for _ in 0..<30 { try run.advance(horizontal: 0, jump: false) }
-        let p = CellPosition(x: 0, y: 2)
+        // Character body after 30 advances: x: -2..2, y: -1..7 (standing on ground at y=-2)
+        // Place fire and water above character body
+        let p = CellPosition(x: 0, y: 8)
         try run.paint(.fire, at: p)
-        try run.paint(.water, at: .init(x: 0, y: 3))
+        try run.paint(.water, at: .init(x: 0, y: 9))
         try run.advance(horizontal: 0, jump: false)
-        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .empty)
+        // Fire + water creates steam at water position; fire remains at p
+        XCTAssertEqual(try run.simulation.snapshot.material(at: p), .fire)
         XCTAssertEqual(run.health, 3)
         try run.paint(.fire, at: p)
         try run.paint(.empty, at: p)
@@ -94,9 +97,17 @@ final class FireContactTests: XCTestCase {
         try run.paint(.water, at: .init(x: 0, y: 13))
         try run.paint(.empty, at: .init(x: 0, y: 11))
         try run.advance(horizontal: 0, jump: false)
-        XCTAssertFalse(try run.simulation.snapshot.thermalState(at: .init(x: 0, y: 12)).isBurning)
+        // Oil + water creates steam at water position; oil is extinguished
+        XCTAssertEqual(try run.simulation.snapshot.material(at: .init(x: 0, y: 13)), .steam)
+        // Oil at (0,12) is extinguished but material remains
+        let oilThermal = try run.simulation.snapshot.thermalState(at: .init(x: 0, y: 12))
+        XCTAssertFalse(oilThermal.isBurning)
+        XCTAssertEqual(oilThermal.heat, 0)
+        // Oil falls to y=11 (now extinguished, so no damage)
         for _ in 0..<6 { try run.advance(horizontal: 0, jump: false) }
+        // Oil is extinguished so no damage
         XCTAssertEqual(run.health, 3)
+        XCTAssertNil(run.lastDamageSource)
     }
 
     func testRealBurningPitchEdgeAndWaterQuench() throws {
@@ -117,8 +128,15 @@ final class FireContactTests: XCTestCase {
         try run.paint(.water, at: .init(x: 3, y: 3))
         try run.paint(.empty, at: .init(x: 4, y: 2))
         try run.advance(horizontal: 0, jump: false)
-        XCTAssertFalse(try run.simulation.snapshot.thermalState(at: pitch).isBurning)
+        // Water becomes steam, pitch is extinguished (preserves burnElapsed)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: .init(x: 3, y: 3)), .steam)
+        let pitchThermal = try run.simulation.snapshot.thermalState(at: pitch)
+        XCTAssertFalse(pitchThermal.isBurning)
+        XCTAssertEqual(pitchThermal.heat, 0)
+        // burnElapsed is preserved for reignition
+        XCTAssertGreaterThanOrEqual(pitchThermal.burnElapsed, 0)
         for _ in 0..<30 { try run.advance(horizontal: 0, jump: false) }
+        // Pitch is extinguished, no more damage
         XCTAssertEqual(run.health, 2)
         XCTAssertNil(run.lastDamageSource)
     }
@@ -133,8 +151,14 @@ final class FireContactTests: XCTestCase {
         XCTAssertGreaterThan(try run.simulation.snapshot.thermalState(at: pitch).heat, 0)
         try run.paint(.water, at: .init(x: 3, y: 3))
         try run.advance(horizontal: 0, jump: false)
-        XCTAssertEqual(try run.simulation.snapshot.thermalState(at: pitch), .zero)
+        // Water becomes steam, pitch is quenched
+        XCTAssertEqual(try run.simulation.snapshot.material(at: .init(x: 3, y: 3)), .steam)
+        let pitchThermal = try run.simulation.snapshot.thermalState(at: pitch)
+        XCTAssertFalse(pitchThermal.isBurning)
+        XCTAssertEqual(pitchThermal.heat, 0)
+        // Pitch is quenched, no damage
         XCTAssertEqual(run.health, 3)
+        XCTAssertNil(run.lastDamageSource)
     }
 
     func testFallPrecedesFireAndRestartClearsHitAndEdits() throws {

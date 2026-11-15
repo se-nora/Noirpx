@@ -138,8 +138,9 @@ final class BeaconHazardTests: XCTestCase {
         try run.paint(.water, at: water)
         try run.paint(.fire, at: fire)
         try run.advance(horizontal: 0, jump: false)
-        XCTAssertEqual(try run.simulation.snapshot.material(at: water), .empty)
-        XCTAssertEqual(try run.simulation.snapshot.material(at: fire), .empty)
+        // Fire + water creates steam at water position; fire remains and ages
+        XCTAssertEqual(try run.simulation.snapshot.material(at: water), .steam)
+        XCTAssertEqual(try run.simulation.snapshot.material(at: fire), .fire)
         XCTAssertEqual(run.ventCooling, 0)
 
         try run.paint(.water, at: water)
@@ -147,6 +148,7 @@ final class BeaconHazardTests: XCTestCase {
             try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
             XCTAssertEqual(run.ventCooling, BeaconRun.ventCoolingTicks)
         }
+        // Steam cools and condenses to water
         XCTAssertEqual(try run.simulation.snapshot.material(at: water), .water)
     }
 

@@ -15,6 +15,8 @@ enum MaterialMovement {
             let above = CellPosition(x: destination.x, y: y)
             guard canVisit(above) else { return nil }
             if available(above) { return above }
+            // Blocked by solid/liquid material - cannot displace through it
+            if material(above) != .empty { return nil }
         }
         return nil
     }

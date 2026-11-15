@@ -125,7 +125,15 @@ final class DiagonalFireTests: XCTestCase {
                                           material: { withEdge[$0] ?? .empty }, moved: [],
                                           secondary: reaction + [corner, edge],
                                           thermal: { $0 == source ? self.ready(flame) : .zero })
-            XCTAssertEqual(quench.writes.first?.0, edge)
+            // New behavior: water at edge becomes steam, flame creates steam instead of spreading
+            XCTAssertEqual(quench.writes.map(\.1), [Material.steam])
+            if flame == .fire {
+                XCTAssertEqual(quench.moved, [edge])
+            } else {
+                XCTAssertEqual(quench.moved, [edge, source])
+            }
+            // Fire/pitch/oil: water interaction takes priority, no spread to pitch target
+            // Oil's movement destinations is empty in this test setup
             XCTAssertFalse(quench.moved.contains(target))
         }
         let pitch = MaterialBehavior.pitch
@@ -136,8 +144,9 @@ final class DiagonalFireTests: XCTestCase {
         XCTAssertEqual(heat.thermalWrites.first?.1.heat, 40)
         let quench = pitch.receiveHeat(at: target, state: .zero, amount: 40, canVisit: { _ in true },
                                        material: { $0 == diagonalWater || $0 == cardinalWater ? .water : .empty })
-        XCTAssertEqual(quench.writes.first?.0, cardinalWater)
-        XCTAssertEqual(quench.thermalWrites.first?.1, .zero)
+        // New behavior: water becomes steam (heat 200), not empty
+        XCTAssertEqual(quench.writes.first?.1, Material.steam)
+        XCTAssertEqual(quench.thermalWrites.first?.1.heat, 200)
     }
 
     func testDiagonalIgnitionFrozenBoundaryAndReplay() throws {

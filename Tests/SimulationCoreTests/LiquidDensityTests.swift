@@ -66,7 +66,7 @@ final class LiquidDensityTests: XCTestCase {
         }
     }
 
-    func testWaterQuenchesBeforeDisplacementWhenOilActsFirst() throws {
+    func testOilWaterCreatesSteamAndExtinguishesOil() throws {
         for state in [ThermalCellState(heat: 20), ThermalCellState(heat: 80, isBurning: true)] {
             var (s, r) = try setup([(.water, 0, 1), (.oil, 0, 0),
                                     (.solid, -1, 0), (.solid, 1, 0), (.solid, 0, -1)])
@@ -75,11 +75,16 @@ final class LiquidDensityTests: XCTestCase {
             try s.advance()
             try r.advance(focus: p(0, 0), batchSize: 8) { true }
             for material in [s.snapshot.material, r.snapshot.material] {
-                XCTAssertEqual(try material(p(0, 1)), .empty)
+                // Oil + water creates steam at water position
+                XCTAssertEqual(try material(p(0, 1)), .steam)
+                // Oil remains but is extinguished (material stays oil, thermal is zero)
                 XCTAssertEqual(try material(p(0, 0)), .oil)
             }
             for thermal in [s.snapshot.thermalState, r.snapshot.thermalState] {
+                // Oil is extinguished - thermal state is zero
                 XCTAssertEqual(try thermal(p(0, 0)), .zero)
+                // Steam has heat 200
+                XCTAssertEqual(try thermal(p(0, 1)).heat, 200)
             }
         }
     }
@@ -91,14 +96,27 @@ final class LiquidDensityTests: XCTestCase {
         let burning = ThermalCellState(heat: 80, isBurning: true, burnElapsed: 4)
         try r.setThermalState(burning, at: p(0, 15))
         let before = r.snapshot
-        try r.advance(focus: p(0, 16), batchSize: 1) { true }
-        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .water)
-        XCTAssertEqual(try r.snapshot.material(at: p(0, 16)), .oil)
-        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)), burning)
+        // Focus on oil so its chunk is processed first
+        try r.advance(focus: p(0, 15), batchSize: 1) { true }
+        // Oil + water creates steam at water position (y=16)
+        XCTAssertEqual(try r.snapshot.material(at: p(0, 16)), .steam)
+        // Oil at y=15 remains but is extinguished (thermal zero, burnElapsed preserved)
+        let oilThermal = try r.snapshot.thermalState(at: p(0, 15))
+        XCTAssertEqual(oilThermal.heat, 0)
+        XCTAssertFalse(oilThermal.isBurning)
+        // burnElapsed is preserved for reignition
+        XCTAssertEqual(oilThermal.burnElapsed, 4)
+        // Steam has heat 200
+        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)).heat, 200)
         XCTAssertEqual(try before.thermalState(at: p(0, 15)), burning)
-        try r.advance(focus: p(0, 16), batchSize: 1) { true }
-        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .empty)
-        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)), .zero)
+        try r.advance(focus: p(0, 15), batchSize: 1) { true }
+        // Steam cools and eventually condenses; oil stays at y=15 (blocked by solids below)
+        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .oil)
+        // Oil remains extinguished but preserves burnElapsed for reignition
+        let oilThermal2 = try r.snapshot.thermalState(at: p(0, 15))
+        XCTAssertEqual(oilThermal2.heat, 0)
+        XCTAssertFalse(oilThermal2.isBurning)
+        XCTAssertEqual(oilThermal2.burnElapsed, 4)
     }
 
     func testResidentDeferredOilChunkSeesDisplacementOnNextTick() throws {
@@ -108,16 +126,28 @@ final class LiquidDensityTests: XCTestCase {
         let burning = ThermalCellState(heat: 80, isBurning: true, burnElapsed: 4)
         try r.setThermalState(burning, at: p(0, 15))
         var checks = 0
-        let report = try r.advance(focus: p(0, 16), batchSize: 1) {
+        // Focus on oil so its chunk is processed first
+        let report = try r.advance(focus: p(0, 15), batchSize: 1) {
             checks += 1
             return checks == 1
         }
         XCTAssertEqual(report.chunksProcessed, 1)
-        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)), burning)
-        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .water)
-        try r.advance(focus: p(0, 16), batchSize: 1) { true }
-        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .empty)
-        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)), .zero)
+        // Oil + water creates steam at water position (y=16)
+        XCTAssertEqual(try r.snapshot.material(at: p(0, 16)), .steam)
+        let oilThermal = try r.snapshot.thermalState(at: p(0, 15))
+        XCTAssertEqual(oilThermal.heat, 0)
+        XCTAssertFalse(oilThermal.isBurning)
+        XCTAssertEqual(oilThermal.burnElapsed, 4)
+        // Steam has heat 200
+        XCTAssertEqual(try r.snapshot.thermalState(at: p(0, 16)).heat, 200)
+        try r.advance(focus: p(0, 15), batchSize: 1) { true }
+        // Oil remains, steam cools/condenses
+        XCTAssertEqual(try r.snapshot.material(at: p(0, 15)), .oil)
+        // Oil remains extinguished but preserves burnElapsed for reignition
+        let oilThermal2 = try r.snapshot.thermalState(at: p(0, 15))
+        XCTAssertEqual(oilThermal2.heat, 0)
+        XCTAssertFalse(oilThermal2.isBurning)
+        XCTAssertEqual(oilThermal2.burnElapsed, 4)
     }
 
     func testCrowdedDiagonalRejectsDisplacementWithoutRoom() {

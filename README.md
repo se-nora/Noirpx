@@ -216,6 +216,25 @@ xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
 open DerivedData/mac/Build/Products/Debug/Noirpx.app
 ```
 
+### Parallel test execution
+
+To run tests in parallel (reduces SimulationCoreTests from ~5.5 min to ~1.5 min):
+
+```sh
+# SwiftPM (parallelizes test targets, not classes within target)
+swift test --parallel
+
+# Xcode with test plan (parallelizes test classes, skips known-shared-state classes)
+xcodebuild test -scheme Noirpx -testPlan ParallelTestPlan \
+  -destination 'platform=macOS' -parallel-testing-enabled YES \
+  -parallel-testing-worker-count 4
+```
+
+The test plan (`Noirpx.xcodeproj/xcshareddata/xctestplans/ParallelTestPlan.xctestplan`)
+serializes `CaveSpawnReplayTests` (global `caveMatrixCache`),
+`ScopedRegistrationTests` and `HUDViewportTests` (AppKit `NSApplication.shared`).
+All other test classes run in parallel.
+
 An iOS Simulator build is optional for platform-specific work and also runs
 locally:
 

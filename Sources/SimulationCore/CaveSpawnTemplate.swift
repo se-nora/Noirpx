@@ -124,14 +124,16 @@ internal enum CaveSpawnTemplate {
         let bodyLeftCol = bodyLeft // 17
         let bodyRightCol = bodyLeft + bodyWidth - 1 // 21
         let roomLeftCol = shaftLeftCol // 8
-        let roomRightCol = rightWallRight // 23? No, room interior is 8...21 per spec.
+        _ = rightWallRight // 23 (right wall right edge, not used directly)
         // Room interior cols 8...21 (shaft band + wall + body)
         let roomRightColInterior = bodyRightCol // 21
         let roomBottomRow = bodyTopRow // pf + 1
         let roomTopRow = ceilingBottomRow - 1 // pf + 12
 
-        let minBottomRow = pf - minShaftDepth - 1
-        let capRow = max(pf - maxShaftDepth - 1, minBottomMargin) // clamp to >= 2
+        // Spec formulas: minBottomRow = pf - minShaftDepth + 1 (so descent = minShaftDepth when opening at minBottomRow)
+        // capRow = max(pf - maxShaftDepth + 1, minBottomMargin) (so cap descent = maxShaftDepth when not clamped)
+        let minBottomRow = pf - minShaftDepth + 1
+        let capRow = max(pf - maxShaftDepth + 1, minBottomMargin) // clamp to >= 2
 
         // Maximal footprint: dilate room rect and shaft rect by clearanceRadius, clip to interior
         var footprint = Set<Int>()

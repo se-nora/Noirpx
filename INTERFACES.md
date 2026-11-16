@@ -952,22 +952,59 @@ added.
 
 ---
 
-## APPENDED: Seeded cave world generation (agent/cave-worldgen)
+## Cave world generation
 
 `CaveWorldGenerator` (in `Sources/SimulationCore/WorldGeneration.swift`) produces a
 larger multi-material grid deterministically from a seed and a bounded world size.
-It uses only the 8 existing materials (empty, solid, sand, water, oil, pitch,
-fire, steam). Terrain is layered solid carved by 4-octave value noise, with
-flood-fill connectivity repair carving L-shaped tunnels (deterministic). Sand
-fills shallow depressions, sealed water pools are walled in solid, and small
+It places all 16 materials. Terrain is layered solid carved by 4-octave value noise,
+with flood-fill connectivity repair carving L-shaped tunnels (deterministic). Sand
+fills depressions, sealed water pools are walled in solid, and small
 3-8 cell pitch/oil pockets are scattered. Extents stay within
 `Simulation.coordinateBounds`.
+
+**Pipeline.** The generator places all 16 materials. Bands are stated by grid row
+(row 0 = lowest world y); the words "deep" and "shallow" are avoided.
+Connectivity repair is described as natural-pipeline behavior only.
+
+**Pad and shaft contract.** When the template fits (`width >= 30 && height >= 56`),
+a fixed pad and shaft are stamped as the last material pass. Geometry (grid
+coordinates, row increasing upward):
+
+- `padFloorRow = h - 23`.
+- Body: cols 17–21, rows `padFloorRow+1...padFloorRow+9`.
+- Support: row `padFloorRow`, cols 17–21 (solid).
+- Room interior: cols 8–21, rows `padFloorRow+1...padFloorRow+12`.
+- Shaft band: cols 8–14.
+- Flank walls: cols 6–7 and 15–16.
+- Clearance radius 6: every cell within Chebyshev distance 6 of the room and
+  shaft interiors is `.empty` or `.solid` in the final world; the brief's named
+  hazardous materials are also absent there.
+- Shaft termination (single rule): scan the unmodified grid for a full-width
+  two-row opening in the shaft band, from `minBottomRow = padFloorRow - 31`
+  down to `capRow = max(padFloorRow - 47, 2)`. The first opening gives an open
+  cave end; otherwise a solid cap is placed at `capRow`. Descent is at least 32
+  cells at 256×128.
+
+**Verified sizes.** 256×128 and 128×64, seeds 1...64. The 32-cell claim is for
+256×128 only. No promise for other sizes.
+
+**Stated limits.**
+- The contract is static, with no promise after painting or material motion.
+- No exit-reachability claim, no dig requirement, no shaft-to-exit link.
+- Cave worlds are not saved.
+- Old seeds produce different worlds at templated sizes.
+
+**Safety margins.** Hazards stay at least 6 cells from the goal. Around the
+published spawn the guarantee is the purge radius 6 on the pad and shaft.
 
 API: `CaveWorldGenerator(seed:width:height:)`, `.generate() -> CaveWorld`, and
 `.stamp(into:tick:)` which enqueues one `SimulationCommand` per non-empty cell
 in chunked 512-cell batches (no giant intermediate array). `CaveWorld` exposes
 `cells`, `spawn`, `goal`, `extents`, and `materialCounts`. Same seed yields an
-identical `CaveWorld`.
+identical `CaveWorld`. Internal `generateInspected(stampSpawnTemplate:capturePrePass:)`
+is available for testing.
+
+No host features are claimed.
 
 ---
 
@@ -983,21 +1020,6 @@ identical `CaveWorld`.
   - Burning warden remains on fire until quenched by water.
   - Taking damage spawns 3 blood cells at warden's feet.
   - Shield zero removes warden from run.
-
-## APPENDED: Cave materials (agent/cave-materials)
-
-`CaveWorldGenerator` now places all 16 materials. New placement rules:
-- Safety margins: dangerous materials (lava, acid, gunpowder, magicLiquid, fire) stay ≥6 cells (Chebyshev) from spawn/goal; lava keeps ≥8 cells.
-- Protected materials (water, sand, lava, acid, gunpowder, magicLiquid, pitch, oil, blood, ice, slime, gold) are never carved through by connectivity repair.
-- Magic liquid: 1-3 single-cell doses buried deep in rock.
-- Gold: veins inside solid rock plus surface nuggets on cave floors.
-- Gunpowder: thin seams adjacent to pitch/oil pockets.
-- Ice: patches in upper, shallow caves.
-- Slime: small pockets at mid depth.
-- Acid: rare sealed pockets in lower rock.
-- Lava: rare deep pools walled by solid rock; contained by `sealHazards` after carving.
-- Blood: small pools next to oil pockets.
-- Connectivity repair runs after material placement; fallback direct route carves if spawn cannot reach goal; borders and spawn/goal are re-enforced after all carving.
 
 ## Burning terrain spread (appendix)
 

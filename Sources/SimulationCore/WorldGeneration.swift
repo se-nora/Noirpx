@@ -461,17 +461,23 @@ public struct CaveWorldGenerator: Sendable {
         placeBlood(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                    tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
 
-        // Safety margin: no dangerous material within the spawn/goal radius.
-        applySafetyMargin(grid: &grid, width: w, height: h, spawn: spawnCell, goal: goalCell)
-
-        // Tunnel carving (connectivity repair) runs BEFORE the template pass so
-        // the procedural cave is fully connected. The template then overwrites
-        // its footprint, but the cave to the right remains connected.
+        // Tunnel carving (connectivity repair) runs after the material pass so a
+        // pocket that blocks a passage cannot strand the player.
         repairConnectivity(grid: &grid, width: w, height: h)
 
         // Restore the containment of the placed hazards after carving.
         sealHazards(grid: &grid, width: w, height: h,
                     lavaCells: lavaCells, gunpowderCells: gunpowderCells)
+
+        // Safety margin: no dangerous material within the spawn/goal radius.
+        applySafetyMargin(grid: &grid, width: w, height: h, spawn: spawnCell, goal: goalCell)
+
+        // Fallback: carve a direct route when the spawn still cannot reach the goal.
+        if !emptyPathExists(grid: grid, width: w, height: h, from: spawnCell, to: goalCell) {
+            carveDirectRoute(grid: &grid, width: w, height: h, from: spawnCell, to: goalCell)
+            sealHazards(grid: &grid, width: w, height: h,
+                        lavaCells: lavaCells, gunpowderCells: gunpowderCells)
+        }
 
         // Template pass: stamp the spawn pad and shaft as the LAST material pass.
         var prePassGrid: [[Material]]? = nil
@@ -516,18 +522,6 @@ public struct CaveWorldGenerator: Sendable {
                     grid[gy][gx] = .empty
                 }
             }
-            // Horizontal passage: 2-cell high opening at body level through right pad wall.
-            // Carves from room interior edge (bodyRightCol+1) through right wall (rightWallRight)
-            // to connect to the vertical corridor at rightWallRight+1.
-            let passageRow = layout.bodyTopRow
-            let passageStart = layout.bodyRightCol + 1       // 22 (just right of room interior)
-            let passageEnd = layout.rightWallRight           // 25 (right wall right edge)
-            for gx in passageStart...passageEnd {
-                grid[passageRow][gx] = .empty
-                if passageRow + 1 <= layout.padFloorRow + 12 {
-                    grid[passageRow + 1][gx] = .empty
-                }
-            }
             // Shaft and opening: cols 8...14, rows carveBottom...pf
             for gy in term.carveBottomRow...layout.padFloorRow {
                 for gx in 8...14 {
@@ -539,67 +533,6 @@ public struct CaveWorldGenerator: Sendable {
             finalSpawnCell = layout.spawnCell
             // Goal was already chosen outside footprint; keep it.
             finalGoalCell = goalCell
-        }
-
-        // Minimal post-template connectivity: ensure the horizontal passage
-        // (cols 22-23 at body level) connects to the procedural cave at col 24.
-        // 1) Full-height vertical corridor at col 24 (template boundary) so
-        //    horizontal corridors connect to procedural cave at any y-level.
-        // 2) Horizontal corridor at passage rows from col 24 to right border.
-        // 3) Constrained repair on right side (gx >= rightOfPassage).
-        if let layout = layout {
-            let rightOfPassage = layout.rightWallRight + 1 // col 24
-            if rightOfPassage < w {
-                // Full-height vertical corridor at template boundary (col 24).
-                // Stops at top/bottom borders (1 and h-2).
-                for gy in 1..<(h - 1) {
-                    if grid[gy][rightOfPassage] == .solid {
-                        grid[gy][rightOfPassage] = .empty
-                    }
-                }
-                // Horizontal corridors at passage rows from col 24 to right border.
-                var corridorCells: [(Int, Int)] = []
-                for passageY in [layout.bodyTopRow, layout.bodyTopRow + 1] {
-                    for gx in rightOfPassage..<(w - 1) { // stop before right border
-                        if grid[passageY][gx] == .solid {
-                            grid[passageY][gx] = .empty
-                        }
-                        corridorCells.append((gx, passageY))
-                    }
-                }
-                // Constrained repair on right side (gx >= rightOfPassage).
-                // Connects corridor pocket to procedural cave pockets without
-                // touching the template footprint.
-                if !corridorCells.isEmpty {
-                    repairConnectivityRightSide(
-                        grid: &grid, width: w, height: h, minGX: rightOfPassage,
-                        corridorCells: corridorCells
-                    )
-                }
-                // Targeted fallback: if spawn still can't reach goal, carve a vertical
-                // tunnel at goal.x from the horizontal corridor down/up to goal.y.
-                // Only operates on the right side (goal.x >= rightOfPassage), so it
-                // never disrupts the template footprint.
-                if finalGoalCell.0 >= rightOfPassage {
-                    if !emptyPathExists(grid: grid, width: w, height: h, from: finalSpawnCell, to: finalGoalCell) {
-                        let corridorY = layout.bodyTopRow
-                        let gx = finalGoalCell.0
-                        let fromY = corridorY
-                        let toY = finalGoalCell.1
-                        let step = toY > fromY ? 1 : -1
-                        var gy = fromY
-                        while gy != toY + step {
-                            if gy >= 0 && gy < h && gx >= 0 && gx < w {
-                                grid[gy][gx] = .empty
-                                if gx + 1 < w { grid[gy][gx + 1] = .empty }
-                            }
-                            gy += step
-                        }
-                        sealHazards(grid: &grid, width: w, height: h,
-                                    lavaCells: lavaCells, gunpowderCells: gunpowderCells)
-                    }
-                }
-            }
         }
 
         // The border walls and the spawn/goal cells survive every carve.
@@ -1169,118 +1102,6 @@ public struct CaveWorldGenerator: Sendable {
                 }
             }
         }
-    }
-
-    /// Constrained connectivity repair for the region RIGHT of the template footprint.
-    /// Treats the horizontal corridor cells as the main pocket and connects all other
-    /// pockets in gx >= minGX to it. Does not carve inside the template footprint.
-    private func repairConnectivityRightSide(
-        grid: inout [[Material]], width: Int, height: Int, minGX: Int,
-        corridorCells: [(Int, Int)]
-    ) {
-        // Collect empty pockets only in the right-side region.
-        var visited = Set<Int>()
-        var pockets: [[(Int, Int)]] = []
-        for gy in 0..<height {
-            for gx in minGX..<width {
-                let key = gy * width + gx
-                if visited.contains(key) { continue }
-                if grid[gy][gx] != .empty { continue }
-                var pocket: [(Int, Int)] = []
-                var queue: [Int] = [key]
-                visited.insert(key)
-                var head = 0
-                while head < queue.count {
-                    let k = queue[head]; head += 1
-                    let cx = k % width, cy = k / width
-                    pocket.append((cx, cy))
-                    for (dx, dy) in [(1,0),(-1,0),(0,1),(0,-1)] {
-                        let nx = cx + dx, ny = cy + dy
-                        guard nx >= minGX, nx < width - 1, ny > 0, ny < height - 1 else { continue }
-                        let nk = ny * width + nx
-                        if visited.contains(nk) { continue }
-                        if grid[ny][nx] != .empty { continue }
-                        visited.insert(nk)
-                        queue.append(nk)
-                    }
-                }
-                if !pocket.isEmpty { pockets.append(pocket) }
-            }
-        }
-        guard !pockets.isEmpty else { return }
-
-        // Main pocket = union of corridor cells (which are in the right-side region).
-        var main = Set<Int>()
-        for (cx, cy) in corridorCells {
-            if cx >= minGX { main.insert(cy * width + cx) }
-        }
-        // If corridor cells don't form a pocket (e.g., all solid), fall back to largest pocket.
-        if main.isEmpty {
-            var mainIdx = 0
-            for i in pockets.indices where pockets[i].count > pockets[mainIdx].count { mainIdx = i }
-            main = Set(pockets[mainIdx].map { $0.1 * width + $0.0 })
-        }
-
-        // Connect other pockets to main.
-        for pocket in pockets {
-            let pocketKeys = Set(pocket.map { $0.1 * width + $0.0 })
-            if pocketKeys.isSubset(of: main) { continue }
-            guard let path = searchPathRightSide(from: pocket, to: main, grid: grid,
-                                                  width: width, height: height, minGX: minGX)
-                ?? searchPathRightSide(from: pocket, to: main, grid: grid,
-                                      width: width, height: height, minGX: minGX, allowProtected: true) else {
-                continue
-            }
-            for (cx, cy) in path {
-                grid[cy][cx] = .empty
-                main.insert(cy * width + cx)
-                if cx + 1 < width - 1, grid[cy][cx + 1] == .solid {
-                    grid[cy][cx + 1] = .empty
-                }
-                if cy + 1 < height - 1, grid[cy + 1][cx] == .solid {
-                    grid[cy + 1][cx] = .empty
-                }
-            }
-        }
-    }
-
-    /// BFS path search constrained to gx >= minGX.
-    private func searchPathRightSide(from pocket: [(Int, Int)], to main: Set<Int>,
-                                     grid: [[Material]], width: Int, height: Int,
-                                     minGX: Int, allowProtected: Bool = false) -> [(Int, Int)]? {
-        var parent: [Int: Int] = [:]
-        var visited = Set<Int>()
-        var queue: [Int] = []
-        for (cx, cy) in pocket {
-            let key = cy * width + cx
-            if visited.insert(key).inserted { queue.append(key) }
-        }
-        var head = 0
-        var target: Int?
-        while head < queue.count {
-            let key = queue[head]; head += 1
-            if main.contains(key) { target = key; break }
-            let cx = key % width, cy = key / width
-            for (dx, dy) in [(1,0),(-1,0),(0,1),(0,-1)] {
-                let nx = cx + dx, ny = cy + dy
-                guard nx >= minGX, nx < width - 1, ny > 0, ny < height - 1 else { continue }
-                let nkey = ny * width + nx
-                if visited.contains(nkey) { continue }
-                if !allowProtected, isProtected(grid, nx, ny, width: width, height: height) { continue }
-                visited.insert(nkey)
-                parent[nkey] = key
-                queue.append(nkey)
-            }
-        }
-        guard let target else { return nil }
-        var path: [(Int, Int)] = []
-        var current = target
-        while true {
-            path.append((current % width, current / width))
-            guard let previous = parent[current] else { break }
-            current = previous
-        }
-        return path.reversed()
     }
 
     /// Breadth-first search from a pocket to the main cave.

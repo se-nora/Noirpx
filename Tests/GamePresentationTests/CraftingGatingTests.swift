@@ -5,6 +5,11 @@ import XCTest
 import SimulationCore
 import GamePresentation
 
+#if os(macOS)
+import AppKit
+import SwiftUI
+#endif
+
 final class CraftingGatingTests: XCTestCase {
 
     func testIsAllowed_duringPlay_returnsFalse() {
@@ -42,13 +47,14 @@ final class CraftingGatingTests: XCTestCase {
         // Simulate a hypothetical future outcome by using .fell as proxy
         XCTAssertFalse(CraftingGating.isAllowed(playing))
         XCTAssertTrue(CraftingGating.isAllowed(fell))
-        // The gate is simply `outcome != .playing`, so any non-.playing passes
+        // The gate is simply `outcome != nil && outcome != .playing`, so any non-.playing passes
     }
 
-    func testHUDControls_showsButton_whenAllowed() {
-        // Given HUDControls with showSpellCraftingAllowed = true
-        var buttonVisible = false
-        let controls = HUDControls(
+    #if os(macOS)
+    @MainActor
+    func testHUDControls_showsSpellButton_whenAllowed() throws {
+        // Given HUDControls with showSpellCraftingAllowed = true and discovered materials
+        let view = NSHostingView(rootView: HUDControls(
             selected: .sand,
             restart: {},
             newRun: {},
@@ -62,15 +68,37 @@ final class CraftingGatingTests: XCTestCase {
             wand: Wand(),
             manaPool: ManaPool(),
             onCycleWandSlot: { _ in }
-        )
-        // In a real test we'd render and inspect, but we can verify the parameter is stored
-        // This test documents the expected behavior
-        XCTAssertTrue(true, "HUDControls accepts showSpellCraftingAllowed parameter")
+        ))
+        view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.layoutIfNeeded()
+        view.layoutSubtreeIfNeeded()
+
+        func countFocusRingViews(_ view: NSView) -> Int {
+            var count = 0
+            let typeName = String(describing: type(of: view))
+            if typeName.contains("FocusRingView") {
+                count += 1
+            }
+            for child in view.subviews {
+                count += countFocusRingViews(child)
+            }
+            return count
+        }
+
+        let allowedCount = countFocusRingViews(view)
+        // Base buttons: 4 run/info + 7 MaterialBrush = 11. +1 Show Spells = 12 when allowed
+        XCTAssertEqual(allowedCount, 12, "Show Spells button must add one FocusRingView when allowed and materials discovered")
+        window.close()
     }
 
-    func testHUDControls_hidesButton_whenPlaying() {
+    @MainActor
+    func testHUDControls_hidesSpellButton_whenDisallowed() throws {
         // Given HUDControls with showSpellCraftingAllowed = false
-        let controls = HUDControls(
+        let view = NSHostingView(rootView: HUDControls(
             selected: .sand,
             restart: {},
             newRun: {},
@@ -84,8 +112,31 @@ final class CraftingGatingTests: XCTestCase {
             wand: Wand(),
             manaPool: ManaPool(),
             onCycleWandSlot: { _ in }
-        )
-        // Button should be hidden when not allowed
-        XCTAssertTrue(true, "HUDControls with showSpellCraftingAllowed=false hides button")
+        ))
+        view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.layoutIfNeeded()
+        view.layoutSubtreeIfNeeded()
+
+        func countFocusRingViews(_ view: NSView) -> Int {
+            var count = 0
+            let typeName = String(describing: type(of: view))
+            if typeName.contains("FocusRingView") {
+                count += 1
+            }
+            for child in view.subviews {
+                count += countFocusRingViews(child)
+            }
+            return count
+        }
+
+        let disallowedCount = countFocusRingViews(view)
+        // Base buttons: 4 run/info + 7 MaterialBrush = 11. Show Spells hidden = 11 when disallowed
+        XCTAssertEqual(disallowedCount, 11, "Show Spells button must not add FocusRingView when not allowed")
+        window.close()
     }
+    #endif
 }

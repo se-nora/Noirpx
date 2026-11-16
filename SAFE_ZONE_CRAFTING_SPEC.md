@@ -41,8 +41,9 @@ User input (C key / "Show Spells" button)
 |------|-------------|-------------|
 | AppleHost/NoirpxApp.swift | Modify | Add `isCraftingAllowed`, `hideCraftingGrid()`, update `toggleCraftingGrid()` to gate on outcome, update `startCaveRun` to reset `showCraftingGrid = false`, update CraftingHUD.onClose |
 | Sources/GamePresentation/HUDControls.swift | Modify | Accept `showSpellCraftingAllowed: Bool` parameter (already existed), gate "Show Spells" button visibility |
+| Sources/GamePresentation/CraftingGating.swift | New | Pure gating predicate `isAllowed(_:)` — single source of truth for safe-zone crafting logic |
 | Sources/GamePresentation/CraftingHUD.swift | No change | Existing overlay logic works |
-| Tests/GamePresentationTests/CraftingGatingTests.swift | New | Unit tests for gating logic (all outcome states: .playing, .fell, nil) |
+| Tests/GamePresentationTests/CraftingGatingTests.swift | New | Unit tests for gating logic (all outcome states: .playing, .fell, nil) + NSHostingView render tests for HUDControls button gating |
 
 ## Risks
 - **State inconsistency**: Must ensure `showCraftingGrid` resets to `false` when a new run starts (`.playing` outcome) — addressed by `startCaveRun` reset

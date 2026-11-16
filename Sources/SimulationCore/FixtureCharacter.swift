@@ -9,8 +9,21 @@ public struct FixtureCharacter: Equatable, Sendable {
     internal var verticalVelocity = 0
     internal var verticalRemainder = 0
 
+    /// Camera center for viewport tracking (body center).
+    public var cameraCenter: CellPosition {
+        CellPosition(x: position.x + Self.width / 2, y: position.y + Self.height / 2)
+    }
+
     public init() {
         position = CellPosition(x: -2, y: 6)
+    }
+
+    /// Public initializer for placing the character at a specific position.
+    public init(position: CellPosition) {
+        self.position = position
+        self.grounded = false
+        self.verticalVelocity = 0
+        self.verticalRemainder = 0
     }
 
     /// Internal restoring initializer for save decoding.

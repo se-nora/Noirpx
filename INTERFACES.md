@@ -1181,3 +1181,24 @@ ticks per callback). The host computes `activeChunks` from the camera viewport
 extended by two chunk widths/heights. Rendering reads `simulation.snapshot` and
 must not mutate the world. Painting is disabled when `outcome != .playing`.
 Blocking material paint inside the character body is rejected by `CaveRun.paint`.
+
+#### CaveRun host wiring (this increment)
+
+- **Camera policy:** `FixtureViewport` centered on `FixtureCharacter.cameraCenter`
+  with `longEdgeCells: 200` (matching Beacon Run). `activeChunks` derived from
+  viewport ± 2 chunk spans for physics culling.
+- **Default world size:** 256 × 128 cells. Minimum playable: 128 × 64.
+- **Outcome UI (HUD):**
+  - `.playing`: "Descend the shaft. Reach the bottom."
+  - `.reachedDepth`: Green bold "You reached the depth!"
+  - `.fell`: Orange bold "You fell too far. Try again!"
+- **Input mapping (CaveRun mode):**
+  - macOS: A/← left, D/→ right, W/Space/↑ jump, [ / ] cycle material, R restart, N new run
+  - iOS: On-screen left/right/jump/cycle-material buttons; no pulse/wand in CaveRun
+- **Restart / New Run:** Restart reuses same seed; New Run advances seed by
+  golden-ratio constant `0x9e3779b97f4a7c15` (Knuth).
+- **Error handling:** `CaveRun(seed:, width:, height:)` throws
+  `SimulationError.worldGenerationFailed` on invalid size (< 128×64) or layout
+  failure; host surfaces error in HUD, clears on Restart/New Run.
+- **Snapshot:** Host publishes `run.simulation.snapshot` (immutable value) for
+  renderer; `activeChunks` updated per tick from camera.

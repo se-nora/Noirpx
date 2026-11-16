@@ -118,6 +118,40 @@ water, fire, pitch, or lamp oil; number keys 1–7 select them as well. Strokes 
 next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Painting is disabled after a win or failure.
 
+## Cave Run
+
+Cave Run is a descent challenge in a generated vertical shaft. The world is
+256 × 128 cells (minimum 128 × 64) with a fixed spawn pad at the top and a
+shaft leading to a target depth. The camera follows the character with 200
+cells along the drawable's long edge.
+
+**Controls (macOS):**
+- A / ← — move left
+- D / → — move right
+- W / Space / ↑ — jump
+- [ / ] — cycle material
+- Drag — paint selected material
+- R — restart (same seed)
+- N — new run (advances seed deterministically)
+
+**Controls (iOS):**
+- On-screen left/right/jump/cycle-material buttons
+- Drag — paint selected material
+- No pulse or wand casting in Cave Run
+
+**HUD:**
+- Seed, world size, character position, simulation tick
+- Depth / descent goal (distance from spawn to shaft bottom)
+- Outcome banner:
+  - Playing: "Descend the shaft. Reach the bottom."
+  - Reached depth: Green "You reached the depth!"
+  - Fell: Orange "You fell too far. Try again!"
+
+The world is generated from a seed using the cave spawn template. The shaft
+geometry is deterministic per seed; depth is at least 32 cells. Restart
+reconstructs the identical world; New Run advances the seed by the golden-ratio
+constant and generates a new layout.
+
 Sand, water and oil cannot move diagonally past an occupied side cell. Oil
 does not displace water, sand or other oil. Sand can displace water or oil;
 water can displace oil downward. The displaced liquid moves into an empty side

@@ -1,111 +1,161 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
-	objectVersion = 56;
+	classes = {
+	};
+	objectVersion = 60;
 	objects = {
+
+/* Begin PBXBuildFile section */
 		A10000000000000000000001 /* NoirpxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* NoirpxApp.swift */; };
 		A10000000000000000000002 /* SimulationCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SimulationCore */; };
 		A10000000000000000000003 /* GamePresentation in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* GamePresentation */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
 		A20000000000000000000001 /* NoirpxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoirpxApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* Noirpx.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noirpx.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
 		A30000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000002 /* SimulationCore in Frameworks */, A10000000000000000000003 /* GamePresentation in Frameworks */,);
+			files = (
+				A10000000000000000000002 /* SimulationCore in Frameworks */,
+				A10000000000000000000003 /* GamePresentation in Frameworks */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
 		A40000000000000000000001 = {
 			isa = PBXGroup;
-			children = (A40000000000000000000002 /* AppleHost */, A40000000000000000000003 /* Products */,);
+			children = (
+				A40000000000000000000002 /* AppleHost */,
+				A40000000000000000000003 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 		A40000000000000000000002 /* AppleHost */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000001 /* NoirpxApp.swift */,);
+			children = (
+				A20000000000000000000001 /* NoirpxApp.swift */,
+			);
 			path = AppleHost;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
-			children = (A20000000000000000000002 /* Noirpx.app */,);
+			children = (
+				A20000000000000000000002 /* Noirpx.app */,
+			);
 			name = Products;
 			sourceTree = "<group>";
 		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
 		A50000000000000000000001 /* Noirpx */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Noirpx" */;
-			buildPhases = (A60000000000000000000001 /* Sources */, A30000000000000000000001 /* Frameworks */,);
-			buildRules = ();
-			dependencies = ();
+			buildPhases = (
+				A60000000000000000000001 /* Sources */,
+				A30000000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = Noirpx;
-			packageProductDependencies = (A90000000000000000000001 /* SimulationCore */, A90000000000000000000002 /* GamePresentation */,);
+			packageProductDependencies = (
+				A90000000000000000000001 /* SimulationCore */,
+				A90000000000000000000002 /* GamePresentation */,
+			);
 			productName = Noirpx;
 			productReference = A20000000000000000000002 /* Noirpx.app */;
 			productType = "com.apple.product-type.application";
 		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
 		A50000000000000000000002 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastUpgradeCheck = 2720;
-				TargetAttributes = { A50000000000000000000001 = {CreatedOnToolsVersion = 27.2; }; };
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.2;
+					};
+				};
 			};
 			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "Noirpx" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
-			knownRegions = (en, Base,);
+			knownRegions = (
+				en,
+				Base,
+			);
 			mainGroup = A40000000000000000000001;
-			packageReferences = (A80000000000000000000001 /* XCLocalSwiftPackageReference "." */,);
+			packageReferences = (
+				A80000000000000000000001 /* XCLocalSwiftPackageReference "." */,
+			);
 			productRefGroup = A40000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* Noirpx */,);
+			targets = (
+				A50000000000000000000001 /* Noirpx */,
+			);
 		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
 		A60000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000001 /* NoirpxApp.swift in Sources */,);
+			files = (
+				A10000000000000000000001 /* NoirpxApp.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A70000000000000000000001 /* Build configuration list for PBXProject "Noirpx" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */,);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Noirpx" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */,);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		A80000000000000000000001 /* XCLocalSwiftPackageReference "." */ = {isa = XCLocalSwiftPackageReference; relativePath = .; };
-		A90000000000000000000001 /* SimulationCore */ = {isa = XCSwiftPackageProductDependency; package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = SimulationCore; };
-		A90000000000000000000002 /* GamePresentation */ = {isa = XCSwiftPackageProductDependency; package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */; productName = GamePresentation; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
 		B10000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; };
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
 			name = Debug;
 		};
 		B10000000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; ONLY_ACTIVE_ARCH = YES; SWIFT_COMPILATION_MODE = wholemodule; };
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
 			name = Release;
 		};
 		B10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.28.0;
-				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = AppleHost/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Noirapixel;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.adventure-games";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.29.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -120,14 +170,16 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 94YTF9D9PH;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.28.0;
-				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = AppleHost/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Noirapixel;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.adventure-games";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.29.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -138,6 +190,48 @@
 			};
 			name = Release;
 		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A70000000000000000000001 /* Build configuration list for PBXProject "Noirpx" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000001 /* Debug */,
+				B10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "Noirpx" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000003 /* Debug */,
+				B10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A80000000000000000000001 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A90000000000000000000001 /* SimulationCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */;
+			productName = SimulationCore;
+		};
+		A90000000000000000000002 /* GamePresentation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A80000000000000000000001 /* XCLocalSwiftPackageReference "." */;
+			productName = GamePresentation;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A50000000000000000000002 /* Project object */;
 }

@@ -1035,31 +1035,12 @@ No host features are claimed.
   not consumed on that turn.
 - Fire expires to empty after 32 processed turns (unchanged).
 
-### Charring rule
-- A burning cell (fire, or any burning pitch, oil or blood) that has a `solid`
-  neighbour converts that solid to `pitch` with a fixed 1/16 chance per turn and
-  per burning neighbour. The roll is derived from the source position, the
-  source's burn/fire age and the neighbour position; it consumes no random
-  stream, so movement draws are unchanged and both simulation modes reach the
-  same result for the same scene.
-- Only burning sources char. A hot but not burning cell never chars, and neither
-  does a cell that spends its turn on its water reaction: water keeps priority,
-  so a source that quenches or consumes water that turn neither spreads heat nor
-  chars.
-- The charred cell is a normal pitch cell with zero thermal state. It is not
-  burning yet, so it has to reach the pitch ignition threshold again before it
-  burns; once burning it consumes itself on its own 64th burning turn.
-- Adjacency is the same eight neighbours used by the heat rules, and charring
-  respects the active region (`canVisit`), so a frozen chunk is never charred.
-  Charring crosses chunk boundaries when both chunks are active.
-- Charring applies to `solid` only. Sand, ice and the other materials are not
-  affected.
-
 ### Digest and rules version
-- `SimulationSnapshot.digestVersion` bumped from 5 to 6.
-- `SaveCodec.rulesVersion` bumped from 3 to 4.
-- Replay/save compatibility changes: charring adds solid->pitch writes, so old
-  digests and old saves are not compatible.
+- `SimulationSnapshot.digestVersion` bumped from 6 to 7.
+- `SaveCodec.rulesVersion` bumped from 4 to 5.
+- Replay/save compatibility changes: removing charring eliminates solid->pitch
+  writes from fire and burning flammables, so old digests and old saves are not
+  compatible.
 
 ---
 

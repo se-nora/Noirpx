@@ -25,7 +25,7 @@ public struct HUDControls: View {
                 discoveredMaterials: Set<SimulationCore.Material> = [],
                 onToggleSpellCrafting: @escaping () -> Void = {},
                 showSpellCrafting: Bool = false,
-                showSpellCraftingAllowed: Bool = true,
+                showSpellCraftingAllowed: Bool = false,
                 wand: Wand = Wand(),
                 manaPool: ManaPool = ManaPool(),
                 onCycleWandSlot: @escaping (Int) -> Void = { _ in }) {
@@ -73,7 +73,7 @@ public struct HUDControls: View {
                 }
             }
             // Spell crafting toggle
-            if !discoveredMaterials.isEmpty && showSpellCraftingAllowed {
+            if showSpellCraftingAllowed {
                 Button(showSpellCrafting ? "Hide Spells" : "Show Spells", action: onToggleSpellCrafting)
                     .buttonStyle(.bordered)
                     .tint(.purple)

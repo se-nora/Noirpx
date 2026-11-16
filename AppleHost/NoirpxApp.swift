@@ -29,11 +29,11 @@ private final class GameModel: ObservableObject {
     // Spell/Wand Crafting state
     var wandController: WandController = WandController()
     var craftingGrid: CraftingGrid = CraftingGrid()
-    @Published var showCraftingGrid: Bool = false
+    @Published private(set) var showCraftingGrid: Bool = false
 
     /// Returns true when crafting UI may be shown/toggled (safe zones only).
     var isCraftingAllowed: Bool {
-        caveRun != nil && caveRun?.outcome != .playing
+        CraftingGating.isAllowed(caveRun?.outcome)
     }
 
     var caveRun: CaveRun?
@@ -194,9 +194,11 @@ private final class GameModel: ObservableObject {
     }
 
     // New: toggle crafting grid overlay (gated to safe zones only)
-    func toggleCraftingGrid() {
-        guard isCraftingAllowed else { return }
+    @discardableResult
+    func toggleCraftingGrid() -> Bool {
+        guard isCraftingAllowed else { return false }
         showCraftingGrid.toggle()
+        return true
     }
 
     // New: unconditional hide for onClose / restart safety

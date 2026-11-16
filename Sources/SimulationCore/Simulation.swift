@@ -12,6 +12,8 @@ private struct SimulationChunk {
 public struct Simulation {
     public static let chunkWidth = SimulationGrid.chunkSize
     public static let coordinateBounds = -SimulationGrid.coordinateLimit...SimulationGrid.coordinateLimit
+    /// Maximum number of spell commands applied per tick. Spell commands (isSpellCommand=true) take precedence over paint commands.
+    public static let maxSpellCommandsPerTick: Int = 148
 
     private let seed: UInt64
     private var tick: UInt64 = 0
@@ -85,7 +87,7 @@ public struct Simulation {
         set(.empty, at: position)
     }
 
-    func materialForGameplay(at position: CellPosition) -> Material {
+    public func materialForGameplay(at position: CellPosition) -> Material {
         material(at: position)
     }
 
@@ -95,7 +97,20 @@ public struct Simulation {
         guard !overflow else {
             throw SimulationError.tickOverflow
         }
-        for command in commands.removeValue(forKey: nextTick) ?? [] {
+        var tickCommands = commands.removeValue(forKey: nextTick) ?? []
+
+        // Apply command budget: sort spell commands first, then truncate to maxSpellCommandsPerTick
+        if tickCommands.count > Simulation.maxSpellCommandsPerTick {
+            tickCommands.sort { lhs, rhs in
+                if lhs.isSpellCommand != rhs.isSpellCommand {
+                    return lhs.isSpellCommand // spell commands (true) come before paint commands (false)
+                }
+                return false // stable order within same type
+            }
+            tickCommands = Array(tickCommands.prefix(Simulation.maxSpellCommandsPerTick))
+        }
+
+        for command in tickCommands {
             set(command.material, at: command.position)
         }
 

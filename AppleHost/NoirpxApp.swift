@@ -21,6 +21,16 @@ private final class GameModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
+    @Published var isCasting = false
+    @Published private(set) var castAim: CellPosition?
+    private var castProgress: WandCastProgress?
+    private var castMaterial: SimulationCore.Material = .sand
+
+    // Spell/Wand Crafting state
+    var wandController: WandController = WandController()
+    var craftingGrid: CraftingGrid = CraftingGrid()
+    @Published private var showCraftingGrid: Bool = false
+
     var caveRun: CaveRun?
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
@@ -122,12 +132,86 @@ private final class GameModel: ObservableObject {
         }
     }
 
-    func cycleMaterial(_ forward: Bool) {
-        let allMaterials = MaterialBrush.allCases.map(\.material)
-        if let idx = allMaterials.firstIndex(of: selectedMaterial) {
-            let nextIdx = forward ? (idx + 1) % allMaterials.count : (idx - 1 + allMaterials.count) % allMaterials.count
-            selectedMaterial = allMaterials[nextIdx]
+    func setCastAim(_ position: CellPosition?) {
+        castAim = position
+    }
+
+    func startCasting() {
+        guard caveRun?.outcome == .playing, errorMessage == nil else { return }
+
+        // Gate cast start on WandController.tryStartCast()
+        let result = wandController.tryStartCast()
+        switch result {
+        case .started:
+            isCasting = true
+            castMaterial = selectedMaterial
+            castProgress = nil
+        case .noActiveSpell, .onCooldown, .insufficientMana:
+            // Show HUD feedback via errorMessage
+            errorMessage = castStartErrorMessage(result)
+            // Don't start casting
+            return
         }
+    }
+
+    func stopCasting() {
+        // If we were casting, cancel for mana refund
+        if isCasting {
+            wandController.cancelCast()
+        }
+        isCasting = false
+        castProgress = nil
+    }
+
+    private func castStartErrorMessage(_ result: CastStartResult) -> String {
+        switch result {
+        case .noActiveSpell:
+            return "No spell in active wand slot"
+        case .onCooldown(let remaining):
+            return "Spell on cooldown (\(remaining) ticks)"
+        case .insufficientMana(let required, let available):
+            return "Insufficient mana: need \(required), have \(available)"
+        case .started:
+            return ""
+        }
+    }
+
+    func cycleWandMaterial(_ direction: Int) {
+        let current = WandMaterials.normalized(selectedMaterial)
+        selectedMaterial = direction >= 0 ? WandMaterials.next(after: current) : WandMaterials.previous(before: current)
+    }
+
+    // New: cycle active wand slot (replaces material cycling for wand casting)
+    func cycleWandSlot(_ direction: Int) {
+        wandController.cycleActiveSlot(direction)
+    }
+
+    // New: toggle crafting grid overlay
+    func toggleCraftingGrid() {
+        showCraftingGrid.toggle()
+    }
+
+    // New: attempt to craft from grid
+    func tryCraft() {
+        if let (_, blueprint) = craftingGrid.tryCraft(registry: .standard) {
+            let spell = Spell(blueprint: blueprint)
+            // Place in first empty slot, or active slot if all full
+            if let emptyIndex = wandController.wand.slots.firstIndex(where: { $0 == nil }) {
+                wandController.setSpell(spell, at: emptyIndex)
+            } else {
+                wandController.setSpell(spell, at: wandController.wand.activeSlotIndex)
+            }
+        }
+    }
+
+    // New: place selected material into crafting grid slot
+    func placeInCraftingGrid(index: Int) {
+        _ = craftingGrid.setSlot(index, material: selectedMaterial, count: 1)
+    }
+
+    // New: clear crafting grid slot
+    func clearCraftingGridSlot(index: Int) {
+        craftingGrid.clearSlot(index)
     }
 
     func update(at time: Double) {
@@ -137,6 +221,46 @@ private final class GameModel: ObservableObject {
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 guard let activeChunks else { return }
+
+                // Tick wand controller (cooldowns + mana regen)
+                wandController.tick()
+
+                // Handle spell casting from wand
+                if isCasting, let aim = castAim, let activeSpell = wandController.wand.activeSpell {
+                    let blueprint = activeSpell.blueprint
+                    let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
+                                              y: run.character.position.y + FixtureCharacter.height / 2)
+                    let ray = WandRay.cells(for: blueprint, from: origin, toward: aim)
+
+                    if castProgress == nil || castProgress?.cells != ray {
+                        castProgress = makeCastProgress(for: blueprint, ray: ray)
+                    }
+
+                    if let p = castProgress {
+                        let result = advanceCast(blueprint: blueprint, progress: p, simulation: run.simulation, characterBody: run.character.bodyCells)
+                        castProgress = result.progress
+
+                        // Enqueue ray commands (primary + trail)
+                        let rayCmds = rayCommands(blueprint: blueprint, batch: result.batch, nextTick: run.simulation.snapshot.tick + 1)
+                        for cmd in rayCmds {
+                            try run.enqueueSpellCommand(cmd)
+                        }
+
+                        // Check for impact
+                        if result.isComplete, let impact = result.impactCell {
+                            // Enqueue footprint commands
+                            let footprintCmds = footprintCommands(blueprint: blueprint, impact: impact, characterBody: run.character.bodyCells, nextTick: run.simulation.snapshot.tick + 1)
+                            for cmd in footprintCmds {
+                                try run.enqueueSpellCommand(cmd)
+                            }
+                            isCasting = false
+                            castProgress = nil
+                        }
+                    }
+                } else {
+                    castProgress = nil
+                }
+
                 let controls = input.consumeTick()
                 try run.advance(horizontal: controls.horizontal, jump: controls.jump, activeChunks: activeChunks)
                 caveRun = run
@@ -158,6 +282,7 @@ private struct HostView: View {
     @StateObject private var model = GameModel()
     @State private var showingDiagnostics = false
     @State private var showingHelp = false
+    @State private var showSpellCrafting = false
     private let timer = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
     private let device = MTLCreateSystemDefaultDevice()
 
@@ -178,11 +303,18 @@ private struct HostView: View {
                     onError: { model.errorMessage = $0 },
                     onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) },
+                    onAim: { model.setCastAim($0) },
+                    onCastChanged: { casting in
+                        if casting { model.startCasting() } else { model.stopCasting() }
+                    },
+                    onCycleWandMaterial: { direction in model.cycleWandMaterial(direction) },
+                    onCycleWandSlot: { direction in model.cycleWandSlot(direction) },
+                    onToggleCraftingGrid: { model.toggleCraftingGrid() },
                     onKeyboard: { model.setKeyboard($0) },
                     onInputReset: { model.resetClock() },
                     onRestart: { model.restart() },
                     onNewRun: { model.newRun() },
-                    onCycleMaterial: { model.cycleMaterial($0) }
+                    onCycleMaterial: { model.cycleWandMaterial($0 ? 1 : -1) }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -223,8 +355,24 @@ private struct HostView: View {
                             restart: { model.restart() }, newRun: { model.newRun() },
                             diagnostics: { model.resetClock(); showingDiagnostics = true },
                             help: { model.resetClock(); showingHelp = true },
-                            select: { model.selectedMaterial = $0 })
+                            select: { model.selectedMaterial = $0 },
+                            discoveredMaterials: [],
+                            onToggleSpellCrafting: { showSpellCrafting.toggle() },
+                            showSpellCrafting: showSpellCrafting,
+                            wand: model.wandController.wand,
+                            manaPool: model.wandController.manaPool,
+                            onCycleWandSlot: { direction in model.cycleWandSlot(direction) })
                 Text("Paint: drag; keys 1–7")
+                Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
+                // Spell crafting HUD
+                if showSpellCrafting {
+                    CraftingHUD(
+                        grid: $model.craftingGrid,
+                        registry: .standard,
+                        onCraft: { model.tryCraft() },
+                        onClose: { model.toggleCraftingGrid() }
+                    )
+                }
                 if let device {
                     Text("FPS: \(model.framesPerSecond, specifier: "%.1f")  Chunks: \(model.renderedChunks ?? 0)")
                 } else {
@@ -296,7 +444,7 @@ private struct HostView: View {
             .foregroundStyle(.white)
             .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
             .contentShape(Rectangle())
-            .onTapGesture { model.cycleMaterial(true) }
+            .onTapGesture { model.cycleWandMaterial(1) }
             .accessibilityLabel("Cycle Material")
             .accessibilityAddTraits(.isButton)
     }
@@ -353,6 +501,11 @@ private struct MetalSurface {
     let onError: (String) -> Void
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
+    let onAim: (CellPosition?) -> Void
+    let onCastChanged: (Bool) -> Void
+    let onCycleWandMaterial: (Int) -> Void
+    let onCycleWandSlot: (Int) -> Void
+    let onToggleCraftingGrid: () -> Void
     let onKeyboard: (GameplayControls) -> Void
     let onInputReset: () -> Void
     let onRestart: (() -> Void)?
@@ -382,6 +535,11 @@ private struct MetalSurface {
 #if os(macOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var onAim: ((CellPosition?) -> Void)?
+    var onCastChanged: ((Bool) -> Void)?
+    var onCycleWandMaterial: ((Int) -> Void)?
+    var onCycleWandSlot: ((Int) -> Void)?
+    var onToggleCraftingGrid: (() -> Void)?
     var onKeyboard: ((GameplayControls) -> Void)?
     var onInputReset: (() -> Void)?
     var onRestart: (() -> Void)?
@@ -424,21 +582,28 @@ private final class InputMetalView: MTKView {
                 }
                 return nil
             }
-            // [ (33) - Cycle material backward
+            // C (8) - Toggle crafting grid
+            if event.keyCode == 8 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onToggleCraftingGrid?()
+                }
+                return nil
+            }
+            // [ (33) and ] (30) - cycle wand slot / wand material
             if event.keyCode == 33 {
                 if event.type == .keyDown && !event.isARepeat {
-                    self.onCycleMaterial?(false)
+                    self.onCycleWandSlot?(-1)
                 }
                 return nil
             }
             // ] (30) - Cycle material forward
             if event.keyCode == 30 {
                 if event.type == .keyDown && !event.isARepeat {
-                    self.onCycleMaterial?(true)
+                    self.onCycleWandSlot?(1)
                 }
                 return nil
             }
-            // F (3) - Cycle material forward
+            // F (3) - Cycle material forward (alternate)
             if event.keyCode == 3 {
                 if event.type == .keyDown && !event.isARepeat {
                     self.onCycleMaterial?(true)
@@ -506,6 +671,7 @@ private final class InputMetalView: MTKView {
                                        y: Double(y / bounds.height * drawableSize.height)) else {
             return
         }
+        onAim?(cell)
     }
 }
 
@@ -513,6 +679,11 @@ extension MetalSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
+        view.onCycleWandSlot = onCycleWandSlot
+        view.onToggleCraftingGrid = onToggleCraftingGrid
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
         view.onRestart = onRestart
@@ -527,6 +698,11 @@ extension MetalSurface: NSViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
+        view.onCycleWandSlot = onCycleWandSlot
+        view.onToggleCraftingGrid = onToggleCraftingGrid
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
         view.onRestart = onRestart
@@ -538,6 +714,11 @@ extension MetalSurface: NSViewRepresentable {
 #elseif os(iOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
+    var onAim: ((CellPosition?) -> Void)?
+    var onCastChanged: ((Bool) -> Void)?
+    var onCycleWandMaterial: ((Int) -> Void)?
+    var onCycleWandSlot: ((Int) -> Void)?
+    var onToggleCraftingGrid: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var activeTouch: UITouch?
@@ -579,6 +760,11 @@ extension MetalSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
+        view.onCycleWandSlot = onCycleWandSlot
+        view.onToggleCraftingGrid = onToggleCraftingGrid
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -588,6 +774,11 @@ extension MetalSurface: UIViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
         view.onPaint = onPaint
+        view.onAim = onAim
+        view.onCastChanged = onCastChanged
+        view.onCycleWandMaterial = onCycleWandMaterial
+        view.onCycleWandSlot = onCycleWandSlot
+        view.onToggleCraftingGrid = onToggleCraftingGrid
         view.cameraCenter = character.cameraCenter
     }
 }

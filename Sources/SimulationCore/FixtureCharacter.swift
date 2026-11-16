@@ -14,6 +14,17 @@ public struct FixtureCharacter: Equatable, Sendable {
         CellPosition(x: position.x + Self.width / 2, y: position.y + Self.height / 2)
     }
 
+    /// All cells occupied by the character body.
+    public var bodyCells: Set<CellPosition> {
+        var cells: Set<CellPosition> = []
+        for x in position.x..<position.x + Self.width {
+            for y in position.y..<position.y + Self.height {
+                cells.insert(CellPosition(x: x, y: y))
+            }
+        }
+        return cells
+    }
+
     public init() {
         position = CellPosition(x: -2, y: 6)
     }

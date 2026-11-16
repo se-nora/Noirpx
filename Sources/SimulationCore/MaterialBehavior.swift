@@ -293,8 +293,6 @@ final class FireBehavior: FlameBehavior, @unchecked Sendable {
             }
             return action
         }
-        charAdjacentSolids(source: source, age: state.fireElapsed,
-                           canVisit: canVisit, material: material, action: &action)
         spread(destinations: destinations, age: state.fireElapsed, canVisit: canVisit, material: material,
                thermal: thermal, moved: moved, action: &action)
         if state.fireElapsed >= 32 {
@@ -354,8 +352,6 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
             }
         } else if state.isBurning {
             state.burnElapsed = state.burnElapsed == .max ? .max : state.burnElapsed + 1
-            charAdjacentSolids(source: source, age: state.burnElapsed,
-                               canVisit: canVisit, material: material, action: &action)
             spread(destinations: destinations, age: state.burnElapsed, canVisit: canVisit, material: material,
                    thermal: thermal, moved: moved, action: &action)
             if state.burnElapsed >= burnoutAge {

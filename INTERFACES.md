@@ -1060,3 +1060,124 @@ No host features are claimed.
 - `SaveCodec.rulesVersion` bumped from 3 to 4.
 - Replay/save compatibility changes: charring adds solid->pitch writes, so old
   digests and old saves are not compatible.
+
+---
+
+## Cave Session (appendix)
+
+`CaveRun` is a self-contained, deterministic session type that reuses the cave
+spawn template and `FixtureCharacter` physics. It owns the cave world,
+simulation, character, and a minimal outcome state machine.
+
+### Public API
+
+```swift
+public struct CaveWorldSize: Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public init(width: Int, height: Int)
+}
+
+public struct CaveRun {
+    public let seed: UInt64
+    public let size: CaveWorldSize
+    public let world: CaveWorld
+    public private(set) var character: FixtureCharacter
+    public private(set) var outcome: Outcome
+    public private(set) var simulation: Simulation
+
+    internal private(set) var termination: CaveSpawnTemplate.Termination
+    internal private(set) var fallLimit: Int
+
+    public init(seed: UInt64, width: Int = 256, height: Int = 128) throws
+
+    public enum Outcome: Equatable, Sendable {
+        case playing
+        case reachedDepth
+        case fell
+    }
+
+    /// Advances one tick. Order: material tick → character advance → outcome checks.
+    /// Terminal outcomes freeze further input and paint.
+    public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws
+
+    /// Paints a material at the next simulation tick.
+    /// Disabled after terminal outcome; cannot paint blocking material into character body.
+    public mutating func paint(_ material: Material, at position: CellPosition) throws
+}
+```
+
+### World and spawn
+
+- `CaveRun.init` creates a `CaveWorldGenerator(seed: width: height:)` for the
+  given dimensions, generates the world with `stampSpawnTemplate: true`, and
+  enqueues all cells at tick 1 in y-then-x order, then calls
+  `simulation.advance()` once.
+- The `CaveWorld` contains the stamped pad, room, shaft, and termination
+  (open cave or cap). The `spawn` position is the lower-left of the character
+  body on the pad floor. The `goal` field is an empty cell outside the maximal
+  footprint (used by generator connectivity fallback, not the depth goal).
+- `termination.descent` (cells from body bottom to shaft end) is computed from
+  the pre-pass grid by `CaveSpawnTemplate.termination` and stored.
+- `fallLimit = world.spawn.y - termination.descent - 4` (four-cell safety
+  margin below the goal depth).
+
+### Character physics
+
+- Reuses `FixtureCharacter` exactly: 5 × 9 body, quarter-cell vertical units,
+  max step height 3, gravity and bounded fall speed, jump only while grounded,
+  step-up when blocked horizontally.
+- Character advances *after* each material tick using that tick's snapshot.
+- Hazards (lava, acid, fire, magicLiquid) are detected by the test harness
+  but do not affect cave character outcome in this increment (accepted gap).
+
+### Tick order and outcome checks
+
+Each `advance(horizontal:jump:)` call executes in this exact order:
+
+1. **Material tick**: `simulation.advance(activeChunks:)` processes one full
+   deterministic physics tick on the active region (default: all chunks).
+2. **Character advance**: `character.advance(snapshot: horizontal: jump:)` on
+   the completed snapshot.
+3. **Fell check**: `character.position.y <= fallLimit` → `.fell`.
+4. **Reached depth check**: `descent >= termination.descent` → `.reachedDepth`.
+
+Once `outcome != .playing`, further `advance` calls are no-ops (input frozen,
+paint disabled by host). Insufficient descent (grounded mid-shaft) is detected
+by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
+
+### Determinism and replay
+
+- Same seed + same per-tick `horizontal`/`jump` inputs + same `activeChunks`
+  sequence → identical `outcome`, `character.position`, and simulation digest
+  at every tick.
+- The `simulation` field exposes the full `Simulation` for snapshot and digest
+  access; `CaveRun` does not add its own digest.
+- Character state is outside the simulation snapshot and digest (like BeaconRun).
+- No wall-clock or platform input is read; the host supplies ticks.
+
+### Verified configurations
+
+- `standard` (256 × 128): seeds 1, 2, 3, 4, 42, 64 reach `.reachedDepth` with
+  the canonical 60-idle / 7-walk-left / fall script; descent ≥ 32 cells.
+- `small` (128 × 64): seeds 1, 2, 3, 4, 42, 64 reach `.reachedDepth` with
+  the same script.
+- Mutation tests (seed 42, 256 × 128):
+  - Plug at `padFloorRow-10` → test harness `insufficientDescent(10)`.
+  - Narrow shaft (cols 8–10 solid) → test harness `insufficientDescent(0)`.
+  - Embedded solid block at spawn body → test harness `bodyOverlap` at tick 1 postPhysics.
+  - MagicLiquid at spawn body → test harness `harmfulBody` at tick 1 postPhysics.
+
+### Paint rules
+
+- Disabled after any terminal outcome (`outcome != .playing`).
+- Cannot paint blocking material into the character body (silently rejected).
+- Enqueued at `snapshot.tick + 1`.
+
+### Host integration (non-normative)
+
+The macOS/iOS app hosts `CaveRun` with a 60 Hz monotonic accumulator (max 4
+ticks per callback). The host computes `activeChunks` from the camera viewport
+extended by two chunk widths/heights. Rendering reads `simulation.snapshot` and
+must not mutate the world. Painting is disabled when `outcome != .playing`.
+Blocking material paint inside the character body is rejected by `CaveRun.paint`.

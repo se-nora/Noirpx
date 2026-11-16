@@ -958,7 +958,7 @@ added.
 larger multi-material grid deterministically from a seed and a bounded world size.
 It places all 16 materials. Terrain is layered solid carved by 4-octave value noise,
 with flood-fill connectivity repair carving L-shaped tunnels (deterministic). Sand
-fills shallow depressions, sealed water pools are walled in solid, and small
+fills depressions, sealed water pools are walled in solid, and small
 3-8 cell pitch/oil pockets are scattered. Extents stay within
 `Simulation.coordinateBounds`.
 
@@ -980,8 +980,8 @@ coordinates, row increasing upward):
   shaft interiors is `.empty` or `.solid` in the final world; the brief's named
   hazardous materials are also absent there.
 - Shaft termination (single rule): scan the unmodified grid for a full-width
-  two-row opening in the shaft band, from `minBottomRow = padFloorRow - 33`
-  down to `capRow = max(padFloorRow - 49, 2)`. The first opening gives an open
+  two-row opening in the shaft band, from `minBottomRow = padFloorRow - 31`
+  down to `capRow = max(padFloorRow - 47, 2)`. The first opening gives an open
   cave end; otherwise a solid cap is placed at `capRow`. Descent is at least 32
   cells at 256×128.
 

@@ -65,7 +65,7 @@ final class CaveSpawnReplayTests: XCTestCase {
 
     /// Runs the walk-and-fall script for a given world.
     /// - Returns: The outcome of the replay.
-    func replay(world: CaveWorld, layout: CaveSpawnTemplate.Layout, termination: CaveSpawnTemplate.Termination) -> ReplayOutcome {
+    func replay(world: CaveWorld, termination: CaveSpawnTemplate.Termination) -> ReplayOutcome {
         var sim = Simulation(seed: world.seed)
         do {
             try world.cells.keys.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }.forEach { pos in
@@ -151,41 +151,7 @@ final class CaveSpawnReplayTests: XCTestCase {
                     return prePass[gy][gx] == Material.empty
                 }
 
-                // Update layout with actual termination values
-                let actualLayout = CaveSpawnTemplate.Layout(
-                    width: layout.width,
-                    height: layout.height,
-                    originX: layout.originX,
-                    originY: layout.originY,
-                    padFloorRow: layout.padFloorRow,
-                    bodyTopRow: layout.bodyTopRow,
-                    headroomTopRow: layout.headroomTopRow,
-                    ceilingBottomRow: layout.ceilingBottomRow,
-                    shaftLeftCol: layout.shaftLeftCol,
-                    shaftRightCol: layout.shaftRightCol,
-                    leftFlankLeft: layout.leftFlankLeft,
-                    leftFlankRight: layout.leftFlankRight,
-                    rightFlankLeft: layout.rightFlankLeft,
-                    rightFlankRight: layout.rightFlankRight,
-                    rightWallLeft: layout.rightWallLeft,
-                    rightWallRight: layout.rightWallRight,
-                    bodyLeftCol: layout.bodyLeftCol,
-                    bodyRightCol: layout.bodyRightCol,
-                    roomLeftCol: layout.roomLeftCol,
-                    roomRightCol: layout.roomRightCol,
-                    roomBottomRow: layout.roomBottomRow,
-                    roomTopRow: layout.roomTopRow,
-                    carveBottomRow: term.carveBottomRow,
-                    wallBottomRow: term.wallBottomRow,
-                    capRow: layout.capRow,
-                    minBottomRow: layout.minBottomRow,
-                    spawnCell: layout.spawnCell,
-                    maximalFootprint: layout.maximalFootprint,
-                    descent: term.descent,
-                    terminationKind: term.kind
-                )
-
-                let outcome = replay(world: world, layout: actualLayout, termination: term)
+                let outcome = replay(world: world, termination: term)
 
                 switch outcome {
                 case .descended(let d):
@@ -241,27 +207,12 @@ final class CaveSpawnReplayTests: XCTestCase {
         let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
             prePass[gy][gx] == Material.empty
         }
-        let actualLayout = CaveSpawnTemplate.Layout(
-            width: layout.width, height: layout.height, originX: layout.originX, originY: layout.originY,
-            padFloorRow: layout.padFloorRow, bodyTopRow: layout.bodyTopRow, headroomTopRow: layout.headroomTopRow,
-            ceilingBottomRow: layout.ceilingBottomRow, shaftLeftCol: layout.shaftLeftCol, shaftRightCol: layout.shaftRightCol,
-            leftFlankLeft: layout.leftFlankLeft, leftFlankRight: layout.leftFlankRight,
-            rightFlankLeft: layout.rightFlankLeft, rightFlankRight: layout.rightFlankRight,
-            rightWallLeft: layout.rightWallLeft, rightWallRight: layout.rightWallRight,
-            bodyLeftCol: layout.bodyLeftCol, bodyRightCol: layout.bodyRightCol,
-            roomLeftCol: layout.roomLeftCol, roomRightCol: layout.roomRightCol,
-            roomBottomRow: layout.roomBottomRow, roomTopRow: layout.roomTopRow,
-            carveBottomRow: term.carveBottomRow, wallBottomRow: term.wallBottomRow,
-            capRow: layout.capRow, minBottomRow: layout.minBottomRow,
-            spawnCell: layout.spawnCell, maximalFootprint: layout.maximalFootprint,
-            descent: term.descent, terminationKind: term.kind
-        )
 
         // Control: unmutated world should descend
-        let controlOutcome = replay(world: world, layout: actualLayout, termination: term)
+        let controlOutcome = replay(world: world, termination: term)
         XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
-        let outcome = replay(world: mutatedWorld, layout: actualLayout, termination: term)
+        let outcome = replay(world: mutatedWorld, termination: term)
         if case .insufficientDescent(let d) = outcome {
             XCTAssertEqual(d, 10, "Plug at pf-10 should give descent 10, got \(d)")
         } else {
@@ -289,26 +240,10 @@ final class CaveSpawnReplayTests: XCTestCase {
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
 
-        let actualLayout = CaveSpawnTemplate.Layout(
-            width: layout.width, height: layout.height, originX: layout.originX, originY: layout.originY,
-            padFloorRow: layout.padFloorRow, bodyTopRow: layout.bodyTopRow, headroomTopRow: layout.headroomTopRow,
-            ceilingBottomRow: layout.ceilingBottomRow, shaftLeftCol: layout.shaftLeftCol, shaftRightCol: layout.shaftRightCol,
-            leftFlankLeft: layout.leftFlankLeft, leftFlankRight: layout.leftFlankRight,
-            rightFlankLeft: layout.rightFlankLeft, rightFlankRight: layout.rightFlankRight,
-            rightWallLeft: layout.rightWallLeft, rightWallRight: layout.rightWallRight,
-            bodyLeftCol: layout.bodyLeftCol, bodyRightCol: layout.bodyRightCol,
-            roomLeftCol: layout.roomLeftCol, roomRightCol: layout.roomRightCol,
-            roomBottomRow: layout.roomBottomRow, roomTopRow: layout.roomTopRow,
-            carveBottomRow: term.carveBottomRow, wallBottomRow: term.wallBottomRow,
-            capRow: layout.capRow, minBottomRow: layout.minBottomRow,
-            spawnCell: layout.spawnCell, maximalFootprint: layout.maximalFootprint,
-            descent: term.descent, terminationKind: term.kind
-        )
-
-        let controlOutcome = replay(world: world, layout: actualLayout, termination: term)
+        let controlOutcome = replay(world: world, termination: term)
         XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
-        let outcome = replay(world: mutatedWorld, layout: actualLayout, termination: term)
+        let outcome = replay(world: mutatedWorld, termination: term)
         if case .insufficientDescent(let d) = outcome {
             XCTAssertEqual(d, 0, "Narrow shaft should give descent 0, got \(d)")
         } else {
@@ -336,26 +271,10 @@ final class CaveSpawnReplayTests: XCTestCase {
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
 
-        let actualLayout = CaveSpawnTemplate.Layout(
-            width: layout.width, height: layout.height, originX: layout.originX, originY: layout.originY,
-            padFloorRow: layout.padFloorRow, bodyTopRow: layout.bodyTopRow, headroomTopRow: layout.headroomTopRow,
-            ceilingBottomRow: layout.ceilingBottomRow, shaftLeftCol: layout.shaftLeftCol, shaftRightCol: layout.shaftRightCol,
-            leftFlankLeft: layout.leftFlankLeft, leftFlankRight: layout.leftFlankRight,
-            rightFlankLeft: layout.rightFlankLeft, rightFlankRight: layout.rightFlankRight,
-            rightWallLeft: layout.rightWallRight, rightWallRight: layout.rightWallRight,
-            bodyLeftCol: layout.bodyLeftCol, bodyRightCol: layout.bodyRightCol,
-            roomLeftCol: layout.roomLeftCol, roomRightCol: layout.roomRightCol,
-            roomBottomRow: layout.roomBottomRow, roomTopRow: layout.roomTopRow,
-            carveBottomRow: term.carveBottomRow, wallBottomRow: term.wallBottomRow,
-            capRow: layout.capRow, minBottomRow: layout.minBottomRow,
-            spawnCell: layout.spawnCell, maximalFootprint: layout.maximalFootprint,
-            descent: term.descent, terminationKind: term.kind
-        )
-
-        let controlOutcome = replay(world: world, layout: actualLayout, termination: term)
+        let controlOutcome = replay(world: world, termination: term)
         XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
-        let outcome = replay(world: mutatedWorld, layout: actualLayout, termination: term)
+        let outcome = replay(world: mutatedWorld, termination: term)
         if case .bodyOverlap(let tick, let phase, let cell) = outcome {
             XCTAssertEqual(tick, 1, "Expected tick 1, got \(tick)")
             XCTAssertEqual(phase, .postPhysics, "Expected postPhysics, got \(phase)")
@@ -385,26 +304,10 @@ final class CaveSpawnReplayTests: XCTestCase {
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
 
-        let actualLayout = CaveSpawnTemplate.Layout(
-            width: layout.width, height: layout.height, originX: layout.originX, originY: layout.originY,
-            padFloorRow: layout.padFloorRow, bodyTopRow: layout.bodyTopRow, headroomTopRow: layout.headroomTopRow,
-            ceilingBottomRow: layout.ceilingBottomRow, shaftLeftCol: layout.shaftLeftCol, shaftRightCol: layout.shaftRightCol,
-            leftFlankLeft: layout.leftFlankLeft, leftFlankRight: layout.leftFlankRight,
-            rightFlankLeft: layout.rightFlankLeft, rightFlankRight: layout.rightFlankRight,
-            rightWallLeft: layout.rightWallRight, rightWallRight: layout.rightWallRight,
-            bodyLeftCol: layout.bodyLeftCol, bodyRightCol: layout.bodyRightCol,
-            roomLeftCol: layout.roomLeftCol, roomRightCol: layout.roomRightCol,
-            roomBottomRow: layout.roomBottomRow, roomTopRow: layout.roomTopRow,
-            carveBottomRow: term.carveBottomRow, wallBottomRow: term.wallBottomRow,
-            capRow: layout.capRow, minBottomRow: layout.minBottomRow,
-            spawnCell: layout.spawnCell, maximalFootprint: layout.maximalFootprint,
-            descent: term.descent, terminationKind: term.kind
-        )
-
-        let controlOutcome = replay(world: world, layout: actualLayout, termination: term)
+        let controlOutcome = replay(world: world, termination: term)
         XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
-        let outcome = replay(world: mutatedWorld, layout: actualLayout, termination: term)
+        let outcome = replay(world: mutatedWorld, termination: term)
         if case .harmfulBody(let tick, let phase, let cell) = outcome {
             XCTAssertEqual(tick, 1, "Expected tick 1, got \(tick)")
             XCTAssertEqual(phase, .postPhysics, "Expected postPhysics, got \(phase)")

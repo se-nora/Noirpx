@@ -91,10 +91,10 @@ final class CaveWorldGenTests: XCTestCase {
     }
 
     private func checkClearanceRadius(_ world: CaveWorld, layout: CaveSpawnTemplate.Layout, prePass: [[Material]], term: CaveSpawnTemplate.Termination) {
-        let w = layout.width
-        let h = layout.height
-        let originX = layout.originX
-        let originY = layout.originY
+        _ = layout.width
+        _ = layout.height
+        _ = layout.originX
+        _ = layout.originY
         let forbidden: Set<Material> = [.lava, .acid, .gunpowder, .magicLiquid, .fire, .water, .sand, .pitch, .oil, .blood, .slime, .ice, .gold]
 
         // Room interior: cols 8...21, rows pf+1...pf+12
@@ -123,8 +123,12 @@ final class CaveWorldGenTests: XCTestCase {
                 guard nx >= 0, nx < w, ny >= 0, ny < h else { continue }
                 let pos = CellPosition(x: originX + nx, y: originY + ny)
                 let mat = world.material(at: pos)
-                XCTAssertTrue(mat == .empty || mat == .solid || forbidden.contains(mat) == false,
-                              "Cell \(pos) (gx=\(nx), gy=\(ny)) is \(mat) within clearance radius of interior")
+                // Spec: every cell within Chebyshev 6 of room/shaft interiors is exactly .empty or .solid
+                XCTAssertTrue(mat == .empty || mat == .solid,
+                              "Cell \(pos) (gx=\(nx), gy=\(ny)) is \(mat) within clearance radius; only .empty or .solid allowed")
+                // Also assert forbidden materials are absent
+                XCTAssertFalse(forbidden.contains(mat),
+                               "Cell \(pos) (gx=\(nx), gy=\(ny)) is forbidden material \(mat) within clearance radius")
             }
         }
     }
@@ -526,6 +530,34 @@ final class CaveWorldGenTests: XCTestCase {
                 XCTAssertTrue(gx >= 1 && gx <= layout.width - 2, "footprint x out of bounds")
                 XCTAssertTrue(gy >= 1 && gy <= layout.height - 2, "footprint y out of bounds")
             }
+            // Spec §7.1: raw rectangles inside 1...w-2 by 1...h-2
+            // Pad block: cols 6...23, rows pf-1...pf+14
+            // Shaft block: cols 6...16, rows wallBottom...pf-1 (using capRow-1 as worst case)
+            // Room carve: cols 8...21, rows pf+1...pf+12
+            // Shaft carve: cols 8...14, rows capRow...pf
+            let pf = layout.height - CaveSpawnTemplate.topInset
+            let padBlockCols = 6...23
+            let padBlockRows = (pf - 1)...(pf + 14)
+            let shaftBlockCols = 6...16
+            let shaftBlockRows = (layout.capRow - 1)...(pf - 1)
+            let roomCarveCols = 8...21
+            let roomCarveRows = (pf + 1)...(pf + 12)
+            let shaftCarveCols = 8...14
+            let shaftCarveRows = layout.capRow...pf
+            let allRects: [(ClosedRange<Int>, ClosedRange<Int>)] = [
+                (padBlockCols, padBlockRows),
+                (shaftBlockCols, shaftBlockRows),
+                (roomCarveCols, roomCarveRows),
+                (shaftCarveCols, shaftCarveRows)
+            ]
+            for (cols, rows) in allRects {
+                for gx in cols {
+                    XCTAssertTrue(gx >= 1 && gx <= layout.width - 2, "rect col \(gx) out of 1...w-2")
+                }
+                for gy in rows {
+                    XCTAssertTrue(gy >= 1 && gy <= layout.height - 2, "rect row \(gy) out of 1...h-2")
+                }
+            }
         }
     }
 
@@ -576,110 +608,83 @@ final class CaveWorldGenTests: XCTestCase {
                 continue
             }
 
-            var queried = Set<Int>()
+            var allQueried = Set<Int>()
 
             // All solid -> cap
-            var allSolidQueries = 0
             let term1 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                allSolidQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 return false
             }
             XCTAssertEqual(term1.kind, .cap)
             XCTAssertEqual(term1.carveBottomRow, layout.capRow)
 
             // Opening at minBottomRow -> chosen
-            queried.removeAll()
-            var minBottomQueries = 0
             let term2 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                minBottomQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 return gy == layout.minBottomRow || gy == layout.minBottomRow - 1
             }
             XCTAssertEqual(term2.kind, .openCave)
             XCTAssertEqual(term2.carveBottomRow, layout.minBottomRow)
 
-            // Opening above minBottomRow (i.e. at minBottomRow - 5) -> ignored, next opening chosen
-            queried.removeAll()
-            var aboveQueries = 0
-            let openingRow = layout.minBottomRow - 5
+            // Opening ABOVE minBottomRow (gy > minBottomRow) -> ignored (outside scan range), cap chosen
             let term3 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                aboveQueries += 1
-                queried.insert(gy * width + gx)
-                return gy == openingRow || gy == openingRow - 1
+                allQueried.insert(gy * width + gx)
+                // Opening at minBottomRow + 5 (above minBottomRow, not in scan range)
+                return gy == layout.minBottomRow + 5 || gy == layout.minBottomRow + 4
             }
-            // Since minBottomRow is higher (larger gy), the scan finds minBottomRow first if it's also empty
-            // But we only made openingRow empty, so it should find openingRow
-            // Wait: scan is from minBottomRow DOWN to capRow (decreasing gy).
-            // So minBottomRow is checked first. If we only make openingRow empty, it will be found.
-            XCTAssertEqual(term3.carveBottomRow, openingRow)
+            XCTAssertEqual(term3.kind, .cap, "Opening above minBottomRow must be ignored; scan only runs minBottomRow down to capRow")
+            XCTAssertEqual(term3.carveBottomRow, layout.capRow)
 
-            // Of two openings, the row with larger gy (checked first in downward scan) is chosen
-            queried.removeAll()
-            // Scan goes from minBottomRow DOWN to capRow (decreasing gy).
-            // The row with LARGER gy is checked FIRST.
+            // Of two openings in scan range, the higher row (larger gy, checked first) is chosen
             let rowA = layout.minBottomRow - 3
             let rowB = layout.capRow + 5
             let firstCheckedRow = max(rowA, rowB)  // larger gy, checked first
-            _ = min(rowA, rowB) // smaller gy, checked later (unused but kept for clarity)
-            var twoOpenQueries = 0
             let term4 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                twoOpenQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 return (gy == rowA || gy == rowA - 1) || (gy == rowB || gy == rowB - 1)
             }
-            // Scan from minBottomRow down: firstCheckedRow (larger gy) is checked first
+            XCTAssertEqual(term4.kind, .openCave)
             XCTAssertEqual(term4.carveBottomRow, firstCheckedRow)
 
             // Opening at capRow -> accepted
-            queried.removeAll()
-            var capRowQueries = 0
             let term5 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                capRowQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 return gy == layout.capRow || gy == layout.capRow - 1
             }
+            XCTAssertEqual(term5.kind, .openCave)
             XCTAssertEqual(term5.carveBottomRow, layout.capRow)
 
             // Not openings: single-column crack, 6-of-7 row, one empty row over solid row
             // Single column crack
-            queried.removeAll()
-            var crackQueries = 0
             let term6 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                crackQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 // Only column 8 is empty for two rows
                 return gx == layout.shaftLeftCol && (gy == layout.minBottomRow || gy == layout.minBottomRow - 1)
             }
             XCTAssertEqual(term6.kind, .cap)
 
             // 6 of 7 columns
-            queried.removeAll()
-            var sixOfSevenQueries = 0
             let term7 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                sixOfSevenQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 return gx != layout.shaftRightCol && (gy == layout.minBottomRow || gy == layout.minBottomRow - 1)
             }
             XCTAssertEqual(term7.kind, .cap)
 
             // One empty row over solid row
-            queried.removeAll()
-            var oneRowQueries = 0
             let term8 = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-                oneRowQueries += 1
-                queried.insert(gy * width + gx)
+                allQueried.insert(gy * width + gx)
                 // Row minBottomRow empty, row minBottomRow-1 solid
                 return gy == layout.minBottomRow
             }
             XCTAssertEqual(term8.kind, .cap)
 
-            // Closure never queried outside grid or band columns
-            for key in queried {
+            // Closure never queried outside grid or band columns (all closures)
+            for key in allQueried {
                 let gx = key % width
                 let gy = key / width
                 XCTAssertTrue(gx >= layout.shaftLeftCol && gx <= layout.shaftRightCol, "Queried outside shaft band: (\(gx),\(gy))")
                 XCTAssertTrue(gy >= 1 && gy < height - 1, "Queried outside grid: (\(gx),\(gy))")
+                XCTAssertTrue(gy <= layout.minBottomRow, "Queried above minBottomRow (gy=\(gy) > minBottomRow=\(layout.minBottomRow)): scan range is minBottomRow down to capRow")
             }
         }
     }

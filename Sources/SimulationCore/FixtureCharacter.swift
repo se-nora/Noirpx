@@ -13,6 +13,14 @@ public struct FixtureCharacter: Equatable, Sendable {
         position = CellPosition(x: -2, y: 6)
     }
 
+    /// Public initializer for placing the character at a specific position.
+    public init(position: CellPosition) {
+        self.position = position
+        self.grounded = false
+        self.verticalVelocity = 0
+        self.verticalRemainder = 0
+    }
+
     /// Internal restoring initializer for save decoding.
     init(position: CellPosition, grounded: Bool, verticalVelocity: Int, verticalRemainder: Int) {
         self.position = position

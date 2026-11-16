@@ -17,6 +17,9 @@ public struct CaveRun {
     internal private(set) var termination: CaveSpawnTemplate.Termination
     internal private(set) var fallLimit: Int
 
+    /// The descent goal (distance from spawn to shaft bottom) for HUD display.
+    public var descentGoal: Int { termination.descent }
+
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
     public init(seed: UInt64, width: Int = 256, height: Int = 128) throws {

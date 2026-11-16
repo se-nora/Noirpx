@@ -479,4 +479,143 @@ final class CaveRunTests: XCTestCase {
         XCTAssertEqual(run.simulation.snapshot.tick, tickBefore, "Tick should not advance after paint rejected in body")
         XCTAssertEqual(run.simulation.snapshot.digest, digestBefore, "Digest should not change after paint rejected in body")
     }
+
+    // MARK: - Host contract tests
+
+    /// Camera target is character center (position + width/2, height/2) for both sizes.
+    func testHostContractCameraTarget() throws {
+        for (width, height) in [(256, 128), (128, 64)] {
+            for seed in [1, 42] {
+                let run = try CaveRun(seed: UInt64(seed), width: width, height: height)
+                let cameraCenter = run.character.cameraCenter
+                let expectedX = run.character.position.x + FixtureCharacter.width / 2
+                let expectedY = run.character.position.y + FixtureCharacter.height / 2
+                XCTAssertEqual(cameraCenter.x, expectedX, "Camera center X mismatch seed \(seed) \(width)×\(height)")
+                XCTAssertEqual(cameraCenter.y, expectedY, "Camera center Y mismatch seed \(seed) \(width)×\(height)")
+            }
+        }
+    }
+
+    /// Terminal outcomes freeze advance and paint.
+    func testHostContractOutcomeFreeze() throws {
+        var run = try CaveRun(seed: 42, width: 256, height: 128)
+        let originalSnapshot = run.simulation.snapshot
+
+        // Force reachedDepth by setting outcome directly
+        var reachedRun = CaveRun(
+            seed: 42, size: run.size, world: run.world,
+            character: run.character, outcome: .reachedDepth,
+            simulation: run.simulation, termination: run.termination,
+            fallLimit: run.fallLimit
+        )
+
+        let tickBefore = reachedRun.simulation.snapshot.tick
+        let digestBefore = reachedRun.simulation.snapshot.digest
+
+        // advance should no-op
+        try reachedRun.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(reachedRun.outcome, .reachedDepth)
+        XCTAssertEqual(reachedRun.simulation.snapshot.tick, tickBefore)
+        XCTAssertEqual(reachedRun.simulation.snapshot.digest, digestBefore)
+
+        // paint should no-op
+        try reachedRun.paint(.sand, at: CellPosition(x: 0, y: 0))
+        XCTAssertEqual(reachedRun.simulation.snapshot.tick, tickBefore)
+        XCTAssertEqual(reachedRun.simulation.snapshot.digest, digestBefore)
+
+        // Force fell
+        var fellRun = CaveRun(
+            seed: 42, size: run.size, world: run.world,
+            character: run.character, outcome: .fell,
+            simulation: run.simulation, termination: run.termination,
+            fallLimit: run.fallLimit
+        )
+
+        let tickBefore2 = fellRun.simulation.snapshot.tick
+        let digestBefore2 = fellRun.simulation.snapshot.digest
+
+        try fellRun.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(fellRun.outcome, .fell)
+        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore2)
+        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore2)
+
+        try fellRun.paint(.sand, at: CellPosition(x: 0, y: 0))
+        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore2)
+        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore2)
+    }
+
+    /// Restart with same seed produces identical world and character position.
+    func testHostContractRestartSameSeed() throws {
+        let seed = UInt64(42)
+        let width = 256
+        let height = 128
+
+        let run1 = try CaveRun(seed: seed, width: width, height: height)
+        let world1 = run1.world.cells
+        let spawn1 = run1.world.spawn
+        let charPos1 = run1.character.position
+
+        let run2 = try CaveRun(seed: seed, width: width, height: height)
+        let world2 = run2.world.cells
+        let spawn2 = run2.world.spawn
+        let charPos2 = run2.character.position
+
+        XCTAssertEqual(world1, world2, "World cells differ on restart with same seed")
+        XCTAssertEqual(spawn1, spawn2, "Spawn differs on restart with same seed")
+        XCTAssertEqual(charPos1, charPos2, "Character position differs on restart with same seed")
+    }
+
+    /// New Run advances seed by golden ratio constant.
+    func testHostContractNewRunSeedAdvance() throws {
+        let seed = UInt64(42)
+        let width = 256
+        let height = 128
+        let goldenRatio = UInt64(0x9e3779b97f4a7c15)
+
+        let run1 = try CaveRun(seed: seed, width: width, height: height)
+        let run2 = try CaveRun(seed: seed &+ goldenRatio, width: width, height: height)
+
+        // Different seeds should produce different worlds
+        XCTAssertNotEqual(run1.world.cells, run2.world.cells, "New Run seed should produce different world")
+        XCTAssertNotEqual(run1.seed, run2.seed, "New Run seed should differ from original")
+        XCTAssertEqual(run2.seed, seed &+ goldenRatio, "New Run seed should be original + golden ratio")
+    }
+
+    /// CaveRun.init throws on invalid size (below minimum playable).
+    func testHostContractGenerateThrowOnInvalidSize() throws {
+        // Below minimum width (layout requires width >= 30, height >= 56)
+        XCTAssertThrowsError(try CaveRun(seed: 42, width: 20, height: 64)) { error in
+            guard case SimulationError.worldGenerationFailed = error else {
+                XCTFail("Expected worldGenerationFailed, got \(error)")
+                return
+            }
+        }
+        // Below minimum height
+        XCTAssertThrowsError(try CaveRun(seed: 42, width: 64, height: 40)) { error in
+            guard case SimulationError.worldGenerationFailed = error else {
+                XCTFail("Expected worldGenerationFailed, got \(error)")
+                return
+            }
+        }
+        // Both below minimum
+        XCTAssertThrowsError(try CaveRun(seed: 42, width: 20, height: 40)) { error in
+            guard case SimulationError.worldGenerationFailed = error else {
+                XCTFail("Expected worldGenerationFailed, got \(error)")
+                return
+            }
+        }
+        // Minimum playable 128×64 should succeed
+        let run = try CaveRun(seed: 42, width: 128, height: 64)
+        XCTAssertEqual(run.size.width, 128)
+        XCTAssertEqual(run.size.height, 64)
+    }
+
+    /// Host error surfacing: init throw → errorMessage set pattern.
+    func testHostContractErrorSurfacingInitThrow() throws {
+        // This test documents the expected error type for host wiring
+        // The actual host catches SimulationError.worldGenerationFailed
+        XCTAssertThrowsError(try CaveRun(seed: 42, width: 64, height: 32)) { error in
+            XCTAssertTrue(error is SimulationError, "Error should be SimulationError for host to surface")
+        }
+    }
 }

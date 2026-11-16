@@ -33,11 +33,11 @@ private final class GameModel: ObservableObject {
         return challenge?.character ?? (caveRun?.character ?? FixtureCharacter())
     }
     enum WorldMode { case beaconRun, caveRun, caveWorld }
-    private var worldMode: WorldMode = .beaconRun
+    @Published private var worldMode: WorldMode = .beaconRun
     var isCaveWorld: Bool { worldMode == .caveWorld }
     var isCaveRun: Bool { worldMode == .caveRun }
     var isBeaconRun: Bool { worldMode == .beaconRun }
-    var caveRunSeed: UInt64 = 42
+    @Published var caveRunSeed: UInt64 = 42
     private var caveWorldSimulation: Simulation?
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
@@ -50,6 +50,7 @@ private final class GameModel: ObservableObject {
         init(seed: UInt64 = 42) { self.seed = seed }
         func restart() throws -> CaveRun { try CaveRun(seed: seed, width: 256, height: 128) }
         mutating func newRun() throws -> CaveRun {
+            // Golden ratio constant (Knuth) for deterministic seed advancement
             let next = seed &+ 0x9e3779b97f4a7c15
             let run = try CaveRun(seed: next, width: 256, height: 128)
             seed = next
@@ -85,34 +86,43 @@ private final class GameModel: ObservableObject {
     }
 
     private func startCaveWorld(newSeed: Bool) {
-        if newSeed {
-            caveRunSeed = caveRunSeed &+ 0x9e3779b97f4a7c15
-        }
-        // Generate a world for camera/spawn reference (public API, stamps spawn template)
-        let generator = CaveWorldGenerator(seed: caveRunSeed, width: 256, height: 128)
-        let world = generator.generate()
+        do {
+            if newSeed {
+                // Golden ratio constant (Knuth) for deterministic seed advancement
+                caveRunSeed = caveRunSeed &+ 0x9e3779b97f4a7c15
+            }
+            // Generate a world for camera/spawn reference (public API, stamps spawn template)
+            let generator = CaveWorldGenerator(seed: caveRunSeed, width: 256, height: 128)
+            let world = generator.generate()
 
-        var simulation = Simulation(seed: caveRunSeed)
-        let sortedCells = world.cells.keys.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
-        for pos in sortedCells {
-            try? simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: world.cells[pos]!))
-        }
-        try? simulation.advance()
+            var simulation = Simulation(seed: caveRunSeed)
+            let sortedCells = world.cells.keys.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+            for pos in sortedCells {
+                try simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: world.cells[pos]!))
+            }
+            try simulation.advance()
 
-        caveWorldSimulation = simulation
-        caveWorldCharacter = FixtureCharacter(position: world.spawn)
-        caveRun = nil
-        snapshot = simulation.snapshot
-        updateActiveChunks()
-        clearControls()
-        errorMessage = nil
-        scheduler.reset()
-        framesPerSecond = 0
-        renderedChunks = nil
-        renderGeneration += 1
-        isCasting = false
-        castProgress = nil
-        castAim = nil
+            caveWorldSimulation = simulation
+            caveWorldCharacter = FixtureCharacter(position: world.spawn)
+            caveRun = nil
+            snapshot = simulation.snapshot
+            updateActiveChunks()
+            clearControls()
+            errorMessage = nil
+            scheduler.reset()
+            framesPerSecond = 0
+            renderedChunks = nil
+            renderGeneration += 1
+            isCasting = false
+            castProgress = nil
+            castAim = nil
+        } catch {
+            caveWorldSimulation = nil
+            caveWorldCharacter = nil
+            caveRun = nil
+            snapshot = nil
+            errorMessage = "Could not create cave world: \(error)"
+        }
     }
 
     private func startCaveRun(newSeed: Bool) {
@@ -359,12 +369,6 @@ private final class GameModel: ObservableObject {
     }
 }
 
-private extension FixtureCharacter {
-    var cameraCenter: CellPosition {
-        CellPosition(x: position.x + Self.width / 2, y: position.y + Self.height / 2)
-    }
-}
-
 private struct HostView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = GameModel()
@@ -397,7 +401,10 @@ private struct HostView: View {
                     },
                     onCycleWandMaterial: { direction in model.cycleWandMaterial(direction) },
                     onKeyboard: { model.setKeyboard($0) },
-                    onInputReset: { model.resetClock() }
+                    onInputReset: { model.resetClock() },
+                    onRestart: { model.restart() },
+                    onNewRun: { model.newRun() },
+                    caveMode: model.isCaveRun || model.isCaveWorld
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -417,10 +424,14 @@ private struct HostView: View {
                 if model.isCaveRun, let run = model.caveRun {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("A/D or ←/→ move • Space/↑ jump")
-                        Text("Drag paints material • F cycles material")
+                        Text("Drag paints material • [ ] cycle material")
                         Text("R restart • N new run")
                     }
                     Text("Seed \(run.seed)")
+                    Text("Size \(run.size.width)×\(run.size.height)")
+                    let pos = run.character.position
+                    Text("Pos (\(pos.x), \(pos.y))")
+                    Text("Tick \(run.simulation.snapshot.tick)")
                     let depth = run.world.spawn.y - run.character.position.y
                     Text("Depth \(depth)/\(run.descentGoal)")
                     if run.outcome == .reachedDepth {
@@ -487,9 +498,15 @@ private struct HostView: View {
                     controlButton("Left", symbol: "chevron.left", control: .left)
                     controlButton("Right", symbol: "chevron.right", control: .right)
                     Spacer()
-                    controlButton("Pulse", symbol: "bolt.fill", control: .pulse)
-                    controlButton("Jump", symbol: "arrow.up", control: .jump)
-                    castButton
+                    if !model.isCaveRun && !model.isCaveWorld {
+                        controlButton("Pulse", symbol: "bolt.fill", control: .pulse)
+                        controlButton("Jump", symbol: "arrow.up", control: .jump)
+                        castButton
+                    } else {
+                        controlButton("Jump", symbol: "arrow.up", control: .jump)
+                        // Cycle material in CaveRun/CaveWorld
+                        controlButton("Cycle", symbol: "paintbrush.fill", control: .pulse)
+                    }
                 }
                 .padding()
             }
@@ -614,6 +631,9 @@ private struct MetalSurface {
     let onCycleWandMaterial: (Int) -> Void
     let onKeyboard: (GameplayControls) -> Void
     let onInputReset: () -> Void
+    let onRestart: (() -> Void)?
+    let onNewRun: (() -> Void)?
+    let caveMode: Bool
 
     func makeCoordinator() -> MetalRenderer {
         MetalRenderer(device: device, snapshot: snapshot, character: character, challenge: challenge, onFPS: onFPS,
@@ -625,6 +645,13 @@ private struct MetalSurface {
         view.clearColor = MTLClearColor(red: 0.06, green: 0.08, blue: 0.12, alpha: 1)
         view.preferredFramesPerSecond = 60
         view.delegate = coordinator
+        #if os(macOS)
+        if let inputView = view as? InputMetalView {
+            inputView.onRestart = onRestart
+            inputView.onNewRun = onNewRun
+            inputView.caveMode = caveMode
+        }
+        #endif
     }
 }
 
@@ -636,6 +663,9 @@ private final class InputMetalView: MTKView {
     var onCycleWandMaterial: ((Int) -> Void)?
     var onKeyboard: ((GameplayControls) -> Void)?
     var onInputReset: (() -> Void)?
+    var onRestart: (() -> Void)?
+    var onNewRun: (() -> Void)?
+    var caveMode = false
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
@@ -667,6 +697,20 @@ private final class InputMetalView: MTKView {
                 }
                 return nil
             }
+            // R (15) - Restart
+            if event.keyCode == 15 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onRestart?()
+                }
+                return nil
+            }
+            // N (45) - New Run
+            if event.keyCode == 45 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onNewRun?()
+                }
+                return nil
+            }
             if event.keyCode == 33 {
                 if event.type == .keyDown && !event.isARepeat {
                     self.onCycleWandMaterial?(-1)
@@ -678,6 +722,15 @@ private final class InputMetalView: MTKView {
                     self.onCycleWandMaterial?(1)
                 }
                 return nil
+            }
+            // F (3) - in cave mode cycles material, otherwise pulse
+            if event.keyCode == 3 {
+                if self.caveMode {
+                    if event.type == .keyDown && !event.isARepeat {
+                        self.onCycleWandMaterial?(1)
+                    }
+                    return nil
+                }
             }
             guard [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {

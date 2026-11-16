@@ -29,7 +29,12 @@ private final class GameModel: ObservableObject {
     // Spell/Wand Crafting state
     var wandController: WandController = WandController()
     var craftingGrid: CraftingGrid = CraftingGrid()
-    @Published private var showCraftingGrid: Bool = false
+    @Published var showCraftingGrid: Bool = false
+
+    /// Returns true when crafting UI may be shown/toggled (safe zones only).
+    var isCraftingAllowed: Bool {
+        caveRun != nil && caveRun?.outcome != .playing
+    }
 
     var caveRun: CaveRun?
     private var scheduler = FixedTickScheduler()
@@ -74,11 +79,13 @@ private final class GameModel: ObservableObject {
             framesPerSecond = 0
             renderedChunks = nil
             renderGeneration += 1
+            showCraftingGrid = false
         } catch {
             caveRun = nil
             snapshot = nil
             renderedChunks = nil
             errorMessage = "Could not create cave run: \(error)"
+            showCraftingGrid = false
         }
     }
 
@@ -186,9 +193,15 @@ private final class GameModel: ObservableObject {
         wandController.cycleActiveSlot(direction)
     }
 
-    // New: toggle crafting grid overlay
+    // New: toggle crafting grid overlay (gated to safe zones only)
     func toggleCraftingGrid() {
+        guard isCraftingAllowed else { return }
         showCraftingGrid.toggle()
+    }
+
+    // New: unconditional hide for onClose / restart safety
+    func hideCraftingGrid() {
+        showCraftingGrid = false
     }
 
     // New: attempt to craft from grid
@@ -282,7 +295,6 @@ private struct HostView: View {
     @StateObject private var model = GameModel()
     @State private var showingDiagnostics = false
     @State private var showingHelp = false
-    @State private var showSpellCrafting = false
     private let timer = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
     private let device = MTLCreateSystemDefaultDevice()
 
@@ -357,20 +369,21 @@ private struct HostView: View {
                             help: { model.resetClock(); showingHelp = true },
                             select: { model.selectedMaterial = $0 },
                             discoveredMaterials: [],
-                            onToggleSpellCrafting: { showSpellCrafting.toggle() },
-                            showSpellCrafting: showSpellCrafting,
+                            onToggleSpellCrafting: { model.toggleCraftingGrid() },
+                            showSpellCrafting: model.showCraftingGrid,
+                            showSpellCraftingAllowed: model.isCraftingAllowed,
                             wand: model.wandController.wand,
                             manaPool: model.wandController.manaPool,
                             onCycleWandSlot: { direction in model.cycleWandSlot(direction) })
                 Text("Paint: drag; keys 1–7")
                 Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
-                // Spell crafting HUD
-                if showSpellCrafting {
+                // Spell crafting HUD (only presented in safe zones)
+                if model.showCraftingGrid && model.isCraftingAllowed {
                     CraftingHUD(
                         grid: $model.craftingGrid,
                         registry: .standard,
                         onCraft: { model.tryCraft() },
-                        onClose: { model.toggleCraftingGrid() }
+                        onClose: { model.hideCraftingGrid() }
                     )
                 }
                 if let device {

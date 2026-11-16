@@ -5,6 +5,7 @@ import XCTest
 import GamePresentation
 import SimulationCore
 
+@MainActor
 final class HUDViewportTests: XCTestCase {
     @MainActor
     func testRealSwiftUIControlsScrollIntoCompactViewport() throws {

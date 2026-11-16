@@ -5,6 +5,7 @@ import XCTest
 import AppKit
 #endif
 
+@MainActor
 final class ScopedRegistrationTests: XCTestCase {
     func testCancellationAndDeinitRemoveOnlyOnceEvenWhenReentered() {
         var removals = 0

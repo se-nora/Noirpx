@@ -39,6 +39,7 @@ final class CaveWorldMatrixCache: @unchecked Sendable {
 }
 
 /// Global matrix cache for the test suite.
+/// NOT safe for concurrent mutation. CaveSpawnReplayTests must run serially.
 let caveMatrixCache = CaveWorldMatrixCache()
 
 // MARK: - Enqueue helper

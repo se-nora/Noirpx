@@ -126,6 +126,15 @@ public struct CaveWorldGenerator: Sendable {
     // MARK: - Generation
 
     public func generate() -> CaveWorld {
+        generateInspected(stampSpawnTemplate: true, capturePrePass: false).world
+    }
+
+    /// Internal inspection entry point used by tests.
+    /// - Parameters:
+    ///   - stampSpawnTemplate: When true, stamps the spawn pad and shaft as the last material pass (default).
+    ///   - capturePrePass: When true, captures the grid state just before the template pass.
+    /// - Returns: The generated world and optionally the pre-pass grid.
+    func generateInspected(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?) {
         let w = size.width
         let h = size.height
         let originX = -w / 2
@@ -360,22 +369,61 @@ public struct CaveWorldGenerator: Sendable {
         // Spawn and goal: extremes of empty space. They are chosen before the
         // material pass so the placement rules can keep hazards away from them,
         // and they stay empty afterwards.
-        var empties: [(Int, Int)] = []
-        for gy in 0..<h {
-            for gx in 0..<w {
-                if grid[gy][gx] == .empty {
-                    empties.append((gx, gy))
+        var layout: CaveSpawnTemplate.Layout? = nil
+        if stampSpawnTemplate {
+            layout = CaveSpawnTemplate.layout(width: w, height: h)
+        }
+
+        var spawnCell: (Int, Int) = (w / 2, h / 2)
+        var goalCell: (Int, Int) = (w / 2, h / 2)
+        var useTemplate = false
+        if let candidateLayout = layout {
+            // Goal candidates are empties outside the maximal footprint.
+            var candidates: [(Int, Int)] = []
+            for gy in 0..<h {
+                for gx in 0..<w {
+                    if grid[gy][gx] == .empty && !candidateLayout.maximalFootprint.contains(gy * w + gx) {
+                        candidates.append((gx, gy))
+                    }
                 }
             }
+            if candidates.isEmpty {
+                // No candidate outside footprint: skip template, fall back to natural selection.
+                layout = nil
+            } else {
+                // Lexicographic max (by x, then y) for goal.
+                goalCell = candidates.max(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+                // Natural spawn is still the lexicographic min of all empties.
+                var allEmpties: [(Int, Int)] = []
+                for gy in 0..<h {
+                    for gx in 0..<w {
+                        if grid[gy][gx] == .empty {
+                            allEmpties.append((gx, gy))
+                        }
+                    }
+                }
+                spawnCell = allEmpties.min(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+                useTemplate = true
+            }
         }
-        let spawnCell: (Int, Int)
-        let goalCell: (Int, Int)
-        if empties.isEmpty {
-            spawnCell = (w / 2, h / 2)
-            goalCell = (w / 2, h / 2)
-        } else {
-            spawnCell = empties.min(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
-            goalCell = empties.max(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+
+        if !useTemplate {
+            // Natural selection (original behavior).
+            var empties: [(Int, Int)] = []
+            for gy in 0..<h {
+                for gx in 0..<w {
+                    if grid[gy][gx] == .empty {
+                        empties.append((gx, gy))
+                    }
+                }
+            }
+            if empties.isEmpty {
+                spawnCell = (w / 2, h / 2)
+                goalCell = (w / 2, h / 2)
+            } else {
+                spawnCell = empties.min(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+                goalCell = empties.max(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+            }
         }
 
         // MARK: New material placement (cave materials follow-up)
@@ -431,10 +479,69 @@ public struct CaveWorldGenerator: Sendable {
                         lavaCells: lavaCells, gunpowderCells: gunpowderCells)
         }
 
+        // Template pass: stamp the spawn pad and shaft as the LAST material pass.
+        var prePassGrid: [[Material]]? = nil
+        var finalSpawnCell = spawnCell
+        var finalGoalCell = goalCell
+        if let layout = layout {
+            if capturePrePass { prePassGrid = grid }
+            // Scan termination on the unmodified grid (pre-pass).
+            let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
+                guard gx >= 0, gx < w, gy >= 0, gy < h else { return false }
+                return grid[gy][gx] == .empty
+            }
+
+            // 1. Purge: footprint cells that are not .empty or .solid become .solid.
+            for key in layout.maximalFootprint {
+                let gy = key / w
+                let gx = key % w
+                let mat = grid[gy][gx]
+                if mat != .empty && mat != .solid {
+                    grid[gy][gx] = .solid
+                }
+            }
+
+            // 2. Solid shell.
+            // Pad block: cols 6...23, rows pf-1...pf+14
+            for gy in (layout.padFloorRow - 1)...(layout.padFloorRow + 14) {
+                for gx in 6...23 {
+                    grid[gy][gx] = .solid
+                }
+            }
+            // Shaft block: cols 6...16, rows wallBottom...pf-1
+            for gy in term.wallBottomRow...(layout.padFloorRow - 1) {
+                for gx in 6...16 {
+                    grid[gy][gx] = .solid
+                }
+            }
+
+            // 3. Carve (empty).
+            // Room: cols 8...21, rows pf+1...pf+12
+            for gy in (layout.padFloorRow + 1)...(layout.padFloorRow + 12) {
+                for gx in 8...21 {
+                    grid[gy][gx] = .empty
+                }
+            }
+            // Shaft and opening: cols 8...14, rows carveBottom...pf
+            for gy in term.carveBottomRow...layout.padFloorRow {
+                for gx in 8...14 {
+                    grid[gy][gx] = .empty
+                }
+            }
+
+            // Template spawn overrides natural spawn.
+            finalSpawnCell = layout.spawnCell
+            // Goal was already chosen outside footprint; keep it.
+            finalGoalCell = goalCell
+        }
+
         // The border walls and the spawn/goal cells survive every carve.
         enforceBorders(grid: &grid, width: w, height: h)
-        grid[spawnCell.1][spawnCell.0] = .empty
-        grid[goalCell.1][goalCell.0] = .empty
+        // Skip writing spawn cell when stamped (could punch a hole in a template wall).
+        if layout == nil {
+            grid[finalSpawnCell.1][finalSpawnCell.0] = .empty
+        }
+        grid[finalGoalCell.1][finalGoalCell.0] = .empty
 
         // Build cell dictionary (non-empty only).
         var cells: [CellPosition: Material] = [:]
@@ -457,14 +564,15 @@ public struct CaveWorldGenerator: Sendable {
                                       minY: ys.min()!, maxY: ys.max()!)
         }
 
-        return CaveWorld(
+        let world = CaveWorld(
             seed: seed,
             size: size,
             extents: extents,
-            spawn: CellPosition(x: originX + spawnCell.0, y: originY + spawnCell.1),
-            goal: CellPosition(x: originX + goalCell.0, y: originY + goalCell.1),
+            spawn: CellPosition(x: originX + finalSpawnCell.0, y: originY + finalSpawnCell.1),
+            goal: CellPosition(x: originX + finalGoalCell.0, y: originY + finalGoalCell.1),
             cells: cells
         )
+        return (world, prePassGrid)
     }
 
     // MARK: - Placement helpers

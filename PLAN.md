@@ -304,7 +304,7 @@ established by automated tests; milestone exit remains open.
 **Increment: CaveRun host wiring** — Added Cave Run as a selectable world mode
 alongside Beacon Run and Cave World. Host wires `CaveRun` simulation type with
 camera follow (`FixtureViewport` 200 long-edge cells), 256×128 default size,
-outcome HUD (playing/reachedDepth/fell), Restart (same seed), New Run (golden-ratio
+outcome HUD (playing/fell), Restart (same seed), New Run (golden-ratio
 seed advance), and `generate()` throw surfaced as error. Input: macOS A/D/←/→ move,
 W/Space/↑ jump, [/] cycle material, R/N restart/new run; iOS on-screen buttons
 for move/jump/cycle (no pulse/wand). HUD shows size, position, tick, seed, depth.

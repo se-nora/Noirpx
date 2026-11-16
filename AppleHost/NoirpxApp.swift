@@ -211,13 +211,11 @@ private struct HostView: View {
                     Text("Pos (\(pos.x), \(pos.y))")
                     Text("Tick \(run.simulation.snapshot.tick)")
                     let depth = run.world.spawn.y - run.character.position.y
-                    Text("Depth \(depth)/\(run.descentGoal)")
-                    if run.outcome == .reachedDepth {
-                        Text("You reached the depth!").foregroundStyle(.green).fontWeight(.bold)
-                    } else if run.outcome == .fell {
+                    Text("Depth \(depth)")
+                    if run.outcome == .fell {
                         Text("You fell too far. Try again!").foregroundStyle(.orange).fontWeight(.bold)
                     } else {
-                        Text("Descend the shaft. Reach the bottom.")
+                        Text("Descend the shaft.")
                     }
                 }
 
@@ -268,7 +266,7 @@ private struct HostView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Cave Run").font(.headline)
-                        Text("Descend the shaft to reach the depth goal. Paint materials with drag. Cycle materials with [/].")
+                        Text("Descend the shaft. Paint materials with drag. Cycle materials with [/].")
                         Text("Lava creates fire. Fire burns pitch and oil. Water quenches fire and creates steam.")
                         Text("macOS: A/D or arrows move, W/up/space jumps, [/] cycles material, R restarts, N new run.")
                         Text("iOS: use the on-screen controls.")

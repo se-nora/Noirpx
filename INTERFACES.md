@@ -1074,7 +1074,6 @@ public struct CaveRun {
 
     public enum Outcome: Equatable, Sendable {
         case playing
-        case reachedDepth
         case fell
     }
 
@@ -1121,7 +1120,7 @@ Each `advance(horizontal:jump:)` call executes in this exact order:
 2. **Character advance**: `character.advance(snapshot: horizontal: jump:)` on
    the completed snapshot.
 3. **Fell check**: `character.position.y <= fallLimit` → `.fell`.
-4. **Reached depth check**: `descent >= termination.descent` → `.reachedDepth`.
+4. **Fall check**: `character.position.y <= fallLimit` → `.fell`.
 
 Once `outcome != .playing`, further `advance` calls are no-ops (input frozen,
 paint disabled by host). Insufficient descent (grounded mid-shaft) is detected
@@ -1139,9 +1138,9 @@ by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
 
 ### Verified configurations
 
-- `standard` (256 × 128): seeds 1, 2, 3, 4, 42, 64 reach `.reachedDepth` with
+- `standard` (256 × 128): seeds 1, 2, 3, 4, 42, 64 complete without falling
   the canonical 60-idle / 7-walk-left / fall script; descent ≥ 32 cells.
-- `small` (128 × 64): seeds 1, 2, 3, 4, 42, 64 reach `.reachedDepth` with
+- `small` (128 × 64): seeds 1, 2, 3, 4, 42, 64 complete without falling
   the same script.
 - Mutation tests (seed 42, 256 × 128):
   - Plug at `padFloorRow-10` → test harness `insufficientDescent(10)`.
@@ -1171,7 +1170,7 @@ Blocking material paint inside the character body is rejected by `CaveRun.paint`
 - **Default world size:** 256 × 128 cells. Minimum playable: 128 × 64.
 - **Outcome UI (HUD):**
   - `.playing`: "Descend the shaft. Reach the bottom."
-  - `.reachedDepth`: Green bold "You reached the depth!"
+  - `.fell`: Red bold "You fell!"
   - `.fell`: Orange bold "You fell too far. Try again!"
 - **Input mapping (CaveRun mode):**
   - macOS: A/← left, D/→ right, W/Space/↑ jump, [ / ] cycle material, R restart, N new run

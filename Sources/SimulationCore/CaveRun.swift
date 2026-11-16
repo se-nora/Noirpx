@@ -1,9 +1,8 @@
 /// A seeded, replayable cave session. All game state advances on completed material ticks.
-/// The depth goal is defined by the stamped descent shaft; the fall failure mirrors BeaconRun.
+/// Open-ended descent; the only failure is falling too far below spawn.
 public struct CaveRun {
     public enum Outcome: Equatable, Sendable {
         case playing
-        case reachedDepth
         case fell
     }
 
@@ -14,11 +13,7 @@ public struct CaveRun {
     public private(set) var outcome: Outcome = .playing
     public private(set) var simulation: Simulation
 
-    internal private(set) var termination: CaveSpawnTemplate.Termination
     internal private(set) var fallLimit: Int
-
-    /// The descent goal (distance from spawn to shaft bottom) for HUD display.
-    public var descentGoal: Int { termination.descent }
 
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
@@ -43,7 +38,6 @@ public struct CaveRun {
         }
 
         self.world = world
-        self.termination = termination
 
         var simulation = Simulation(seed: seed)
         // Enqueue world cells in deterministic order (y then x)
@@ -77,17 +71,9 @@ public struct CaveRun {
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
 
         // 3. Outcome checks (order matters)
-        let descent = world.spawn.y - character.position.y
-
         // 3a. Fell check (uses fallLimit with margin)
         if character.position.y <= fallLimit {
             outcome = .fell
-            return
-        }
-
-        // 3b. Reached depth check (uses termination.descent from stamped shaft)
-        if descent >= termination.descent {
-            outcome = .reachedDepth
             return
         }
     }
@@ -105,14 +91,13 @@ public struct CaveRun {
 
     /// Test-only restoring initializer for mutation/replay tests.
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
-         outcome: Outcome, simulation: Simulation, termination: CaveSpawnTemplate.Termination, fallLimit: Int) {
+         outcome: Outcome, simulation: Simulation, fallLimit: Int) {
         self.seed = seed
         self.size = size
         self.world = world
         self.character = character
         self.outcome = outcome
         self.simulation = simulation
-        self.termination = termination
         self.fallLimit = fallLimit
     }
 }

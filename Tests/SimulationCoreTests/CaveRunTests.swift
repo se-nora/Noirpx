@@ -26,7 +26,7 @@ final class CaveRunTests: XCTestCase {
 
     private enum ReplayOutcome: Equatable {
         case descended(Int)
-        case insufficientDescent(Int)
+        case fell
         case bodyOverlap(tick: Int, phase: String)
         case harmfulBody(tick: Int, phase: String)
         case idleFailed(tick: Int, reason: String)
@@ -79,7 +79,6 @@ final class CaveRunTests: XCTestCase {
         expectedMinDescent: Int? = nil
     ) throws -> (ReplayOutcome, Int) {
         var run = try CaveRun(seed: seed, width: width, height: height)
-        let termination = run.termination
         let maxTicks = 200
 
         // Idle phase: 60 ticks, character should stay grounded at spawn
@@ -92,7 +91,7 @@ final class CaveRunTests: XCTestCase {
         // Walk phase: 7 ticks of horizontal -1
         for t in 1...7 {
             try run.advance(horizontal: -1, jump: false)
-            if run.outcome != .playing { return (.insufficientDescent(run.world.spawn.y - run.character.position.y), run.world.spawn.y - run.character.position.y) }
+            if run.outcome != .playing { return (.fell, run.world.spawn.y - run.character.position.y) }
             if let issue = checkBodyOverlapAndHarmful(run: run, tick: 60 + t, phase: "walk") { return (issue, run.world.spawn.y - run.character.position.y) }
         }
 
@@ -101,29 +100,21 @@ final class CaveRunTests: XCTestCase {
         while fallTicks < maxTicks {
             fallTicks += 1
             try run.advance(horizontal: 0, jump: false)
-            if run.outcome == .reachedDepth {
-                let descent = run.world.spawn.y - run.character.position.y
-                if let expected = expectedMinDescent {
-                    guard descent >= expected else { return (.insufficientDescent(descent), descent) }
-                }
-                if let issue = checkBodyOverlapAndHarmful(run: run, tick: 67 + fallTicks, phase: "fall") { return (issue, descent) }
-                return (.descended(descent), descent)
-            }
             if run.outcome == .fell {
-                return (.insufficientDescent(run.world.spawn.y - run.character.position.y), run.world.spawn.y - run.character.position.y)
+                return (.fell, run.world.spawn.y - run.character.position.y)
             }
             if let issue = checkBodyOverlapAndHarmful(run: run, tick: 67 + fallTicks, phase: "fall") { return (issue, run.world.spawn.y - run.character.position.y) }
             if run.character.grounded {
-                // Grounded but not reached depth → insufficient
+                // Grounded but not fell → descended
                 let descent = run.world.spawn.y - run.character.position.y
                 if let expected = expectedMinDescent, descent >= expected {
                     if let issue = checkBodyOverlapAndHarmful(run: run, tick: 67 + fallTicks, phase: "fall") { return (issue, descent) }
                     return (.descended(descent), descent)
                 }
-                return (.insufficientDescent(descent), descent)
+                return (.descended(descent), descent)
             }
         }
-        return (.insufficientDescent(run.world.spawn.y - run.character.position.y), run.world.spawn.y - run.character.position.y)
+        return (.descended(run.world.spawn.y - run.character.position.y), run.world.spawn.y - run.character.position.y)
     }
 
     func testLiveReplay256x128Seeds() throws {
@@ -203,7 +194,6 @@ final class CaveRunTests: XCTestCase {
 
     private struct MutatedRun {
         var run: CaveRun
-        let termination: CaveSpawnTemplate.Termination
     }
 
     private func makeMutatedRun(
@@ -214,7 +204,7 @@ final class CaveRunTests: XCTestCase {
         guard let prePass = prePass else { XCTFail("prePass missing"); throw TestError.missingPrePass }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); throw TestError.missingLayout }
 
-        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
+        let termination = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
             guard gx >= 0, gx < 256, gy >= 0, gy < 128 else { return false }
             return prePass[gy][gx] == Material.empty
         }
@@ -241,8 +231,7 @@ final class CaveRunTests: XCTestCase {
             verticalVelocity: 0,
             verticalRemainder: 0
         )
-
-        let fallLimit = mutatedWorld.spawn.y - term.descent - 4
+        let fallLimit = mutatedWorld.spawn.y - termination.descent - 4
 
         // Use internal restoring initializer
         let run = CaveRun(
@@ -252,11 +241,10 @@ final class CaveRunTests: XCTestCase {
             character: character,
             outcome: .playing,
             simulation: simulation,
-            termination: term,
             fallLimit: fallLimit
         )
 
-        return MutatedRun(run: run, termination: term)
+        return MutatedRun(run: run)
     }
 
     enum TestError: Error { case missingPrePass, missingLayout }
@@ -265,13 +253,13 @@ final class CaveRunTests: XCTestCase {
         // Idle phase
         for t in 1...60 {
             try? mutated.run.advance(horizontal: 0, jump: false)
-            if mutated.run.outcome != .playing { return (.insufficientDescent(mutated.run.world.spawn.y - mutated.run.character.position.y), mutated.run.world.spawn.y - mutated.run.character.position.y) }
+            if mutated.run.outcome != .playing { return (.fell, mutated.run.world.spawn.y - mutated.run.character.position.y) }
             if let issue = checkBodyOverlapAndHarmful(run: mutated.run, tick: t, phase: "idle") { return (issue, mutated.run.world.spawn.y - mutated.run.character.position.y) }
         }
         // Walk phase
         for t in 1...7 {
             try? mutated.run.advance(horizontal: -1, jump: false)
-            if mutated.run.outcome != .playing { return (.insufficientDescent(mutated.run.world.spawn.y - mutated.run.character.position.y), mutated.run.world.spawn.y - mutated.run.character.position.y) }
+            if mutated.run.outcome != .playing { return (.fell, mutated.run.world.spawn.y - mutated.run.character.position.y) }
             if let issue = checkBodyOverlapAndHarmful(run: mutated.run, tick: 60 + t, phase: "walk") { return (issue, mutated.run.world.spawn.y - mutated.run.character.position.y) }
         }
         // Fall phase
@@ -279,21 +267,17 @@ final class CaveRunTests: XCTestCase {
         while fallTicks < maxTicks {
             fallTicks += 1
             try? mutated.run.advance(horizontal: 0, jump: false)
-            if mutated.run.outcome == .reachedDepth {
-                let descent = mutated.run.world.spawn.y - mutated.run.character.position.y
-                if let issue = checkBodyOverlapAndHarmful(run: mutated.run, tick: 67 + fallTicks, phase: "fall") { return (issue, descent) }
-                return (.descended(descent), descent)
-            }
             if mutated.run.outcome == .fell {
-                return (.insufficientDescent(mutated.run.world.spawn.y - mutated.run.character.position.y), mutated.run.world.spawn.y - mutated.run.character.position.y)
+                return (.fell, mutated.run.world.spawn.y - mutated.run.character.position.y)
             }
             if let issue = checkBodyOverlapAndHarmful(run: mutated.run, tick: 67 + fallTicks, phase: "fall") { return (issue, mutated.run.world.spawn.y - mutated.run.character.position.y) }
             if mutated.run.character.grounded {
                 let descent = mutated.run.world.spawn.y - mutated.run.character.position.y
-                return (.insufficientDescent(descent), descent)
+                if let issue = checkBodyOverlapAndHarmful(run: mutated.run, tick: 67 + fallTicks, phase: "fall") { return (issue, descent) }
+                return (.descended(descent), descent)
             }
         }
-        return (.insufficientDescent(mutated.run.world.spawn.y - mutated.run.character.position.y), mutated.run.world.spawn.y - mutated.run.character.position.y)
+        return (.descended(mutated.run.world.spawn.y - mutated.run.character.position.y), mutated.run.world.spawn.y - mutated.run.character.position.y)
     }
 
     func testPlugMutation() throws {
@@ -309,7 +293,7 @@ final class CaveRunTests: XCTestCase {
         }
 
         let (outcome, descent) = runMutationTest(&mutated)
-        XCTAssertEqual(outcome, .insufficientDescent(10), "Plug mutation should cause insufficientDescent(10), got \(outcome)")
+        XCTAssertEqual(outcome, .descended(10), "Plug mutation should cause descended(10), got \(outcome)")
         XCTAssertEqual(descent, 10, "Descent should be 10 for plug mutation")
     }
 
@@ -319,10 +303,10 @@ final class CaveRunTests: XCTestCase {
             stampSpawnTemplate: true, capturePrePass: true)
         guard let prePass = prePass else { XCTFail("prePass missing"); return }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
-        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+        let termination = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
 
         var mutatedCells = world.cells
-        for gy in term.carveBottomRow...layout.padFloorRow {
+        for gy in termination.carveBottomRow...layout.padFloorRow {
             for gx in layout.shaftLeftCol...(layout.shaftLeftCol + 2) { // cols 8,9,10
                 let wx = layout.originX + gx
                 let wy = layout.originY + gy
@@ -348,13 +332,12 @@ final class CaveRunTests: XCTestCase {
             verticalVelocity: 0,
             verticalRemainder: 0
         )
-
-        let fallLimit = mutatedWorld.spawn.y - term.descent - 4
+        let fallLimit = mutatedWorld.spawn.y - termination.descent - 4
 
         var run = CaveRun(
             seed: 42, size: mutatedWorld.size, world: mutatedWorld,
             character: character, outcome: .playing, simulation: simulation,
-            termination: term, fallLimit: fallLimit
+            fallLimit: fallLimit
         )
 
         // Idle phase
@@ -374,14 +357,8 @@ final class CaveRunTests: XCTestCase {
         while fallTicks < 200 {
             fallTicks += 1
             try run.advance(horizontal: 0, jump: false)
-            if run.outcome == .reachedDepth {
-                let descent = run.world.spawn.y - run.character.position.y
-                if let issue = checkBodyOverlapAndHarmful(run: run, tick: 67 + fallTicks, phase: "fall") { XCTFail("Body overlap/harmful at depth: \(issue)"); return }
-                XCTFail("Narrow shaft should cause insufficientDescent, got reachedDepth with descent \(descent)")
-                return
-            }
             if run.outcome == .fell {
-                XCTFail("Narrow shaft should cause insufficientDescent(0), got fell")
+                XCTFail("Narrow shaft should cause descended(0), got fell")
                 return
             }
             if let issue = checkBodyOverlapAndHarmful(run: run, tick: 67 + fallTicks, phase: "fall") { XCTFail("Body overlap/harmful during fall: \(issue)"); return }
@@ -396,7 +373,6 @@ final class CaveRunTests: XCTestCase {
     }
 
     func testEmbeddedBlockMutation() throws {
-        // Embedded block: cell (19, pf+5) becomes solid (body overlap at spawn)
         // Character walks away during walk phase, then falls shaft normally and reaches depth.
         var mutated = try makeMutatedRun { cells, layout in
             let blockGX = layout.bodyLeftCol + 2 // 19
@@ -442,7 +418,7 @@ final class CaveRunTests: XCTestCase {
         var fellRun = CaveRun(
             seed: 42, size: run.size, world: run.world,
             character: run.character, outcome: .fell, simulation: simulation,
-            termination: run.termination, fallLimit: run.fallLimit
+            fallLimit: run.fallLimit
         )
 
         let tickBefore = fellRun.simulation.snapshot.tick
@@ -451,19 +427,6 @@ final class CaveRunTests: XCTestCase {
         XCTAssertEqual(fellRun.outcome, .fell)
         XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore, "Tick should not advance after paint on terminal outcome")
         XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore, "Digest should not change after paint on terminal outcome")
-
-        var reachedRun = CaveRun(
-            seed: 42, size: run.size, world: run.world,
-            character: run.character, outcome: .reachedDepth, simulation: simulation,
-            termination: run.termination, fallLimit: run.fallLimit
-        )
-
-        let tickBefore2 = reachedRun.simulation.snapshot.tick
-        let digestBefore2 = reachedRun.simulation.snapshot.digest
-        try reachedRun.paint(.sand, at: CellPosition(x: 0, y: 0))
-        XCTAssertEqual(reachedRun.outcome, .reachedDepth)
-        XCTAssertEqual(reachedRun.simulation.snapshot.tick, tickBefore2, "Tick should not advance after paint on terminal outcome")
-        XCTAssertEqual(reachedRun.simulation.snapshot.digest, digestBefore2, "Digest should not change after paint on terminal outcome")
     }
 
     func testPaintBlockingInsideCharacterRejected() throws {
@@ -501,47 +464,27 @@ final class CaveRunTests: XCTestCase {
         var run = try CaveRun(seed: 42, width: 256, height: 128)
         let originalSnapshot = run.simulation.snapshot
 
-        // Force reachedDepth by setting outcome directly
-        var reachedRun = CaveRun(
-            seed: 42, size: run.size, world: run.world,
-            character: run.character, outcome: .reachedDepth,
-            simulation: run.simulation, termination: run.termination,
-            fallLimit: run.fallLimit
-        )
-
-        let tickBefore = reachedRun.simulation.snapshot.tick
-        let digestBefore = reachedRun.simulation.snapshot.digest
-
-        // advance should no-op
-        try reachedRun.advance(horizontal: 0, jump: false)
-        XCTAssertEqual(reachedRun.outcome, .reachedDepth)
-        XCTAssertEqual(reachedRun.simulation.snapshot.tick, tickBefore)
-        XCTAssertEqual(reachedRun.simulation.snapshot.digest, digestBefore)
-
-        // paint should no-op
-        try reachedRun.paint(.sand, at: CellPosition(x: 0, y: 0))
-        XCTAssertEqual(reachedRun.simulation.snapshot.tick, tickBefore)
-        XCTAssertEqual(reachedRun.simulation.snapshot.digest, digestBefore)
-
         // Force fell
         var fellRun = CaveRun(
             seed: 42, size: run.size, world: run.world,
             character: run.character, outcome: .fell,
-            simulation: run.simulation, termination: run.termination,
+            simulation: run.simulation,
             fallLimit: run.fallLimit
         )
 
-        let tickBefore2 = fellRun.simulation.snapshot.tick
-        let digestBefore2 = fellRun.simulation.snapshot.digest
+        let tickBefore = fellRun.simulation.snapshot.tick
+        let digestBefore = fellRun.simulation.snapshot.digest
 
+        // advance should no-op
         try fellRun.advance(horizontal: 0, jump: false)
         XCTAssertEqual(fellRun.outcome, .fell)
-        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore2)
-        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore2)
+        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore)
+        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore)
 
+        // paint should no-op
         try fellRun.paint(.sand, at: CellPosition(x: 0, y: 0))
-        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore2)
-        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore2)
+        XCTAssertEqual(fellRun.simulation.snapshot.tick, tickBefore)
+        XCTAssertEqual(fellRun.simulation.snapshot.digest, digestBefore)
     }
 
     /// Restart with same seed produces identical world and character position.

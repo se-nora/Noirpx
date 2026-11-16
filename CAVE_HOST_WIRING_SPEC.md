@@ -1,6 +1,6 @@
 # Architecture Spec: CaveRun Host Wiring
 
-**Goal:** Wire `CaveRun` into the Apple host with camera follow, 256×128 default size, outcome UI (playing/reachedDepth/fell), restart and New Run, and handling a thrown `generate()`.
+**Goal:** Wire `CaveRun` into the Apple host with camera follow, 256×128 default size, outcome UI (playing/fell), restart and New Run, and handling a thrown `generate()`.
 
 **Commit:** `c933dec` — CaveRun host wiring: camera follow, HUD, restart/new run, error surfacing
 
@@ -14,7 +14,6 @@
 public struct CaveRun {
     public enum Outcome: Equatable, Sendable {
         case playing
-        case reachedDepth
         case fell
     }
 
@@ -40,8 +39,8 @@ public struct CaveRun {
 **Key contracts:**
 - `descentGoal` exposes `termination.descent` for HUD depth display
 - `init` throws `SimulationError.worldGenerationFailed` on insufficient descent or layout failure
-- `advance` order: material tick → character advance → fell check → reachedDepth check
-- Terminal outcomes (`.reachedDepth`, `.fell`) freeze further `advance` and `paint`
+- `advance` order: material tick → character advance → fell check
+- Terminal outcome (`.fell`) freezes further `advance` and `paint`
 - `paint` silently rejects blocking material inside character body
 
 ### 1.2 FixtureCharacter Extension
@@ -92,7 +91,7 @@ Allows host to place character at `world.spawn` for CaveWorld sandbox mode.
 | Outcome | HUD Text | Style |
 |---------|----------|-------|
 | `.playing` | "Descend the shaft. Reach the bottom." | normal |
-| `.reachedDepth` | "You reached the depth!" | green, bold |
+
 | `.fell` | "You fell too far. Try again!" | orange, bold |
 
 Depth display: `Text("Depth \(depth)/\(run.descentGoal)")` where `depth = run.world.spawn.y - run.character.position.y`
@@ -208,18 +207,14 @@ open DerivedData/mac/Build/Products/Debug/Noirpx.app
 ```
 
 **Manual verification checklist:**
-1. App launches, shows "BEACON RUN" HUD
-2. Click "Cave Run" button → HUD shows "CAVE RUN", seed displayed, depth "Depth 0/XX"
-3. A/D or arrow keys move character; Space/W/↑ jumps
-4. Camera follows character (viewport shifts smoothly)
-5. Drag paints selected material (1–7 or F to cycle)
-6. Descend shaft → "You reached the depth!" in green
-7. Press R → Restart (same seed, depth resets)
-8. Press N → New Run (seed advances, new layout)
-9. Fall below shaft → "You fell too far. Try again!" in orange
-10. Click "Cave World" → sandbox mode, "CAVE WORLD — Sandbox mode"
-11. Click "Beacon Run" → returns to Beacon Run
-12. Error case: (hard to trigger) if `generate()` throws, red error in HUD, Restart/New Run clears it
+1. App launches directly into CaveRun, seed displayed
+2. A/D or arrow keys move character; Space/W/↑ jumps
+3. Camera follows character (viewport shifts smoothly)
+4. Drag paints selected material (1–7 or [/] to cycle)
+5. Press R → Restart (same seed)
+6. Press N → New Run (seed advances, new layout)
+7. Fall too far below spawn → "You fell too far. Try again!" in orange
+8. Error case: if `generate()` throws, red error in HUD, Restart/New Run clears it
 
 ### 4.4 iOS Simulator (Optional)
 

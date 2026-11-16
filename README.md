@@ -144,7 +144,7 @@ cells along the drawable's long edge.
 - Depth / descent goal (distance from spawn to shaft bottom)
 - Outcome banner:
   - Playing: "Descend the shaft. Reach the bottom."
-  - Reached depth: Green "You reached the depth!"
+  
   - Fell: Orange "You fell too far. Try again!"
 
 The world is generated from a seed using the cave spawn template. The shaft

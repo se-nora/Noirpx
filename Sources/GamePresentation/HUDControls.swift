@@ -13,6 +13,7 @@ public struct HUDControls: View {
     private let discoveredMaterials: Set<SimulationCore.Material>
     private let onToggleSpellCrafting: () -> Void
     private let showSpellCrafting: Bool
+    private let showSpellCraftingAllowed: Bool
     // Wand/mana additions
     private let wand: Wand
     private let manaPool: ManaPool
@@ -24,6 +25,7 @@ public struct HUDControls: View {
                 discoveredMaterials: Set<SimulationCore.Material> = [],
                 onToggleSpellCrafting: @escaping () -> Void = {},
                 showSpellCrafting: Bool = false,
+                showSpellCraftingAllowed: Bool = true,
                 wand: Wand = Wand(),
                 manaPool: ManaPool = ManaPool(),
                 onCycleWandSlot: @escaping (Int) -> Void = { _ in }) {
@@ -36,6 +38,7 @@ public struct HUDControls: View {
         self.discoveredMaterials = discoveredMaterials
         self.onToggleSpellCrafting = onToggleSpellCrafting
         self.showSpellCrafting = showSpellCrafting
+        self.showSpellCraftingAllowed = showSpellCraftingAllowed
         self.wand = wand
         self.manaPool = manaPool
         self.onCycleWandSlot = onCycleWandSlot
@@ -70,7 +73,7 @@ public struct HUDControls: View {
                 }
             }
             // Spell crafting toggle
-            if !discoveredMaterials.isEmpty {
+            if !discoveredMaterials.isEmpty && showSpellCraftingAllowed {
                 Button(showSpellCrafting ? "Hide Spells" : "Show Spells", action: onToggleSpellCrafting)
                     .buttonStyle(.bordered)
                     .tint(.purple)

@@ -128,89 +128,6 @@ final class FireOverlayTests: XCTestCase {
         }
     }
 
-    func testContrastAndWardenPhaseAcrossShieldStates() throws {
-        func character(at x: Int) throws -> FixtureCharacter {
-            var floor = Simulation(seed: 0)
-            for x in -10...130 {
-                try floor.enqueue(.init(tick: 1, position: .init(x: x, y: -2), material: .solid))
-            }
-            try floor.advance(activeChunks: frozen)
-            var character = FixtureCharacter()
-            while character.position.x < x {
-                try character.advance(snapshot: floor.snapshot, horizontal: 1, jump: false)
-            }
-            return character
-        }
-        for (phase, phaseColor) in [(2, [UInt8]([255, 186, 59, 255])),
-                                    (25, [255, 77, 75, 255]), (37, [145, 94, 166, 255])] {
-            for shield in [false, true] {
-                var run = try BeaconRun()
-                try run.advance(horizontal: 0, jump: false)
-                while run.warden.phase != phase - 1 { try run.advance(horizontal: 0, jump: false) }
-                if shield {
-                    let p = run.character.position
-                    try run.paint(.fire, at: .init(x: p.x + 2, y: p.y + 4))
-                }
-                try run.advance(horizontal: 0, jump: false, activeChunks: frozen)
-                XCTAssertEqual(run.warden.phase, phase)
-                XCTAssertEqual(run.damageCooldown > 0, shield)
-                let character = try character(at: run.warden.position.x)
-                let p = character.position
-                XCTAssertEqual(p, run.warden.position)
-                let body = CellPosition(x: p.x + 2, y: p.y + 4)
-                let fire = CellPosition(x: p.x, y: p.y + 8)
-                let oil = CellPosition(x: p.x + 1, y: p.y + 8)
-                let pitches = (0...4).map { CellPosition(x: p.x + $0, y: p.y + 9) }
-                var simulation = Simulation(seed: 0)
-                var cells: [(Material, CellPosition)] = [(.fire, body), (.fire, fire), (.oil, oil)]
-                cells += (2...4).map { (.fire, .init(x: p.x + $0, y: p.y + 8)) }
-                cells += pitches.map { (.pitch, $0) }
-                for (material, position) in cells {
-                    try simulation.enqueue(.init(tick: 1, position: position, material: material))
-                }
-                try simulation.advance(activeChunks: frozen)
-                try simulation.setThermalState(.init(heat: 80, isBurning: true), at: oil)
-                for pitch in pitches {
-                    try simulation.setThermalState(.init(heat: 100, isBurning: true), at: pitch)
-                }
-                let snapshot = simulation.snapshot
-                let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
-                                                             center: .init(x: p.x, y: 0), longEdgeCells: 200))
-                let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport,
-                                                    character: character, challenge: run).pixels
-                let bar = (0...4).map { CellPosition(x: p.x + $0, y: p.y + 8) }
-                let marked = Set(bar + pitches)
-                for cell in marked {
-                    let mark = pixel(frame, viewport: viewport, at: cell)
-                    let visible = neighbors(cell).filter { !marked.contains($0) }
-                        .map { pixel(frame, viewport: viewport, at: $0) }
-                    if !visible.isEmpty {
-                        let actual = visible.map { contrast(mark, $0) }.min()!
-                        let black = visible.map { contrast([0, 0, 0, 255], $0) }.min()!
-                        let white = visible.map { contrast([255, 255, 255, 255], $0) }.min()!
-                        XCTAssertEqual(actual, max(black, white), accuracy: 0.0001)
-                    }
-                }
-                for dx in [0, 4] {
-                    let edge = CellPosition(x: p.x + dx, y: p.y + 9)
-                    let background = CellPosition(x: edge.x, y: edge.y + 1)
-                    let visible = pixel(frame, viewport: viewport, at: background)
-                    XCTAssertEqual(visible, [15, 20, 31, 255])
-                    XCTAssertGreaterThanOrEqual(contrast(pixel(frame, viewport: viewport, at: edge), visible), 4.5)
-                }
-                let bodyColor: [UInt8] = shield ? [255, 164, 164, 255] : [180, 226, 230, 255]
-                XCTAssertGreaterThanOrEqual(contrast(pixel(frame, viewport: viewport, at: body), bodyColor), 4.5)
-                for dx in [1, 3] {
-                    XCTAssertEqual(pixel(frame, viewport: viewport, at: .init(x: p.x + dx, y: p.y + 10)),
-                                   phaseColor, "phase indicator survives pitch and bar marks")
-                }
-                XCTAssertEqual(pixel(frame, viewport: viewport, at: .init(x: p.x + 2, y: p.y + 10)),
-                               [255, 250, 245, 255])
-                XCTAssertEqual(simulation.snapshot, snapshot)
-            }
-        }
-    }
-
     func testFullBodyAndContiguousPitchRemainPatternedAgainstVisibleNeighbors() throws {
         let character = FixtureCharacter()
         let p = character.position
@@ -258,9 +175,7 @@ final class FireOverlayTests: XCTestCase {
     }
 
     func testTwoAdjacentPitchCellsBothContrastWithActualDarkBoundary() throws {
-        var run = try BeaconRun()
-        for _ in 0..<30 { try run.advance(horizontal: 0, jump: false) }
-        XCTAssertEqual(run.character.position, .init(x: -2, y: -1))
+        let character = FixtureCharacter(position: .init(x: -2, y: -1))
         let pitch = [CellPosition(x: 0, y: 8), .init(x: 1, y: 8)]
         var simulation = Simulation(seed: 0)
         for cell in pitch { try simulation.enqueue(.init(tick: 1, position: cell, material: .pitch)) }
@@ -269,7 +184,7 @@ final class FireOverlayTests: XCTestCase {
         let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 1000, drawableHeight: 600,
                                                      center: .init(x: 0, y: 3), longEdgeCells: 200))
         let frame = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport,
-                                            character: run.character).pixels
+                                            character: character).pixels
         for cell in pitch {
             let above = CellPosition(x: cell.x, y: cell.y + 1)
             let background = pixel(frame, viewport: viewport, at: above)

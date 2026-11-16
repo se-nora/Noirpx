@@ -32,6 +32,7 @@ public enum SaveError: Error, Equatable, Sendable {
     case unknownMaterial(UInt8)
     case invalidCellEntry(chunk: ChunkPosition, localIndex: UInt32)
     case commandTickNotInFuture(tick: UInt64, completedTick: UInt64)
+    case invalidCommandFlag(UInt8)
     case invalidGameplayField(SaveField)
     case digestMismatch(stored: UInt64, recomputed: UInt64)
 }

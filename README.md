@@ -137,7 +137,7 @@ cells along the drawable's long edge.
 **Controls (iOS):**
 - On-screen left/right/jump/cycle-material buttons
 - Drag — paint selected material
-- No pulse or wand casting in Cave Run
+- No pulse, no wand casting, no spell crafting in Cave Run
 
 **HUD:**
 - Seed, world size, character position, simulation tick

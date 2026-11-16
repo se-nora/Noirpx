@@ -260,6 +260,15 @@ public struct BeaconRun {
             && p.y < marker.y + Self.markerHeight && p.y + FixtureCharacter.height > marker.y
     }
 
+    /// Enqueues a spell command (with isSpellCommand=true for precedence).
+    public mutating func enqueueSpellCommand(_ command: SimulationCommand) throws {
+        var cmd = command
+        if !cmd.isSpellCommand {
+            cmd = SimulationCommand(tick: cmd.tick, position: cmd.position, material: cmd.material, isSpellCommand: true)
+        }
+        try simulation.enqueue(cmd)
+    }
+
     /// Internal restoring initializer for save decoding.
     /// Sets all stored fields without generating a course or queueing fixtures.
     init(seed: UInt64, course: BeaconCourse, simulation: Simulation,

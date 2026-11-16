@@ -15,7 +15,7 @@ final class SaveFormatValidationTests: XCTestCase {
         for version: UInt16 in [0, 2, .max] {
             assertThrows(replaced16(version, at: 4, in: bytes), SaveError.unknownFormatVersion(version))
         }
-        // rulesVersion is now 4, so version 3 and 5 should be rejected
+        // rulesVersion is 4, so version 3 and 5 should be rejected
         assertThrows(replaced16(3, at: 8, in: bytes), SaveError.unsupportedRulesVersion(3))
         assertThrows(replaced16(5, at: 8, in: bytes), SaveError.unsupportedRulesVersion(5))
         // digestVersion is now 6, so version 5 and 7 should be rejected
@@ -324,7 +324,7 @@ final class SaveFormatValidationTests: XCTestCase {
         // First command at tick 4, second at tick 5 - canonical
         // Corrupt: make first command tick 5, second tick 4
         orderCmdBytes = replaced64(5, at: orderFirstCmdOffset, in: orderCmdBytes)
-        let orderSecondCmdOffset = orderFirstCmdOffset + 17
+        let orderSecondCmdOffset = orderFirstCmdOffset + 18 // 8+4+4+1+1 = 18 bytes per command
         orderCmdBytes = replaced64(4, at: orderSecondCmdOffset, in: orderCmdBytes)
         assertThrows(orderCmdBytes, SaveError.nonCanonicalCommandOrder(previousTick: 5, nextTick: 4))
 
@@ -642,7 +642,7 @@ final class SaveFormatValidationTests: XCTestCase {
             }
         }
 
-        // Commands
+        // Commands (with isSpellCommand flag)
         encoder.writeU32(UInt32(commands.count))
         // Sort commands by tick for canonical order
         let sortedCommands = commands.sorted { $0.tick < $1.tick }
@@ -651,6 +651,7 @@ final class SaveFormatValidationTests: XCTestCase {
             encoder.writeI32(Int32(cmd.position.x))
             encoder.writeI32(Int32(cmd.position.y))
             encoder.writeU8(cmd.material.rawValue)
+            encoder.writeU8(0) // isSpellCommand = false (paint command)
         }
 
         // Gameplay block - use a valid BeaconRun's gameplay data

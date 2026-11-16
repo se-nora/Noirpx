@@ -103,6 +103,15 @@ public struct CaveRun {
         try simulation.enqueue(SimulationCommand(tick: tick, position: position, material: material))
     }
 
+    /// Enqueues a spell command (with isSpellCommand=true for precedence).
+    public mutating func enqueueSpellCommand(_ command: SimulationCommand) throws {
+        var cmd = command
+        if !cmd.isSpellCommand {
+            cmd = SimulationCommand(tick: cmd.tick, position: cmd.position, material: cmd.material, isSpellCommand: true)
+        }
+        try simulation.enqueue(cmd)
+    }
+
     /// Test-only restoring initializer for mutation/replay tests.
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
          outcome: Outcome, simulation: Simulation, termination: CaveSpawnTemplate.Termination, fallLimit: Int) {

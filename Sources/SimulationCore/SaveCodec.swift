@@ -5,6 +5,12 @@ public struct SaveCodec: Sendable {
     public static let rulesVersion: UInt16 = 4
     public static let digestVersion = UInt16(SimulationSnapshot.digestVersion)
 
+    /// Not saved (intentionally excluded from save payload):
+    /// - In-flight spell projectiles (SpellProjectileState)
+    /// - CraftingSession (discovered materials, unlocked recipes, cooldowns)
+    /// - SpellMixRNG state
+    /// These reset on load; spell crafting is a per-run session feature.
+
     public static let maximumPayloadBytes = 16 * 1024 * 1024
     public static let maximumChunkCount = 1_024
     public static let maximumCellEntryCount = 1_048_576
@@ -81,6 +87,7 @@ public struct SaveCodec: Sendable {
             encoder.writeI32(Int32(cmd.position.x))
             encoder.writeI32(Int32(cmd.position.y))
             encoder.writeU8(cmd.material.rawValue)
+            encoder.writeU8(cmd.isSpellCommand ? 1 : 0)
         }
 
         // Gameplay block
@@ -366,6 +373,11 @@ public struct SaveCodec: Sendable {
             guard let material = Material(rawValue: materialRaw) else {
                 throw SaveError.unknownMaterial(materialRaw)
             }
+            let isSpellCommandRaw = try readU8()
+            guard isSpellCommandRaw == 0 || isSpellCommandRaw == 1 else {
+                throw SaveError.invalidCommandFlag(isSpellCommandRaw)
+            }
+            let isSpellCommand = isSpellCommandRaw == 1
 
             // Validate command tick > completed tick
             guard cmdTick > tick else {
@@ -383,7 +395,7 @@ public struct SaveCodec: Sendable {
                 throw SaveError.outOfRangeCell(pos)
             }
 
-            commands[cmdTick, default: []].append(SimulationCommand(tick: cmdTick, position: pos, material: material))
+            commands[cmdTick, default: []].append(SimulationCommand(tick: cmdTick, position: pos, material: material, isSpellCommand: isSpellCommand))
         }
 
         // Gameplay block

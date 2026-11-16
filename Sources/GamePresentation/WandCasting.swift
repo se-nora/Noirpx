@@ -69,14 +69,20 @@ public enum WandBudget {
 }
 
 /// Stateful progress through one cast's cells. Wraps so a held cast keeps streaming.
-public struct WandCastProgress {
+public struct WandCastProgress: Equatable, Sendable {
     public var cells: [CellPosition]
     public var budget: Int
     public var index: Int = 0
+    private var hasCompleted: Bool = false
 
     public init(cells: [CellPosition], budget: Int = 3) {
         self.cells = cells
         self.budget = max(1, budget)
+    }
+
+    /// Returns true if the full ray has been consumed (for spell casts, no wrap).
+    public var isComplete: Bool {
+        hasCompleted
     }
 
     public mutating func nextBatch() -> [CellPosition] {
@@ -85,7 +91,10 @@ public struct WandCastProgress {
         let end = min(index + budget, cells.count)
         let batch = Array(cells[index..<end])
         index = end
-        if index >= cells.count { index = 0 }
+        if index >= cells.count {
+            hasCompleted = true
+            index = 0
+        }
         return batch
     }
 }

@@ -400,7 +400,6 @@ final class CaveWorldGenTests: XCTestCase {
     func testConnectivityStillHolds() {
         for seed in [1, 2, 3, 5, 9, 42] as [UInt64] {
             let world = CaveWorldGenerator(seed: seed, width: 80, height: 60).generateInspected(stampSpawnTemplate: false, capturePrePass: false).world
-            print("seed", seed, "spawn", world.spawn, "goal", world.goal, "spawnMat", world.material(at: world.spawn), "goalMat", world.material(at: world.goal))
             let ok = bfsReaches(world: world, from: world.spawn, to: world.goal)
             if !ok { print("CONNECTIVITY FAIL seed=", seed) }
             XCTAssertTrue(ok, "connectivity failed for seed \\(seed)")

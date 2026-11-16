@@ -21,116 +21,41 @@ private final class GameModel: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var renderGeneration = 0
     @Published var selectedMaterial: SimulationCore.Material = .sand
-    @Published var isCasting = false
-    @Published private(set) var castAim: CellPosition?
-    private var castProgress: WandCastProgress?
-    private var castMaterial: SimulationCore.Material = .sand
-    @Published private(set) var challenge: BeaconRun?
-    @Published private(set) var caveRun: CaveRun?
-    private var caveWorldCharacter: FixtureCharacter?
-    var character: FixtureCharacter {
-        if worldMode == .caveWorld, let c = caveWorldCharacter { return c }
-        return challenge?.character ?? (caveRun?.character ?? FixtureCharacter())
-    }
-    enum WorldMode { case beaconRun, caveRun, caveWorld }
-    @Published private var worldMode: WorldMode = .beaconRun
-    var isCaveWorld: Bool { worldMode == .caveWorld }
-    var isCaveRun: Bool { worldMode == .caveRun }
-    var isBeaconRun: Bool { worldMode == .beaconRun }
-    @Published var caveRunSeed: UInt64 = 42
-    private var caveWorldSimulation: Simulation?
+    var caveRun: CaveRun?
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
     private var input = GameplayInput()
-    private var session = BeaconRunSession()
+    private var caveRunSession = CaveRunSession()
 
     private struct CaveRunSession {
         private(set) var seed: UInt64
         init(seed: UInt64 = 42) { self.seed = seed }
         func restart() throws -> CaveRun { try CaveRun(seed: seed, width: 256, height: 128) }
         mutating func newRun() throws -> CaveRun {
-            // Golden ratio constant (Knuth) for deterministic seed advancement
             let next = seed &+ 0x9e3779b97f4a7c15
             let run = try CaveRun(seed: next, width: 256, height: 128)
             seed = next
             return run
         }
     }
-    private var caveRunSession = CaveRunSession()
 
     init() {
         restart()
     }
 
     func restart() {
-        if worldMode == .caveRun { startCaveRun(newSeed: false) } else if worldMode == .caveWorld { startCaveWorld(newSeed: false) } else { startRun(newSeed: false) }
+        startCaveRun(newSeed: false)
     }
 
     func newRun() {
-        if worldMode == .caveRun { startCaveRun(newSeed: true) } else if worldMode == .caveWorld { startCaveWorld(newSeed: true) } else { startRun(newSeed: true) }
-    }
-
-    func toggleWorldMode() {
-        switch worldMode {
-        case .beaconRun:
-            worldMode = .caveRun
-            startCaveRun(newSeed: false)
-        case .caveRun:
-            worldMode = .caveWorld
-            startCaveWorld(newSeed: false)
-        case .caveWorld:
-            worldMode = .beaconRun
-            startRun(newSeed: false)
-        }
-    }
-
-    private func startCaveWorld(newSeed: Bool) {
-        do {
-            if newSeed {
-                // Golden ratio constant (Knuth) for deterministic seed advancement
-                caveRunSeed = caveRunSeed &+ 0x9e3779b97f4a7c15
-            }
-            // Generate a world for camera/spawn reference (public API, stamps spawn template)
-            let generator = CaveWorldGenerator(seed: caveRunSeed, width: 256, height: 128)
-            let world = generator.generate()
-
-            var simulation = Simulation(seed: caveRunSeed)
-            let sortedCells = world.cells.keys.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
-            for pos in sortedCells {
-                try simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: world.cells[pos]!))
-            }
-            try simulation.advance()
-
-            caveWorldSimulation = simulation
-            caveWorldCharacter = FixtureCharacter(position: world.spawn)
-            caveRun = nil
-            snapshot = simulation.snapshot
-            updateActiveChunks()
-            clearControls()
-            errorMessage = nil
-            scheduler.reset()
-            framesPerSecond = 0
-            renderedChunks = nil
-            renderGeneration += 1
-            isCasting = false
-            castProgress = nil
-            castAim = nil
-        } catch {
-            caveWorldSimulation = nil
-            caveWorldCharacter = nil
-            caveRun = nil
-            snapshot = nil
-            errorMessage = "Could not create cave world: \(error)"
-        }
+        startCaveRun(newSeed: true)
     }
 
     private func startCaveRun(newSeed: Bool) {
         do {
             let run = try newSeed ? caveRunSession.newRun() : caveRunSession.restart()
             caveRun = run
-            challenge = nil
-            worldMode = .caveRun
             snapshot = run.simulation.snapshot
             updateActiveChunks()
             clearControls()
@@ -139,37 +64,11 @@ private final class GameModel: ObservableObject {
             framesPerSecond = 0
             renderedChunks = nil
             renderGeneration += 1
-            isCasting = false
-            castProgress = nil
-            castAim = nil
         } catch {
             caveRun = nil
             snapshot = nil
             renderedChunks = nil
             errorMessage = "Could not create cave run: \(error)"
-        }
-    }
-
-    private func startRun(newSeed: Bool) {
-        do {
-            let run = try newSeed ? session.newRun() : session.restart()
-            challenge = run
-            snapshot = run.simulation.snapshot
-            updateActiveChunks()
-            clearControls()
-            errorMessage = nil
-            scheduler.reset()
-            framesPerSecond = 0
-            renderedChunks = nil
-            renderGeneration += 1
-            isCasting = false
-            castProgress = nil
-            castAim = nil
-        } catch {
-            challenge = nil
-            snapshot = nil
-            renderedChunks = nil
-            errorMessage = "Could not create challenge: \(error)"
         }
     }
 
@@ -202,160 +101,45 @@ private final class GameModel: ObservableObject {
     }
 
     private func updateActiveChunks() {
-        if worldMode == .caveRun {
-            guard let drawableSize,
-                  let run = caveRun,
-                  let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                                 center: run.character.cameraCenter, longEdgeCells: 200) else {
-                activeChunks = nil
-                return
-            }
-            activeChunks = viewport.activeChunks
-            return
-        }
-        if worldMode == .caveWorld {
+        guard let drawableSize,
+              let run = caveRun,
+              let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
+                                             center: run.character.cameraCenter, longEdgeCells: 200) else {
             activeChunks = nil
             return
         }
-        guard let drawableSize,
-              let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                             center: character.cameraCenter, longEdgeCells: 200) else { return }
         activeChunks = viewport.activeChunks
     }
 
     func paint(_ position: CellPosition) {
-        if worldMode == .caveRun {
-            guard var run = caveRun, errorMessage == nil else { return }
-            do {
-                try run.paint(selectedMaterial, at: position)
-                caveRun = run
-                snapshot = run.simulation.snapshot
-            } catch {
-                errorMessage = "Could not apply input: \(error)"
-            }
-            return
-        }
-        if worldMode == .caveWorld {
-            if caveWorldSimulation == nil {
-                caveWorldSimulation = Simulation(seed: caveRunSeed)
-            }
-            guard var sim = caveWorldSimulation, errorMessage == nil else { return }
-            do {
-                let (tick, overflow) = sim.snapshot.tick.addingReportingOverflow(1)
-                guard !overflow else { throw SimulationError.tickOverflow }
-                try sim.enqueue(.init(tick: tick, position: position, material: selectedMaterial))
-                caveWorldSimulation = sim
-            } catch {
-                errorMessage = "Could not apply input: \(error)"
-            }
-            return
-        }
-        guard var run = challenge, errorMessage == nil else { return }
+        guard var run = caveRun, errorMessage == nil else { return }
         do {
             try run.paint(selectedMaterial, at: position)
-            challenge = run
+            caveRun = run
+            snapshot = run.simulation.snapshot
         } catch {
             errorMessage = "Could not apply input: \(error)"
         }
     }
 
-    func setCastAim(_ position: CellPosition?) {
-        castAim = position
-    }
-
-    func startCasting() {
-        guard challenge?.outcome == .playing, errorMessage == nil else { return }
-        isCasting = true
-        castMaterial = selectedMaterial
-        castProgress = nil
-    }
-
-    func stopCasting() {
-        isCasting = false
-        castProgress = nil
-    }
-
-    func cycleWandMaterial(_ direction: Int) {
-        let current = WandMaterials.normalized(selectedMaterial)
-        selectedMaterial = direction >= 0 ? WandMaterials.next(after: current) : WandMaterials.previous(before: current)
+    func cycleMaterial(_ forward: Bool) {
+        let allMaterials = MaterialBrush.allCases.map(\.material)
+        if let idx = allMaterials.firstIndex(of: selectedMaterial) {
+            let nextIdx = forward ? (idx + 1) % allMaterials.count : (idx - 1 + allMaterials.count) % allMaterials.count
+            selectedMaterial = allMaterials[nextIdx]
+        }
     }
 
     func update(at time: Double) {
-        if worldMode == .caveRun {
-            guard var run = caveRun, errorMessage == nil, activeChunks != nil else { return }
-            do {
-                let steps = scheduler.steps(at: time)
-                guard steps > 0 else { return }
-                for _ in 0..<steps {
-                    guard let activeChunks else { return }
-                    let controls = input.consumeTick()
-                    try run.advance(horizontal: controls.horizontal, jump: controls.jump, activeChunks: activeChunks)
-                    caveRun = run
-                    updateActiveChunks()
-                    snapshot = run.simulation.snapshot
-                    if run.outcome != .playing {
-                        clearControls()
-                        break
-                    }
-                }
-            } catch {
-                errorMessage = "Simulation stopped: \(error)"
-            }
-            return
-        }
-        if worldMode == .caveWorld {
-            if caveWorldSimulation == nil {
-                caveWorldSimulation = Simulation(seed: caveRunSeed)
-            }
-            guard var sim = caveWorldSimulation, errorMessage == nil else { return }
-            do {
-                let steps = scheduler.steps(at: time)
-                guard steps > 0 else { return }
-                for _ in 0..<steps {
-                    try sim.advance(activeChunks: activeChunks)
-                }
-                caveWorldSimulation = sim
-                snapshot = sim.snapshot
-            } catch {
-                errorMessage = "Simulation stopped: \(error)"
-            }
-            return
-        }
-        guard var run = challenge, run.outcome == .playing, errorMessage == nil, activeChunks != nil else { return }
+        guard var run = caveRun, errorMessage == nil, activeChunks != nil else { return }
         do {
             let steps = scheduler.steps(at: time)
             guard steps > 0 else { return }
             for _ in 0..<steps {
                 guard let activeChunks else { return }
-                if isCasting {
-                    if let aim = castAim {
-                        let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
-                                                  y: run.character.position.y + FixtureCharacter.height / 2)
-                        let ray = WandRay.cells(from: origin, toward: aim, maxLength: 12)
-                        if castProgress == nil || castProgress?.cells != ray {
-                            castProgress = WandCastProgress(cells: ray, budget: 3)
-                            castMaterial = selectedMaterial
-                        }
-                        let material = castMaterial
-                        if let progress = castProgress {
-                            var p = progress
-                            let batch = p.nextBatch()
-                            castProgress = p
-                            for cell in batch {
-                                do {
-                                    try run.paint(material, at: cell)
-                                } catch { }
-                            }
-                        }
-                    }
-                } else {
-                    castProgress = nil
-                }
-                if run.outcome != .playing { stopCasting() }
                 let controls = input.consumeTick()
-                try run.advance(horizontal: controls.horizontal, jump: controls.jump, pulse: controls.pulse,
-                                activeChunks: activeChunks)
-                challenge = run
+                try run.advance(horizontal: controls.horizontal, jump: controls.jump, activeChunks: activeChunks)
+                caveRun = run
                 updateActiveChunks()
                 snapshot = run.simulation.snapshot
                 if run.outcome != .playing {
@@ -388,23 +172,17 @@ private struct HostView: View {
                 MetalSurface(
                     device: device,
                     snapshot: snapshot,
-                    character: model.character,
-                    challenge: model.challenge,
+                    character: model.caveRun?.character ?? FixtureCharacter(),
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },
                     onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) },
-                    onAim: { model.setCastAim($0) },
-                    onCastChanged: { casting in
-                        if casting { model.startCasting() } else { model.stopCasting() }
-                    },
-                    onCycleWandMaterial: { direction in model.cycleWandMaterial(direction) },
                     onKeyboard: { model.setKeyboard($0) },
                     onInputReset: { model.resetClock() },
                     onRestart: { model.restart() },
                     onNewRun: { model.newRun() },
-                    caveMode: model.isCaveRun || model.isCaveWorld
+                    onCycleMaterial: { model.cycleMaterial($0) }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -419,9 +197,9 @@ private struct HostView: View {
                     Text("Scroll for controls ↓")
                 }
                 Text("NOIRPX  v\(version)").fontWeight(.bold)
-                Text(model.isCaveRun ? "CAVE RUN" : (model.isCaveWorld ? "CAVE WORLD" : "BEACON RUN")).fontWeight(.bold)
-                
-                if model.isCaveRun, let run = model.caveRun {
+                Text("CAVE RUN").fontWeight(.bold)
+
+                if let run = model.caveRun {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("A/D or ←/→ move • Space/↑ jump")
                         Text("Drag paints material • [ ] cycle material")
@@ -441,47 +219,17 @@ private struct HostView: View {
                     } else {
                         Text("Descend the shaft. Reach the bottom.")
                     }
-                } else if model.isCaveWorld {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Drag paints material • F cycles material")
-                        Text("R restart • N new run")
-                    }
-                    Text("Seed \(model.caveRunSeed)")
-                    Text("CAVE WORLD — Sandbox mode. Paint freely.")
-                } else {
-                    HUDGuide(outcome: model.challenge?.outcome,
-                             collected: model.challenge?.collected.filter { $0 }.count ?? 0,
-                             controls: hudGuideControls)
-                    Text("Seed \(model.challenge?.seed ?? 0)")
-                    Text("Health \(model.challenge?.health ?? 0)/\(BeaconRun.maximumHealth)  •  shield \(model.challenge?.damageCooldown ?? 0) ticks")
-                    if let source = model.challenge?.lastDamageSource {
-                        Text("Hit: \(source.rawValue)").foregroundStyle(.orange)
-                    }
-                    Text(HUDGuideText.warden(model.challenge?.warden))
-                    Text(model.challenge?.ventCooling == 0 ? "Vent HOT" :
-                            "Vent cool \(model.challenge?.ventCooling ?? 0) ticks")
-                    Text("Beacons  \(model.challenge?.collected.filter { $0 }.count ?? 0)/2")
-                    Text(model.challenge?.pulseCooldown == 0 ? "Pulse READY" :
-                            "Pulse cooling \(model.challenge?.pulseCooldown ?? 0)")
-                    if model.challenge?.outcome == .won {
-                        Text("You made it!").foregroundStyle(.green).fontWeight(.bold)
-                    } else if model.challenge?.outcome == .fell {
-                        Text("You fell. Try again!").foregroundStyle(.orange).fontWeight(.bold)
-                    } else if model.challenge?.outcome == .exhausted {
-                        Text("Out of health. Restart to try again!").foregroundStyle(.red).fontWeight(.bold)
-                    }
                 }
-                
-                Button(model.isCaveRun ? "Cave World" : (model.isCaveWorld ? "Beacon Run" : "Cave Run")) { model.toggleWorldMode() }
-                    .buttonStyle(.bordered)
+
                 HUDControls(selected: model.selectedMaterial,
                             restart: { model.restart() }, newRun: { model.newRun() },
                             diagnostics: { model.resetClock(); showingDiagnostics = true },
                             help: { model.resetClock(); showingHelp = true },
                             select: { model.selectedMaterial = $0 })
                 Text("Paint: drag; keys 1–7")
-                Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
-                if device == nil {
+                if let device {
+                    Text("FPS: \(model.framesPerSecond, specifier: "%.1f")  Chunks: \(model.renderedChunks ?? 0)")
+                } else {
                     Text("Metal is unavailable on this device.").foregroundStyle(.red)
                 }
                 if let error = model.errorMessage {
@@ -498,15 +246,8 @@ private struct HostView: View {
                     controlButton("Left", symbol: "chevron.left", control: .left)
                     controlButton("Right", symbol: "chevron.right", control: .right)
                     Spacer()
-                    if !model.isCaveRun && !model.isCaveWorld {
-                        controlButton("Pulse", symbol: "bolt.fill", control: .pulse)
-                        controlButton("Jump", symbol: "arrow.up", control: .jump)
-                        castButton
-                    } else {
-                        controlButton("Jump", symbol: "arrow.up", control: .jump)
-                        // Cycle material in CaveRun/CaveWorld
-                        controlButton("Cycle", symbol: "paintbrush.fill", control: .pulse)
-                    }
+                    controlButton("Jump", symbol: "arrow.up", control: .jump)
+                    cycleMaterialButton
                 }
                 .padding()
             }
@@ -526,14 +267,11 @@ private struct HostView: View {
             VStack(alignment: .leading, spacing: 12) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Beacon Run").font(.headline)
-                        Text("Collect two amber beacons, then reach the green gate. Jump the gap and pulse through sand.")
-                        Text("Violet pitch above the start: paint fire beside it; water quenches the orange cell.")
-                        Text("Lamp oil brush: flowing oil catches fire; water quenches hot oil.")
-                        Text("Fire and burning oil hurt inside you; orange burning pitch hurts on contact, even beside it. Black/white marks show contact cells. Water quenches flames. All hits share the shield.")
-                        Text("Jump the red vent or paint water at its base. The Chime Warden warns in amber and hurts in red.")
-                        Text("The Chime Warden burns in fire and lava, corrodes in acid, douses itself in water, and slides on oil and ice. It leaves blood where it is hurt.")
-                        Text("macOS: A/D or arrows move, W/up/space jumps, F pulses. iOS: use the on-screen controls.")
+                        Text("Cave Run").font(.headline)
+                        Text("Descend the shaft to reach the depth goal. Paint materials with drag. Cycle materials with [/].")
+                        Text("Lava creates fire. Fire burns pitch and oil. Water quenches fire and creates steam.")
+                        Text("macOS: A/D or arrows move, W/up/space jumps, [/] cycles material, R restarts, N new run.")
+                        Text("iOS: use the on-screen controls.")
                     }
                 }
                 Button("Done") { showingHelp = false }
@@ -552,29 +290,21 @@ private struct HostView: View {
         #endif
     }
 
-    private var hudGuideControls: HUDGuideText.Controls {
-        #if os(iOS)
-        .touch
-        #else
-        .keyboard
-        #endif
-    }
-
     #if os(iOS)
-    private var castButton: some View {
-        Image(systemName: "wand.and.stars")
+    private var cycleMaterialButton: some View {
+        Image(systemName: "paintbrush.fill")
             .font(.title2.bold())
             .frame(width: 64, height: 64)
             .foregroundStyle(.white)
             .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in model.startCasting() }
-                .onEnded { _ in model.stopCasting() })
-            .accessibilityLabel("Cast wand")
+            .onTapGesture { model.cycleMaterial(true) }
+            .accessibilityLabel("Cycle Material")
             .accessibilityAddTraits(.isButton)
     }
+    #endif
 
+    #if os(iOS)
     private func controlButton(_ title: String, symbol: String, control: GameplayControl) -> some View {
         Image(systemName: symbol)
             .font(.title2.bold())
@@ -603,8 +333,8 @@ private struct DiagnosticsView: View {
             Text("Tick: \(model.snapshot.map { String($0.tick) } ?? "unavailable")")
             Text("Chunks rendered: \(model.renderedChunks.map(String.init) ?? "unavailable")")
             Text("Chunks allocated: \(model.snapshot.map { String($0.chunks.count) } ?? "unavailable")")
-            if let character = model.challenge?.character {
-                Text("Character: \(character.position.x), \(character.position.y)")
+            if let run = model.caveRun {
+                Text("Character: \(run.character.position.x), \(run.character.position.y)")
             } else {
                 Text("Character: unavailable")
             }
@@ -620,23 +350,19 @@ private struct MetalSurface {
     let device: MTLDevice
     let snapshot: SimulationSnapshot
     let character: FixtureCharacter
-    let challenge: BeaconRun?
     let onFPS: (Double) -> Void
     let onRenderedChunks: (Int) -> Void
     let onError: (String) -> Void
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
-    let onAim: (CellPosition?) -> Void
-    let onCastChanged: (Bool) -> Void
-    let onCycleWandMaterial: (Int) -> Void
     let onKeyboard: (GameplayControls) -> Void
     let onInputReset: () -> Void
     let onRestart: (() -> Void)?
     let onNewRun: (() -> Void)?
-    let caveMode: Bool
+    let onCycleMaterial: ((Bool) -> Void)?
 
     func makeCoordinator() -> MetalRenderer {
-        MetalRenderer(device: device, snapshot: snapshot, character: character, challenge: challenge, onFPS: onFPS,
+        MetalRenderer(device: device, snapshot: snapshot, character: character, onFPS: onFPS,
                       onRenderedChunks: onRenderedChunks, onError: onError, onViewport: onViewport)
     }
 
@@ -649,7 +375,7 @@ private struct MetalSurface {
         if let inputView = view as? InputMetalView {
             inputView.onRestart = onRestart
             inputView.onNewRun = onNewRun
-            inputView.caveMode = caveMode
+            inputView.onCycleMaterial = onCycleMaterial
         }
         #endif
     }
@@ -658,14 +384,11 @@ private struct MetalSurface {
 #if os(macOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
-    var onAim: ((CellPosition?) -> Void)?
-    var onCastChanged: ((Bool) -> Void)?
-    var onCycleWandMaterial: ((Int) -> Void)?
     var onKeyboard: ((GameplayControls) -> Void)?
     var onInputReset: (() -> Void)?
     var onRestart: (() -> Void)?
     var onNewRun: (() -> Void)?
-    var caveMode = false
+    var onCycleMaterial: ((Bool) -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
@@ -689,14 +412,6 @@ private final class InputMetalView: MTKView {
         resignObserver = ScopedRegistration { NotificationCenter.default.removeObserver(observer) }
         if let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp], handler: { [weak self] event in
             guard let self, event.window === self.window else { return event }
-            if event.keyCode == 8 {
-                if event.type == .keyDown && !event.isARepeat {
-                    self.onCastChanged?(true)
-                } else if event.type == .keyUp {
-                    self.onCastChanged?(false)
-                }
-                return nil
-            }
             // R (15) - Restart
             if event.keyCode == 15 {
                 if event.type == .keyDown && !event.isARepeat {
@@ -711,28 +426,28 @@ private final class InputMetalView: MTKView {
                 }
                 return nil
             }
+            // [ (33) - Cycle material backward
             if event.keyCode == 33 {
                 if event.type == .keyDown && !event.isARepeat {
-                    self.onCycleWandMaterial?(-1)
+                    self.onCycleMaterial?(false)
                 }
                 return nil
             }
+            // ] (30) - Cycle material forward
             if event.keyCode == 30 {
                 if event.type == .keyDown && !event.isARepeat {
-                    self.onCycleWandMaterial?(1)
+                    self.onCycleMaterial?(true)
                 }
                 return nil
             }
-            // F (3) - in cave mode cycles material, otherwise pulse
+            // F (3) - Cycle material forward
             if event.keyCode == 3 {
-                if self.caveMode {
-                    if event.type == .keyDown && !event.isARepeat {
-                        self.onCycleWandMaterial?(1)
-                    }
-                    return nil
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onCycleMaterial?(true)
                 }
+                return nil
             }
-            guard [UInt16(0), 2, 3, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
+            guard [UInt16(0), 2, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
                 return event
             }
@@ -741,8 +456,7 @@ private final class InputMetalView: MTKView {
             self.onKeyboard?(GameplayControls(
                 left: self.keys.contains(0) || self.keys.contains(123),
                 right: self.keys.contains(2) || self.keys.contains(124),
-                jump: self.keys.contains(13) || self.keys.contains(49) || self.keys.contains(126),
-                pulse: self.keys.contains(3)
+                jump: self.keys.contains(13) || self.keys.contains(49) || self.keys.contains(126)
             ))
             return nil
         }) {
@@ -769,16 +483,13 @@ private final class InputMetalView: MTKView {
 
     override func rightMouseDown(with event: NSEvent) {
         aim(event)
-        onCastChanged?(true)
     }
 
     override func rightMouseDragged(with event: NSEvent) {
         aim(event)
     }
 
-    override func rightMouseUp(with event: NSEvent) {
-        onCastChanged?(false)
-    }
+    override func rightMouseUp(with event: NSEvent) {}
 
     private func paint(_ event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
@@ -794,11 +505,9 @@ private final class InputMetalView: MTKView {
                                             drawableHeight: Double(drawableSize.height), center: cameraCenter,
                                             longEdgeCells: 200),
               let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
-                                     y: Double(y / bounds.height * drawableSize.height)) else {
-            onAim?(nil)
+                                       y: Double(y / bounds.height * drawableSize.height)) else {
             return
         }
-        onAim?(cell)
     }
 }
 
@@ -806,11 +515,11 @@ extension MetalSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
-        view.onAim = onAim
-        view.onCastChanged = onCastChanged
-        view.onCycleWandMaterial = onCycleWandMaterial
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
+        view.onRestart = onRestart
+        view.onNewRun = onNewRun
+        view.onCycleMaterial = onCycleMaterial
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -819,22 +528,18 @@ extension MetalSurface: NSViewRepresentable {
     func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
-        context.coordinator.challenge = challenge
         view.onPaint = onPaint
-        view.onAim = onAim
-        view.onCastChanged = onCastChanged
-        view.onCycleWandMaterial = onCycleWandMaterial
         view.onKeyboard = onKeyboard
         view.onInputReset = onInputReset
+        view.onRestart = onRestart
+        view.onNewRun = onNewRun
+        view.onCycleMaterial = onCycleMaterial
         view.cameraCenter = character.cameraCenter
     }
 }
 #elseif os(iOS)
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
-    var onAim: ((CellPosition?) -> Void)?
-    var onCastChanged: ((Bool) -> Void)?
-    var onCycleWandMaterial: ((Int) -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var activeTouch: UITouch?
@@ -869,20 +574,6 @@ private final class InputMetalView: MTKView {
     private func paint(_ touch: UITouch) {
         let point = touch.location(in: self)
         paintPoint(x: point.x - bounds.minX, y: point.y - bounds.minY)
-        aim(point)
-    }
-
-    private func aim(_ point: CGPoint) {
-        guard bounds.width > 0, bounds.height > 0,
-              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
-                                            drawableHeight: Double(drawableSize.height), center: cameraCenter,
-                                            longEdgeCells: 200),
-              let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
-                                     y: Double((point.y - bounds.minY) / bounds.height * drawableSize.height)) else {
-            onAim?(nil)
-            return
-        }
-        onAim?(cell)
     }
 }
 
@@ -890,9 +581,6 @@ extension MetalSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> InputMetalView {
         let view = InputMetalView()
         view.onPaint = onPaint
-        view.onAim = onAim
-        view.onCastChanged = onCastChanged
-        view.onCycleWandMaterial = onCycleWandMaterial
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -901,11 +589,7 @@ extension MetalSurface: UIViewRepresentable {
     func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
-        context.coordinator.challenge = challenge
         view.onPaint = onPaint
-        view.onAim = onAim
-        view.onCastChanged = onCastChanged
-        view.onCycleWandMaterial = onCycleWandMaterial
         view.cameraCenter = character.cameraCenter
     }
 }
@@ -947,16 +631,14 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
     private var frameCount = 0
     var snapshot: SimulationSnapshot
     var character: FixtureCharacter
-    var challenge: BeaconRun?
 
-    init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter, challenge: BeaconRun?,
+    init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
          onFPS: @escaping (Double) -> Void,
          onRenderedChunks: @escaping (Int) -> Void,
          onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void) {
         self.device = device
         self.snapshot = snapshot
         self.character = character
-        self.challenge = challenge
         self.onFPS = onFPS
         self.onRenderedChunks = onRenderedChunks
         self.onError = onError
@@ -1001,8 +683,7 @@ private final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
-                                           challenge: challenge)
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character)
         frame.pixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,

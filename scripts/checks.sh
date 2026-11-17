@@ -10,21 +10,26 @@ mode="${2:- --quick}"
 
 cd "$wt"
 
+# Use a unique scratch path per worktree to avoid .build lock conflicts
+# when multiple worktrees run tests simultaneously.
+SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/noirpx-checks.XXXXXX")"
+trap 'rm -rf "$SCRATCH"' EXIT
+
 case "$mode" in
   --quick)
-    echo "=== swift test --parallel (package) ==="
-    swift test --parallel
+    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
+    swift test --parallel --scratch-path "$SCRATCH"
     ;;
   --full)
-    echo "=== swift test --parallel (package) ==="
-    swift test --parallel
+    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
+    swift test --parallel --scratch-path "$SCRATCH"
     echo
     echo "=== xcodebuild macOS Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=macOS' build
     ;;
   --ios)
-    echo "=== swift test --parallel (package) ==="
-    swift test --parallel
+    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
+    swift test --parallel --scratch-path "$SCRATCH"
     echo
     echo "=== xcodebuild iOS Simulator Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build

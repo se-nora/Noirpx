@@ -99,8 +99,9 @@ public struct Simulation {
         }
         var tickCommands = commands.removeValue(forKey: nextTick) ?? []
 
-        // Apply command budget: sort spell commands first, then truncate to maxSpellCommandsPerTick
-        if tickCommands.count > Simulation.maxSpellCommandsPerTick {
+        // Apply command budget: sort spell commands first, then truncate to maxSpellCommandsPerTick.
+        // Exempt tick 1 (world initialization) from budget — all init commands must apply.
+        if nextTick > 1 && tickCommands.count > Simulation.maxSpellCommandsPerTick {
             tickCommands.sort { lhs, rhs in
                 if lhs.isSpellCommand != rhs.isSpellCommand {
                     return lhs.isSpellCommand // spell commands (true) come before paint commands (false)

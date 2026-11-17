@@ -1,30 +1,40 @@
 import SimulationCore
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 
 /// Shared palette for touch buttons and their macOS keyboard shortcuts.
-public enum MaterialBrush: Int, CaseIterable, Sendable {
-    case erase = 1, rock, sand, water, fire, pitch, oil
+/// Derived automatically from `SimulationCore.Material.allCases`, so new cases
+/// added to the `Material` enum become drawable without any code changes here.
+public enum MaterialBrush {
+    /// All drawable materials in stable `Material` rawValue order.
+    /// `.empty` is excluded because it is the erase action, not a brush.
+    public static let drawable: [SimulationCore.Material] = SimulationCore.Material.allCases.filter { $0 != .empty }
 
-    public var material: Material {
-        switch self {
-        case .erase: return .empty
-        case .rock: return .solid
-        case .sand: return .sand
-        case .water: return .water
-        case .fire: return .fire
-        case .pitch: return .pitch
-        case .oil: return .oil
-        }
+    /// Title for a drawable material (reuses the wand name of the material).
+    public static func title(for material: SimulationCore.Material) -> String {
+        material.wandName
     }
 
-    public var title: String {
-        switch self {
-        case .erase: return "Erase"
-        case .rock: return "Rock"
-        case .sand: return "Sand"
-        case .water: return "Water"
-        case .fire: return "Fire"
-        case .pitch: return "Pitch"
-        case .oil: return "Lamp oil"
-        }
+    /// Title for the erase button.
+    public static let eraseTitle = "Erase"
+
+    /// Keyboard shortcut character for a drawable material.
+    /// The first ten materials in `drawable` order get '1'..'9' and '0';
+    /// materials beyond the tenth get no single-key shortcut.
+    public static func shortcutCharacter(for material: SimulationCore.Material) -> Character? {
+        guard let index = drawable.firstIndex(of: material) else { return nil }
+        if index < 9 { return Character(String(index + 1)) }
+        if index == 9 { return "0" }
+        return nil
     }
+
+    #if canImport(SwiftUI)
+    /// KeyEquivalent for SwiftUI's `keyboardShortcut`, or nil when the material
+    /// has no single-key shortcut assigned.
+    public static func keyEquivalent(for material: SimulationCore.Material) -> KeyEquivalent? {
+        guard let char = shortcutCharacter(for: material) else { return nil }
+        return KeyEquivalent(char)
+    }
+    #endif
 }

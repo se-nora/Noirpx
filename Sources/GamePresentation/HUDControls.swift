@@ -44,6 +44,18 @@ public struct HUDControls: View {
         self.onCycleWandSlot = onCycleWandSlot
     }
 
+    /// Discovered drawable materials, sorted by Material.rawValue for stable order.
+    private var selectableMaterials: [SimulationCore.Material] {
+        discoveredMaterials
+            .intersection(Set(MaterialBrush.drawable))
+            .sorted { $0.rawValue < $1.rawValue }
+    }
+
+    /// Total buttons in the palette row: erase + discovered materials.
+    private var paletteButtonCount: Int {
+        1 + selectableMaterials.count
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             // Wand slot bar + mana
@@ -61,14 +73,15 @@ public struct HUDControls: View {
             if !discoveredMaterials.isEmpty {
                 DiscoveredIngredientsRow(discovered: discoveredMaterials)
             }
-            ForEach(0..<((MaterialBrush.allCases.count + 2) / 3), id: \.self) { row in
-                let brushes = Array(MaterialBrush.allCases.dropFirst(row * 3).prefix(3))
+            // Material palette: erase first, then discovered drawable materials
+            ForEach(0..<((paletteButtonCount + 2) / 3), id: \.self) { row in
+                let buttons = paletteButtons.dropFirst(row * 3).prefix(3)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {
-                        ForEach(brushes, id: \.rawValue) { brushButton($0) }
+                        ForEach(buttons, id: \.id) { materialButton($0) }
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(brushes, id: \.rawValue) { brushButton($0) }
+                        ForEach(buttons, id: \.id) { materialButton($0) }
                     }
                 }
             }
@@ -81,6 +94,22 @@ public struct HUDControls: View {
         }
     }
 
+    /// Palette buttons: erase first, then each discovered drawable material.
+    private var paletteButtons: [PaletteButton] {
+        var result: [PaletteButton] = [
+            PaletteButton(id: "erase", material: .empty, title: MaterialBrush.eraseTitle, keyEquivalent: nil)
+        ]
+        result.append(contentsOf: selectableMaterials.map { mat in
+            PaletteButton(
+                id: "mat-\(mat.rawValue)",
+                material: mat,
+                title: MaterialBrush.title(for: mat),
+                keyEquivalent: MaterialBrush.keyEquivalent(for: mat)
+            )
+        })
+        return result
+    }
+
     @ViewBuilder private var runButtons: some View {
         Button("Restart", action: restart)
         Button("New Run", action: newRun)
@@ -91,14 +120,29 @@ public struct HUDControls: View {
         Button("Help", action: help)
     }
 
-    private func brushButton(_ brush: MaterialBrush) -> some View {
-        Button(brush.title) { select(brush.material) }
-            .keyboardShortcut(KeyEquivalent(Character(String(brush.rawValue))), modifiers: [])
+    @ViewBuilder
+    private func materialButton(_ button: PaletteButton) -> some View {
+        let isSelected = selected == button.material
+        let baseButton = Button(button.title) { select(button.material) }
             .buttonStyle(.bordered)
-            .tint(selected == brush.material ? .orange : .gray)
-            .accessibilityLabel("\(brush.title) material")
-            .accessibilityAddTraits(selected == brush.material ? .isSelected : [])
+            .tint(isSelected ? .orange : .gray)
+            .accessibilityLabel("\(button.title) material")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+        if let keyEquiv = button.keyEquivalent {
+            baseButton.keyboardShortcut(keyEquiv, modifiers: [])
+        } else {
+            baseButton
+        }
     }
+}
+
+/// Erase or material button in the palette.
+private struct PaletteButton {
+    let id: String
+    let material: SimulationCore.Material
+    let title: String
+    let keyEquivalent: KeyEquivalent?
 }
 
 /// Horizontal row of discovered ingredient chips for spell crafting.
@@ -108,18 +152,15 @@ private struct DiscoveredIngredientsRow: View {
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 4) {
-                ForEach(MaterialBrush.allCases, id: \.rawValue) { brush in
-                    let mat = brush.material
-                    let isDiscovered = discovered.contains(mat)
+                ForEach(discovered.sorted { $0.rawValue < $1.rawValue }, id: \.rawValue) { mat in
                     Text(mat.wandName)
                         .font(.system(.caption2, design: .monospaced))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(isDiscovered ? materialColor(mat).opacity(0.3) : .gray.opacity(0.2),
-                                    in: Capsule())
-                        .foregroundStyle(isDiscovered ? .white : .gray)
+                        .background(materialColor(mat).opacity(0.3), in: Capsule())
+                        .foregroundStyle(.white)
                         .overlay(
-                            Capsule().stroke(isDiscovered ? materialColor(mat) : .gray, lineWidth: 1)
+                            Capsule().stroke(materialColor(mat), lineWidth: 1)
                         )
                 }
             }
@@ -148,4 +189,5 @@ private struct DiscoveredIngredientsRow: View {
         }
     }
 }
+
 #endif

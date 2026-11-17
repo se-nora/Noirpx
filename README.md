@@ -113,8 +113,9 @@ not block material movement. Blocking materials cannot be painted directly into 
 living warden; falling sand can bury and remove it.
 
 Select a brush in the overlay, then click and drag on the scene on macOS or
-touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
-water, fire, pitch, or lamp oil; number keys 1–7 select them as well. Strokes are applied on the
+touch and drag on iOS. The brushes replace cells with empty space (Erase), rock, sand,
+water, fire, pitch, lamp oil, and all other discovered materials; number keys 1–9, 0 select
+the first ten drawable materials. Erase has no shortcut. Strokes are applied on the
 next simulation tick, and moving materials may immediately fall or react. Input
 outside the displayed scene is ignored. Painting is disabled after a win or failure.
 

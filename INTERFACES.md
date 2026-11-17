@@ -709,7 +709,7 @@ padding is 52 points). Its height fits the view; on iOS it reserves 96 points
 at the bottom for movement, jump and pulse. Its presentation-only guide shows
 the current beacon/gate objective or terminal restart prompt, followed by
 platform-specific movement, jump, pulse and painting reminders. Scroll to reach Restart, New Run,
-Stats, Help and all seven brushes in a compact window. The same keyboard shortcuts
+Stats, Help and the brush palette (Erase + discovered drawable materials, up to 20 buttons). The same keyboard shortcuts
 work while controls are offscreen. Help contains controls and fixture
 instructions, and Stats opens the diagnostic panel reporting submitted FPS, completed tick, rendered
 and allocated chunk counts, and the character's lower-left position. Rendered
@@ -722,8 +722,7 @@ fresh run at tick zero, clear controls and pending edits, reset the scheduler
 and refresh the renderer. The sequence is local, with no seed entry or save.
 The material brush maps mouse or single-touch strokes through the same
 following drawable viewport as the renderer, ignores letterboxing and cells
-outside the world, and fills gaps between sampled cells. The overlay selects empty, solid, sand, water,
-fire, pitch or lamp oil (also via keys 1–7); each cell replacement is enqueued in event order for
+outside the world, and fills gaps between sampled cells. The overlay shows Erase first (no shortcut), then discovered drawable materials (keys 1–9, 0 for the first ten); each cell replacement is enqueued in event order for
 the next tick. A stroke leaving the viewport is disconnected until it re-enters.
 The host surfaces enqueue and tick-overflow failures; inputs are not recorded
 for replay. Missing Metal devices, renderer initialization failures, simulation
@@ -782,7 +781,7 @@ load. At a 1000×600 host size after settling, the shared HUD geometry keeps
 these cells and the cells directly above and below them outside the HUD;
 320×300 and portrait 600×1000 layouts are also covered by geometry tests.
 On macOS, a hosted SwiftUI test checks the actual scroll viewport and that all
-eleven action and brush buttons can be scrolled fully into view at these sizes,
+action and brush buttons (4 run/info + 1 erase + up to 15 discovered drawable = 20 max) can be scrolled fully into view at these sizes,
 including the iOS bottom-reserve geometry. The HUD is not a
 physical-device touch or readability validation.
 Materials update before the character. After movement, a lower-left character
@@ -1522,3 +1521,12 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 - `ManaPoolTests` — Spend, refund, regenerate, caps, equality, Sendable
 - `CommandBudgetTests` — Spell command precedence over paint, budget cap (real pipeline)
 - `DeterministicReplayTests` — Seeded reproducibility with spell commands
+  
+## Material Discovery & Drawable Contract
+
+- **Drawable materials**: `Material.allCases` minus `.empty` (15 materials). `.empty` maps to the Erase brush only. `.solid` (rock) is drawable and included in cycling.
+- **Discovery**: A material becomes discovered when it appears in the visible viewport (active chunks of the current snapshot) or when the player paints with it. Discovery is tracked in the presentation layer only (`MaterialDiscovery.observe()`), never mutates simulation state, and persists across runs within a session.
+- **Selectable palette**: `discovered ∩ drawable`, sorted by `Material.rawValue`. The HUD palette shows Erase first (no keyboard shortcut), then discovered drawable materials.
+- **Keyboard shortcuts**: The first 10 drawable materials receive shortcuts `1`–`9`, `0` (keycodes 18,19,20,21,23,22,26,28,25,29). Remaining materials have no shortcut.
+- **Wand materials**: `WandMaterials.all == MaterialBrush.drawable` (excludes `.empty`). `cycleWandMaterial` filters by the currently discovered set before cycling.
+- **Automatic derivation**: Adding a new case to `Material` automatically makes it drawable (via `MaterialBrush.drawable` and `WandMaterials.all`). Name, color, and behavior mappings remain compile-enforced manual additions in `WandCasting.swift` (`wandName`), `HUDControls.swift` (`materialColor`), `FixturePixels.swift` (color), and simulation reaction code.

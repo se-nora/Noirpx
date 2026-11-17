@@ -133,9 +133,11 @@ cells along the drawable's long edge.
 - Drag — paint selected material
 - R — restart (same seed)
 - N — new run (advances seed deterministically)
+- Tab — toggle HUD visibility
 
 **Controls (iOS):**
 - On-screen left/right/jump/cycle-material buttons
+- Eye button (bottom-right) — toggle HUD visibility
 - Drag — paint selected material
 - No pulse, no wand casting, no spell crafting in Cave Run
 

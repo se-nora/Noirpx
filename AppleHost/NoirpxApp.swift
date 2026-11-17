@@ -23,6 +23,18 @@ private final class GameModel: ObservableObject {
     @Published var selectedMaterial: SimulationCore.Material = .sand
     @Published var isCasting = false
     @Published private(set) var castAim: CellPosition?
+    @Published private(set) var hoverCell: CellPosition?
+
+    /// Material name under the cursor, derived from the current snapshot so it
+    /// tracks changes (falling sand, burning out) without re-aiming.
+    var hoveredMaterialName: String? {
+        guard let cell = hoverCell, let snapshot else { return nil }
+        return MaterialProbe.name(at: cell, in: snapshot)
+    }
+
+    func setHover(_ position: CellPosition?) {
+        hoverCell = position
+    }
     private var castProgress: WandCastProgress?
     private var castMaterial: SimulationCore.Material = .sand
 
@@ -318,6 +330,7 @@ private struct HostView: View {
                     onViewport: { model.setViewport($0) },
                     onPaint: { model.paint($0) },
                     onAim: { model.setCastAim($0) },
+                    onHover: { model.setHover($0) },
                     onCastChanged: { casting in
                         if casting { model.startCasting() } else { model.stopCasting() }
                     },
@@ -413,6 +426,19 @@ private struct HostView: View {
                 .padding()
             }
             #endif
+            // Hovered material name pinned to the bottom of the screen
+            VStack {
+                Spacer()
+                if let name = model.hoveredMaterialName {
+                    Text(name)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.bottom, hudBottomReserved + 12)
+                }
+            }
         }
         .onAppear { model.resetClock() }
         .onChange(of: scenePhase) { _, _ in model.resetClock() }
@@ -517,6 +543,7 @@ private struct MetalSurface {
     let onViewport: (FixtureViewport) -> Void
     let onPaint: (CellPosition) -> Void
     let onAim: (CellPosition?) -> Void
+    let onHover: (CellPosition?) -> Void
     let onCastChanged: (Bool) -> Void
     let onCycleWandMaterial: (Int) -> Void
     let onCycleWandSlot: (Int) -> Void
@@ -551,6 +578,7 @@ private struct MetalSurface {
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
     var onAim: ((CellPosition?) -> Void)?
+    var onHover: ((CellPosition?) -> Void)?
     var onCastChanged: ((Bool) -> Void)?
     var onCycleWandMaterial: ((Int) -> Void)?
     var onCycleWandSlot: ((Int) -> Void)?
@@ -565,6 +593,7 @@ private final class InputMetalView: MTKView {
     private var keys: Set<UInt16> = []
     private var keyMonitor: ScopedRegistration?
     private var resignObserver: ScopedRegistration?
+    private var hoverTrackingArea: NSTrackingArea?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -642,6 +671,18 @@ private final class InputMetalView: MTKView {
         }
     }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let area = NSTrackingArea(rect: bounds,
+                                  options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
     override func mouseMoved(with event: NSEvent) {
         aim(event)
     }
@@ -658,6 +699,10 @@ private final class InputMetalView: MTKView {
     }
 
     override func mouseUp(with event: NSEvent) { lastCell = nil }
+
+    override func mouseExited(with event: NSEvent) {
+        onHover?(nil)
+    }
 
     override func rightMouseDown(with event: NSEvent) {
         aim(event)
@@ -678,14 +723,9 @@ private final class InputMetalView: MTKView {
     private func aim(_ event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
-        guard bounds.width > 0, bounds.height > 0,
-              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
-                                            drawableHeight: Double(drawableSize.height), center: cameraCenter,
-                                            longEdgeCells: 200),
-              let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
-                                       y: Double(y / bounds.height * drawableSize.height)) else {
-            return
-        }
+        let cell = cell(atX: point.x - bounds.minX, y: y)
+        onHover?(cell)
+        guard let cell else { return }
         onAim?(cell)
     }
 }
@@ -695,6 +735,7 @@ extension MetalSurface: NSViewRepresentable {
         let view = InputMetalView()
         view.onPaint = onPaint
         view.onAim = onAim
+        view.onHover = onHover
         view.onCastChanged = onCastChanged
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
@@ -714,6 +755,7 @@ extension MetalSurface: NSViewRepresentable {
         context.coordinator.character = character
         view.onPaint = onPaint
         view.onAim = onAim
+        view.onHover = onHover
         view.onCastChanged = onCastChanged
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
@@ -730,6 +772,7 @@ extension MetalSurface: NSViewRepresentable {
 private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
     var onAim: ((CellPosition?) -> Void)?
+    var onHover: ((CellPosition?) -> Void)?
     var onCastChanged: ((Bool) -> Void)?
     var onCycleWandMaterial: ((Int) -> Void)?
     var onCycleWandSlot: ((Int) -> Void)?
@@ -757,16 +800,19 @@ private final class InputMetalView: MTKView {
         paint(touch)
         activeTouch = nil
         lastCell = nil
+        onHover?(nil)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = activeTouch, touches.contains(touch) else { return }
         activeTouch = nil
         lastCell = nil
+        onHover?(nil)
     }
 
     private func paint(_ touch: UITouch) {
         let point = touch.location(in: self)
+        onHover?(cell(atX: point.x - bounds.minX, y: point.y - bounds.minY))
         paintPoint(x: point.x - bounds.minX, y: point.y - bounds.minY)
     }
 }
@@ -776,6 +822,7 @@ extension MetalSurface: UIViewRepresentable {
         let view = InputMetalView()
         view.onPaint = onPaint
         view.onAim = onAim
+        view.onHover = onHover
         view.onCastChanged = onCastChanged
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
@@ -790,6 +837,7 @@ extension MetalSurface: UIViewRepresentable {
         context.coordinator.character = character
         view.onPaint = onPaint
         view.onAim = onAim
+        view.onHover = onHover
         view.onCastChanged = onCastChanged
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
@@ -800,13 +848,18 @@ extension MetalSurface: UIViewRepresentable {
 #endif
 
 private extension InputMetalView {
-    func paintPoint(x: CGFloat, y: CGFloat) {
+    /// Maps a view-space point (origin top-left of bounds) to a world cell, or nil when off-grid.
+    func cell(atX x: CGFloat, y: CGFloat) -> CellPosition? {
         guard bounds.width > 0, bounds.height > 0,
               let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
                                              drawableHeight: Double(drawableSize.height), center: cameraCenter,
-                                             longEdgeCells: 200),
-              let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
-                                       y: Double(y / bounds.height * drawableSize.height)) else {
+                                             longEdgeCells: 200) else { return nil }
+        return viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
+                             y: Double(y / bounds.height * drawableSize.height))
+    }
+
+    func paintPoint(x: CGFloat, y: CGFloat) {
+        guard let cell = cell(atX: x, y: y) else {
             lastCell = nil
             return
         }

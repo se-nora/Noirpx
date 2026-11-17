@@ -1183,8 +1183,32 @@ Blocking material paint inside the character body is rejected by `CaveRun.paint`
 - **Snapshot:** Host publishes `run.simulation.snapshot` (immutable value) for
   renderer; `activeChunks` updated per tick from camera.
 
----
- 
+#### Hold-to-draw input (this increment, v0.31.0)
+
+- **Held state model:** `HeldInput` (GamePresentation) tracks `paintHeld` +
+  `paintCell` (left button / touch) and `castHeld` (right button, macOS only).
+  The host consumes it once per simulation tick inside `GameModel.update(at:)`.
+- **Material paint (hold):** while `paintHeld` and `paintCell != nil`, exactly one
+  `CaveRun.paint(selectedMaterial, at: paintCell)` is enqueued per tick. Cursor
+  movement while held updates `paintCell` via `mouseDragged`/`touchesMoved`; the
+  stroke interpolation on drag still enqueues intermediate cells as before.
+- **Wand cast (hold, macOS right button):** `rightMouseDown` sets `castHeld=true`;
+  each tick, if `castHeld && !isCasting`, `startCasting()` is attempted (gated by
+  cooldown/mana via `WandController.tryStartCast()`). While `isCasting`, the
+  existing per-tick ray advancement runs. When the ray completes and the button is
+  still held, the next tick attempts a new cast. `rightMouseUp` sets
+  `castHeld=false`; the next tick calls `stopCasting()` which cancels for mana
+  refund if no batch was placed.
+- **iOS:** touch hold drives material paint only; no right-button equivalent, so
+  `castHeld` stays false on iOS.
+- **Reset:** `clearControls()` (restart, focus loss, lifecycle reset) clears all
+  held state.
+- **Determinism:** held state is part of tick-indexed input. Same seed + same
+  sequence of (tick, held, cell) pairs reproduces identical snapshot digests.
+  No wall-clock timers are used; paint rate is bounded to one cell per tick.
+
+--- 
+
 # Appendix: Spell/Wand Crafting System
  
 > **Implementation status: implemented (v0.28.0)**

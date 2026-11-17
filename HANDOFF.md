@@ -1,5 +1,33 @@
 # Handoff: deterministic simulation prototype
 
+## Hold-to-draw increment (2026-11-17, v0.31.0)
+
+The hold-to-draw feature enables continuous material painting and wand casting
+while the mouse button (or touch) is held:
+
+- **macOS left button hold:** paints `selectedMaterial` at the cursor cell once
+  per simulation tick. Cursor movement while held updates the paint cell;
+  stroke interpolation between drag samples still enqueues intermediate cells.
+- **macOS right button hold:** starts wand cast toward cursor; when the ray
+  completes, if still held, retries `startCasting()` respecting cooldown/mana
+  via `WandController`. Release cancels with mana refund if no batch placed.
+- **iOS touch hold:** material paint only (no right-button equivalent).
+- **Implementation:** `HeldInput` (GamePresentation) tracks `paintHeld`,
+  `paintCell`, `castHeld`. Consumed once per tick in `GameModel.update(at:)`.
+  `InputMetalView` mouse/touch handlers call `setPaintHeld`/`updatePaintHeldCell`
+  and `setCastHeld`. No `SimulationCore` changes.
+- **Tests:** `HoldToDrawTests` (13 tests) cover state machine, one-paint-per-tick,
+  cursor follow, cooldown gating, mana gating, deterministic replay.
+- **All tests pass:** `swift test --parallel` (379 tests, 0 failures).
+- **Builds pass:** macOS Debug, iOS Simulator Debug (Xcode 27.2, Swift 6.4.2).
+- **App launches:** macOS app starts, renders, responds to input; manual verify
+  hold-to-draw paint and cast.
+- **Version:** MARKETING_VERSION bumped 0.30.0 → 0.31.0 (Debug + Release).
+- **INTERFACES.md:** appended Hold-to-draw input appendix documenting contract.
+
+**Unverified dimensions:** iOS touch ergonomics on physical device, on-device
+performance, visual quality of continuous spray/bolt.
+
 ## Following camera and material movement increment
 
 The fixture camera follows the character; rendering, painting, and active

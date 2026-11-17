@@ -309,6 +309,7 @@ private struct HostView: View {
     @StateObject private var model = GameModel()
     @State private var showingDiagnostics = false
     @State private var showingHelp = false
+    @State private var isHUDVisible = true
     private let timer = Timer.publish(every: 1.0 / 60, on: .main, in: .common).autoconnect()
     private let device = MTLCreateSystemDefaultDevice()
 
@@ -341,7 +342,8 @@ private struct HostView: View {
                     onInputReset: { model.resetClock() },
                     onRestart: { model.restart() },
                     onNewRun: { model.newRun() },
-                    onCycleMaterial: { model.cycleWandMaterial($0 ? 1 : -1) }
+                    onCycleMaterial: { model.cycleWandMaterial($0 ? 1 : -1) },
+                    onToggleHUD: { isHUDVisible.toggle() }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -349,6 +351,7 @@ private struct HostView: View {
                 Color(red: 0.06, green: 0.08, blue: 0.12).ignoresSafeArea()
             }
 
+            if isHUDVisible {
             HUDScrollViewport(width: geometry.size.width, height: geometry.size.height,
                               bottomReserved: hudBottomReserved) {
             VStack(alignment: .leading, spacing: 5) {
@@ -413,6 +416,7 @@ private struct HostView: View {
             .font(.system(.caption, design: .monospaced))
             .foregroundStyle(.white)
             }
+            }
             #if os(iOS)
             VStack {
                 Spacer()
@@ -422,6 +426,14 @@ private struct HostView: View {
                     Spacer()
                     controlButton("Jump", symbol: "arrow.up", control: .jump)
                     cycleMaterialButton
+                    Button(action: { isHUDVisible.toggle() }) {
+                        Image(systemName: isHUDVisible ? "eye" : "eye.slash")
+                            .font(.title2.bold())
+                            .frame(width: 64, height: 64)
+                            .foregroundStyle(.white)
+                            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .accessibilityLabel(isHUDVisible ? "Hide HUD" : "Show HUD")
                 }
                 .padding()
             }
@@ -553,6 +565,7 @@ private struct MetalSurface {
     let onRestart: (() -> Void)?
     let onNewRun: (() -> Void)?
     let onCycleMaterial: ((Bool) -> Void)?
+    let onToggleHUD: (() -> Void)?
 
     func makeCoordinator() -> MetalRenderer {
         MetalRenderer(device: device, snapshot: snapshot, character: character, onFPS: onFPS,
@@ -569,6 +582,7 @@ private struct MetalSurface {
             inputView.onRestart = onRestart
             inputView.onNewRun = onNewRun
             inputView.onCycleMaterial = onCycleMaterial
+            inputView.onToggleHUD = onToggleHUD
         }
         #endif
     }
@@ -588,6 +602,7 @@ private final class InputMetalView: MTKView {
     var onRestart: (() -> Void)?
     var onNewRun: (() -> Void)?
     var onCycleMaterial: ((Bool) -> Void)?
+    var onToggleHUD: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
@@ -653,6 +668,16 @@ private final class InputMetalView: MTKView {
                     self.onCycleMaterial?(true)
                 }
                 return nil
+            }
+            // Tab (48) - Toggle HUD; modifier+Tab passes through for focus traversal
+            if event.keyCode == 48 {
+                if event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty {
+                    if event.type == .keyDown && !event.isARepeat {
+                        self.onToggleHUD?()
+                    }
+                    return nil
+                }
+                return event
             }
             guard [UInt16(0), 2, 13, 49, 123, 124, 126].contains(event.keyCode) else { return event }
             if event.type == .keyDown && !event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
@@ -745,6 +770,7 @@ extension MetalSurface: NSViewRepresentable {
         view.onRestart = onRestart
         view.onNewRun = onNewRun
         view.onCycleMaterial = onCycleMaterial
+        view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -765,6 +791,7 @@ extension MetalSurface: NSViewRepresentable {
         view.onRestart = onRestart
         view.onNewRun = onNewRun
         view.onCycleMaterial = onCycleMaterial
+        view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
     }
 }
@@ -777,6 +804,7 @@ private final class InputMetalView: MTKView {
     var onCycleWandMaterial: ((Int) -> Void)?
     var onCycleWandSlot: ((Int) -> Void)?
     var onToggleCraftingGrid: (() -> Void)?
+    var onToggleHUD: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     private var lastCell: CellPosition?
     private var activeTouch: UITouch?
@@ -827,6 +855,7 @@ extension MetalSurface: UIViewRepresentable {
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
+        view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
         configure(view, coordinator: context.coordinator)
         return view
@@ -842,6 +871,7 @@ extension MetalSurface: UIViewRepresentable {
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
+        view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
     }
 }

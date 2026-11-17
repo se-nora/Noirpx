@@ -41,6 +41,7 @@ private final class GameModel: ObservableObject {
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
     private var input = GameplayInput()
+    private var heldInput = HeldInput()
     private var caveRunSession = CaveRunSession()
 
     private struct CaveRunSession {
@@ -109,6 +110,19 @@ private final class GameModel: ObservableObject {
 
     private func clearControls() {
         input.reset()
+        heldInput.reset()
+    }
+
+    func setPaintHeld(_ held: Bool, cell: CellPosition?) {
+        heldInput.setPaintHeld(held, cell: cell)
+    }
+
+    func updatePaintHeldCell(_ cell: CellPosition?) {
+        heldInput.updatePaintCell(cell)
+    }
+
+    func setCastHeld(_ held: Bool) {
+        heldInput.setCastHeld(held)
     }
 
     func setViewport(_ viewport: FixtureViewport) {
@@ -276,6 +290,18 @@ private final class GameModel: ObservableObject {
                     castProgress = nil
                 }
 
+                // Held material brush: paint once per tick at the held cursor cell.
+                for (cell, material) in heldInput.paintThisTick(material: selectedMaterial) {
+                    try run.paint(material, at: cell)
+                }
+
+                // Held wand cast: start/restart when idle, stop (with refund) on release.
+                if heldInput.shouldAttemptCast(isCasting: isCasting) {
+                    startCasting()
+                } else if heldInput.shouldStopCast(isCasting: isCasting) {
+                    stopCasting()
+                }
+
                 let controls = input.consumeTick()
                 try run.advance(horizontal: controls.horizontal, jump: controls.jump, activeChunks: activeChunks)
                 caveRun = run
@@ -321,6 +347,11 @@ private struct HostView: View {
                     onCastChanged: { casting in
                         if casting { model.startCasting() } else { model.stopCasting() }
                     },
+                    onPaintHeld: { held, cell in
+                        model.setPaintHeld(held, cell: cell)
+                        if held { model.updatePaintHeldCell(cell) }
+                    },
+                    onCastHeld: { held in model.setCastHeld(held) },
                     onCycleWandMaterial: { direction in model.cycleWandMaterial(direction) },
                     onCycleWandSlot: { direction in model.cycleWandSlot(direction) },
                     onToggleCraftingGrid: { model.toggleCraftingGrid() },
@@ -518,6 +549,8 @@ private struct MetalSurface {
     let onPaint: (CellPosition) -> Void
     let onAim: (CellPosition?) -> Void
     let onCastChanged: (Bool) -> Void
+    let onPaintHeld: (Bool, CellPosition?) -> Void
+    let onCastHeld: (Bool) -> Void
     let onCycleWandMaterial: (Int) -> Void
     let onCycleWandSlot: (Int) -> Void
     let onToggleCraftingGrid: () -> Void
@@ -552,6 +585,8 @@ private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
     var onAim: ((CellPosition?) -> Void)?
     var onCastChanged: ((Bool) -> Void)?
+    var onPaintHeld: ((Bool, CellPosition?) -> Void)?
+    var onCastHeld: ((Bool) -> Void)?
     var onCycleWandMaterial: ((Int) -> Void)?
     var onCycleWandSlot: ((Int) -> Void)?
     var onToggleCraftingGrid: (() -> Void)?
@@ -657,36 +692,38 @@ private final class InputMetalView: MTKView {
         aim(event)
     }
 
-    override func mouseUp(with event: NSEvent) { lastCell = nil }
+    override func mouseUp(with event: NSEvent) {
+        lastCell = nil
+        onPaintHeld?(false, nil)
+    }
 
     override func rightMouseDown(with event: NSEvent) {
         aim(event)
+        onCastHeld?(true)
     }
 
     override func rightMouseDragged(with event: NSEvent) {
         aim(event)
     }
 
-    override func rightMouseUp(with event: NSEvent) {}
+    override func rightMouseUp(with event: NSEvent) {
+        onCastHeld?(false)
+    }
 
     private func paint(_ event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
-        paintPoint(x: point.x - bounds.minX, y: y)
+        guard let cell = cell(for: event) else { lastCell = nil; return }
+        paintCell(cell)
+        onPaintHeld?(true, cell)
     }
 
     private func aim(_ event: NSEvent) {
+        onAim?(cell(for: event))
+    }
+
+    private func cell(for event: NSEvent) -> CellPosition? {
         let point = convert(event.locationInWindow, from: nil)
         let y = isFlipped ? point.y - bounds.minY : bounds.maxY - point.y
-        guard bounds.width > 0, bounds.height > 0,
-              let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
-                                            drawableHeight: Double(drawableSize.height), center: cameraCenter,
-                                            longEdgeCells: 200),
-              let cell = viewport.cell(atX: Double((point.x - bounds.minX) / bounds.width * drawableSize.width),
-                                       y: Double(y / bounds.height * drawableSize.height)) else {
-            return
-        }
-        onAim?(cell)
+        return cell(atX: point.x - bounds.minX, y: y)
     }
 }
 
@@ -696,6 +733,8 @@ extension MetalSurface: NSViewRepresentable {
         view.onPaint = onPaint
         view.onAim = onAim
         view.onCastChanged = onCastChanged
+        view.onPaintHeld = onPaintHeld
+        view.onCastHeld = onCastHeld
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
@@ -715,6 +754,8 @@ extension MetalSurface: NSViewRepresentable {
         view.onPaint = onPaint
         view.onAim = onAim
         view.onCastChanged = onCastChanged
+        view.onPaintHeld = onPaintHeld
+        view.onCastHeld = onCastHeld
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
@@ -731,6 +772,7 @@ private final class InputMetalView: MTKView {
     var onPaint: ((CellPosition) -> Void)?
     var onAim: ((CellPosition?) -> Void)?
     var onCastChanged: ((Bool) -> Void)?
+    var onPaintHeld: ((Bool, CellPosition?) -> Void)?
     var onCycleWandMaterial: ((Int) -> Void)?
     var onCycleWandSlot: ((Int) -> Void)?
     var onToggleCraftingGrid: (() -> Void)?
@@ -743,6 +785,7 @@ private final class InputMetalView: MTKView {
         activeTouch = touch
         lastCell = nil
         paint(touch)
+        onPaintHeld?(true, cell(for: touch))
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -750,6 +793,7 @@ private final class InputMetalView: MTKView {
         for sample in event?.coalescedTouches(for: touch) ?? [touch] {
             paint(sample)
         }
+        onPaintHeld?(true, cell(for: touch))
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -757,17 +801,24 @@ private final class InputMetalView: MTKView {
         paint(touch)
         activeTouch = nil
         lastCell = nil
+        onPaintHeld?(false, nil)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = activeTouch, touches.contains(touch) else { return }
         activeTouch = nil
         lastCell = nil
+        onPaintHeld?(false, nil)
     }
 
     private func paint(_ touch: UITouch) {
         let point = touch.location(in: self)
         paintPoint(x: point.x - bounds.minX, y: point.y - bounds.minY)
+    }
+
+    private func cell(for touch: UITouch) -> CellPosition? {
+        let point = touch.location(in: self)
+        return cell(atX: point.x - bounds.minX, y: point.y - bounds.minY)
     }
 }
 
@@ -777,6 +828,7 @@ extension MetalSurface: UIViewRepresentable {
         view.onPaint = onPaint
         view.onAim = onAim
         view.onCastChanged = onCastChanged
+        view.onPaintHeld = onPaintHeld
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
@@ -791,6 +843,7 @@ extension MetalSurface: UIViewRepresentable {
         view.onPaint = onPaint
         view.onAim = onAim
         view.onCastChanged = onCastChanged
+        view.onPaintHeld = onPaintHeld
         view.onCycleWandMaterial = onCycleWandMaterial
         view.onCycleWandSlot = onCycleWandSlot
         view.onToggleCraftingGrid = onToggleCraftingGrid
@@ -800,16 +853,19 @@ extension MetalSurface: UIViewRepresentable {
 #endif
 
 private extension InputMetalView {
-    func paintPoint(x: CGFloat, y: CGFloat) {
+    func cell(atX x: CGFloat, y: CGFloat) -> CellPosition? {
         guard bounds.width > 0, bounds.height > 0,
               let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
                                              drawableHeight: Double(drawableSize.height), center: cameraCenter,
                                              longEdgeCells: 200),
               let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
                                        y: Double(y / bounds.height * drawableSize.height)) else {
-            lastCell = nil
-            return
+            return nil
         }
+        return cell
+    }
+
+    func paintCell(_ cell: CellPosition) {
         if let lastCell {
             for position in FixtureStroke.cells(from: lastCell, to: cell) {
                 onPaint?(position)
@@ -818,6 +874,11 @@ private extension InputMetalView {
             onPaint?(cell)
         }
         lastCell = cell
+    }
+
+    func paintPoint(x: CGFloat, y: CGFloat) {
+        guard let cell = cell(atX: x, y: y) else { lastCell = nil; return }
+        paintCell(cell)
     }
 }
 

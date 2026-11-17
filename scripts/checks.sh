@@ -12,19 +12,19 @@ cd "$wt"
 
 case "$mode" in
   --quick)
-    echo "=== swift test (package) ==="
-    swift test
+    echo "=== swift test --parallel (package) ==="
+    swift test --parallel
     ;;
   --full)
-    echo "=== swift test (package) ==="
-    swift test
+    echo "=== swift test --parallel (package) ==="
+    swift test --parallel
     echo
     echo "=== xcodebuild macOS Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=macOS' build
     ;;
   --ios)
-    echo "=== swift test (package) ==="
-    swift test
+    echo "=== swift test --parallel (package) ==="
+    swift test --parallel
     echo
     echo "=== xcodebuild iOS Simulator Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build

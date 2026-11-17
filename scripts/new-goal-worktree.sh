@@ -49,5 +49,12 @@ if [ -e "$root" ]; then
 fi
 
 git -C "$integration" worktree add -b "$branch" "$root" main >/dev/null
+
+# Install npm dependencies if package.json exists
+if [ -f "$root/package.json" ]; then
+  echo "installing npm dependencies in $root..."
+  npm ci --prefix "$root" >/dev/null
+fi
+
 echo "worktree: $root"
 echo "branch:   $branch"

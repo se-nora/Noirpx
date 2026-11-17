@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PixelGame}",
+            "name": "Debug CaptureComparison",
+            "target": "CaptureComparison",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug CaptureComparison"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PixelGame}",
+            "name": "Release CaptureComparison",
+            "target": "CaptureComparison",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release CaptureComparison"
+        }
+    ]
+}

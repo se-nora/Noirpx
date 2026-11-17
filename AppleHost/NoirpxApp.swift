@@ -26,6 +26,9 @@ private final class GameModel: ObservableObject {
     private var castProgress: WandCastProgress?
     private var castMaterial: SimulationCore.Material = .sand
 
+    /// Materials the player has encountered (discovered). Persists across runs within a session.
+    @Published private(set) var materialDiscovery = MaterialDiscovery()
+
     // Spell/Wand Crafting state
     var wandController: WandController = WandController()
     var craftingGrid: CraftingGrid = CraftingGrid()
@@ -73,6 +76,7 @@ private final class GameModel: ObservableObject {
             caveRun = run
             snapshot = run.simulation.snapshot
             updateActiveChunks()
+            scanAndDiscover()
             clearControls()
             errorMessage = nil
             scheduler.reset()
@@ -86,6 +90,27 @@ private final class GameModel: ObservableObject {
             renderedChunks = nil
             errorMessage = "Could not create cave run: \(error)"
             showCraftingGrid = false
+        }
+    }
+
+    /// Scan the visible chunks of the current snapshot and union any non-empty
+    /// materials into `materialDiscovery`. Skips work once every drawable
+    /// material has been discovered.
+    private func scanAndDiscover() {
+        let drawableSet = Set(MaterialBrush.drawable)
+        guard !materialDiscovery.discovered.isSuperset(of: drawableSet) else { return }
+        guard let snapshot, let activeChunks else { return }
+        var found = Set<SimulationCore.Material>()
+        for chunk in snapshot.chunks where activeChunks.contains(chunk.position) {
+            for material in chunk.cells where material != .empty {
+                found.insert(material)
+            }
+            if drawableSet.isSubset(of: found.union(materialDiscovery.discovered)) {
+                break
+            }
+        }
+        if !found.isEmpty {
+            materialDiscovery.observe(Array(found))
         }
     }
 
@@ -134,6 +159,10 @@ private final class GameModel: ObservableObject {
             try run.paint(selectedMaterial, at: position)
             caveRun = run
             snapshot = run.simulation.snapshot
+            // The player explicitly chose this material, so it's discovered (except erase).
+            if selectedMaterial != .empty {
+                materialDiscovery.observe([selectedMaterial])
+            }
         } catch {
             errorMessage = "Could not apply input: \(error)"
         }
@@ -185,7 +214,10 @@ private final class GameModel: ObservableObject {
 
     func cycleWandMaterial(_ direction: Int) {
         let current = WandMaterials.normalized(selectedMaterial)
-        selectedMaterial = direction >= 0 ? WandMaterials.next(after: current) : WandMaterials.previous(before: current)
+        let candidates = WandMaterials.all.filter { materialDiscovery.selectable.contains($0) }
+        guard !candidates.isEmpty else { return }
+        let index = candidates.firstIndex(of: current) ?? 0
+        selectedMaterial = candidates[(index + (direction >= 0 ? 1 : -1) + candidates.count) % candidates.count]
     }
 
     // New: cycle active wand slot (replaces material cycling for wand casting)
@@ -281,6 +313,7 @@ private final class GameModel: ObservableObject {
                 caveRun = run
                 updateActiveChunks()
                 snapshot = run.simulation.snapshot
+                scanAndDiscover()
                 if run.outcome != .playing {
                     clearControls()
                     break
@@ -370,14 +403,14 @@ private struct HostView: View {
                             diagnostics: { model.resetClock(); showingDiagnostics = true },
                             help: { model.resetClock(); showingHelp = true },
                             select: { model.selectedMaterial = $0 },
-                            discoveredMaterials: [],
+                            discoveredMaterials: model.materialDiscovery.selectable,
                             onToggleSpellCrafting: { model.toggleCraftingGrid() },
                             showSpellCrafting: model.showCraftingGrid,
                             showSpellCraftingAllowed: model.isCraftingAllowed,
                             wand: model.wandController.wand,
                             manaPool: model.wandController.manaPool,
                             onCycleWandSlot: { direction in model.cycleWandSlot(direction) })
-                Text("Paint: drag; keys 1–7")
+                Text("Paint: drag; keys 1–9, 0 (discovered materials)")
                 Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
                 // Spell crafting HUD (only presented in safe zones)
                 if model.showCraftingGrid && model.isCraftingAllowed {

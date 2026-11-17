@@ -90,8 +90,8 @@ final class CraftingGatingTests: XCTestCase {
         }
 
         let allowedCount = countFocusRingViews(view)
-        // Base buttons: 4 run/info + 7 MaterialBrush = 11. +1 Show Spells = 12 when allowed
-        XCTAssertEqual(allowedCount, 12, "Show Spells button must add one FocusRingView when allowed and materials discovered")
+        // Base buttons: 4 run/info + 1 erase + 2 discovered materials = 7. +1 Show Spells = 8 when allowed
+        XCTAssertEqual(allowedCount, 8, "Show Spells button must add one FocusRingView when allowed and materials discovered")
         window.close()
     }
 
@@ -134,8 +134,8 @@ final class CraftingGatingTests: XCTestCase {
         }
 
         let disallowedCount = countFocusRingViews(view)
-        // Base buttons: 4 run/info + 7 MaterialBrush = 11. Show Spells hidden = 11 when disallowed
-        XCTAssertEqual(disallowedCount, 11, "Show Spells button must not add FocusRingView when not allowed")
+        // Base buttons: 4 run/info + 1 erase + 2 discovered = 7. Show Spells hidden = 7 when disallowed
+        XCTAssertEqual(disallowedCount, 7, "Show Spells button must not add FocusRingView when not allowed")
         window.close()
     }
     #endif

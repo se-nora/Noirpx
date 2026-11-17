@@ -81,7 +81,7 @@ Allows host to place character at `world.spawn` for CaveWorld sandbox mode.
 
 | Platform | Left | Right | Jump | Paint | Cycle Material |
 |----------|------|-------|------|-------|----------------|
-| macOS    | A / ← | D / → | W / ↑ / Space | Drag | F (keys 1–7 also work) |
+| macOS    | A / ← | D / → | W / ↑ / Space | Drag | F (keys 1–9, 0 also work) |
 | iOS      | On-screen ← | On-screen → | On-screen ↑ | Touch drag | F button |
 
 **No pulse, no wand casting, no spell crafting** in CaveRun mode.

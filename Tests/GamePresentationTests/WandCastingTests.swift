@@ -43,22 +43,27 @@ final class WandCastingTests: XCTestCase {
     }
 
     func testMaterialCycleStaysInWandSet() {
+        // WandMaterials.all now = MaterialBrush.drawable = all Materials except .empty in enum order
+        // Order: solid, sand, water, fire, pitch, oil, steam, lava, acid, blood, slime, ice, gunpowder, gold, magicLiquid
         var material: Material = .sand
         material = WandMaterials.next(after: material)
         XCTAssertEqual(material, .water)
         material = WandMaterials.next(after: material)
         XCTAssertEqual(material, .fire)
         material = WandMaterials.next(after: material)
-        XCTAssertEqual(material, .steam)
+        XCTAssertEqual(material, .pitch)
         material = WandMaterials.next(after: material)
-        XCTAssertEqual(material, .lava)
+        XCTAssertEqual(material, .oil)
         material = WandMaterials.previous(before: material)
-        XCTAssertEqual(material, .steam)
+        XCTAssertEqual(material, .pitch)
         material = WandMaterials.previous(before: material)
         XCTAssertEqual(material, .fire)
     }
 
     func testNormalizedFallsBackToSand() {
-        XCTAssertEqual(WandMaterials.normalized(.solid), .sand)
+        // .solid is now in WandMaterials.all (all drawable materials), so it stays .solid
+        XCTAssertEqual(WandMaterials.normalized(.solid), .solid)
+        // .empty is NOT drawable, so it falls back to .sand
+        XCTAssertEqual(WandMaterials.normalized(.empty), .sand)
     }
 }

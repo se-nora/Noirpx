@@ -101,18 +101,22 @@ final class CommandBudgetTests: XCTestCase {
     // MARK: - Real Pipeline Tests
 
     func testSimulationAdvanceEnforcesBudget() throws {
-        // Test that Simulation.advance actually applies the budget and precedence
+        // Test that Simulation.advance actually applies the budget and precedence.
+        // Budget applies from tick 2 onward (tick 1 is reserved for world initialization).
         var sim = Simulation(seed: 42)
 
-        // Queue 200 commands for tick 1: 100 spell + 100 paint
+        // Advance to tick 1 (empty)
+        try sim.advance()
+
+        // Queue 200 commands for tick 2: 100 spell + 100 paint
         // Use solid for paint (doesn't move) and fire for spell (doesn't move)
         // Place at different x ranges to avoid overlap
         for i in 0..<100 {
-            try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: i, y: 0), material: .fire, isSpellCommand: true))
-            try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: i + 200, y: 0), material: .solid, isSpellCommand: false))
+            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i, y: 0), material: .fire, isSpellCommand: true))
+            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i + 200, y: 0), material: .solid, isSpellCommand: false))
         }
 
-        // Advance one tick - should apply only 148 commands (100 spell + 48 paint)
+        // Advance one tick (tick 2) - should apply only 148 commands (100 spell + 48 paint)
         try sim.advance()
 
         // Check that all 100 spell commands were applied
@@ -173,45 +177,48 @@ final class CommandBudgetTests: XCTestCase {
     }
 
     func testSimulationAdvanceMultipleTicksBudgetIndependent() throws {
-        // Test that budget applies per tick independently
+        // Test that budget applies per tick independently (from tick 2 onward).
         var sim = Simulation(seed: 42)
 
-        // Queue 200 commands for tick 1
-        for i in 0..<100 {
-            try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: i, y: 0), material: .fire, isSpellCommand: true))
-            try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: i + 200, y: 0), material: .solid, isSpellCommand: false))
-        }
+        // Advance to tick 1 (empty) - tick 1 is init-exempt
+        try sim.advance()
 
         // Queue 200 commands for tick 2
         for i in 0..<100 {
-            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i, y: 10), material: .pitch, isSpellCommand: true))
-            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i + 200, y: 10), material: .solid, isSpellCommand: false))
+            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i, y: 0), material: .fire, isSpellCommand: true))
+            try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i + 200, y: 0), material: .solid, isSpellCommand: false))
         }
 
-        // Advance tick 1 and check
-        try sim.advance() // tick 1
-
-        // Tick 1: 100 spell + 48 paint
-        var spell1 = 0
-        var paint1 = 0
+        // Queue 200 commands for tick 3
         for i in 0..<100 {
-            if (try? sim.snapshot.material(at: CellPosition(x: i, y: 0))) == .fire { spell1 += 1 }
-            if (try? sim.snapshot.material(at: CellPosition(x: i + 200, y: 0))) == .solid { paint1 += 1 }
+            try sim.enqueue(SimulationCommand(tick: 3, position: CellPosition(x: i, y: 10), material: .pitch, isSpellCommand: true))
+            try sim.enqueue(SimulationCommand(tick: 3, position: CellPosition(x: i + 200, y: 10), material: .solid, isSpellCommand: false))
         }
-        XCTAssertEqual(spell1, 100)
-        XCTAssertEqual(paint1, 48)
 
         // Advance tick 2 and check
         try sim.advance() // tick 2
 
-        // Tick 2: 100 spell + 48 paint (pitch at y=10, solid at y=10) - pitch doesn't fall
+        // Tick 2: 100 spell + 48 paint
         var spell2 = 0
         var paint2 = 0
         for i in 0..<100 {
-            if (try? sim.snapshot.material(at: CellPosition(x: i, y: 10))) == .pitch { spell2 += 1 }
-            if (try? sim.snapshot.material(at: CellPosition(x: i + 200, y: 10))) == .solid { paint2 += 1 }
+            if (try? sim.snapshot.material(at: CellPosition(x: i, y: 0))) == .fire { spell2 += 1 }
+            if (try? sim.snapshot.material(at: CellPosition(x: i + 200, y: 0))) == .solid { paint2 += 1 }
         }
         XCTAssertEqual(spell2, 100)
         XCTAssertEqual(paint2, 48)
+
+        // Advance tick 3 and check
+        try sim.advance() // tick 3
+
+        // Tick 3: 100 spell + 48 paint (pitch at y=10, solid at y=10) - pitch doesn't fall
+        var spell3 = 0
+        var paint3 = 0
+        for i in 0..<100 {
+            if (try? sim.snapshot.material(at: CellPosition(x: i, y: 10))) == .pitch { spell3 += 1 }
+            if (try? sim.snapshot.material(at: CellPosition(x: i + 200, y: 10))) == .solid { paint3 += 1 }
+        }
+        XCTAssertEqual(spell3, 100)
+        XCTAssertEqual(paint3, 48)
     }
 }

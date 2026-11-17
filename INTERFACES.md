@@ -1476,11 +1476,12 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 - Mana capped at 255.
  
 ## Command Budget & Precedence
- 
+
 - `Simulation.maxSpellCommandsPerTick = 148` (constant in SimulationCore)
 - Each tick, commands are sorted: `isSpellCommand = true` first, then `false` (paint)
 - Truncated to 148 commands; paint commands dropped first
 - This ensures spell footprints always apply even under heavy paint load
+- **Tick 1 is exempt**: world initialization (e.g. `CaveRun` spawning a 256×128 grid) legitimately enqueues far more than 148 commands; the budget applies from tick 2 (first gameplay tick) onward
  
 ## HUD Integration
  

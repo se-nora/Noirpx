@@ -382,6 +382,21 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - acceptance:
   - Tests for pickup rules and replay; HUD screenshot with a nonzero counter.
 
+### cave-vertical-biome-layers: Vertical biome bands in CaveRun world generation
+- status: todo
+- priority: 44
+- track: noita
+- depends: none
+- areas: worldgen
+- why: Noita's descent feels varied because each depth has distinct materials and hazards. CaveRun currently generates a uniform vertical mix. Adding vertical biome bands (surface, underground, deep) with distinct material palettes, densities, and transition rows creates depth progression within a single level and lays groundwork for multi-level biome-descent.
+- scope: Continue the existing implementation on branch `agent/cave-vertical-biome-layers` (2 commits, rebased onto main). The branch adds `CaveBiomeConfig` with three default bands, per-material density multipliers and caps, 1-row linear interpolation at boundaries, and integrates into `CaveRun.init` and `CaveWorldGenerator`. Resolve the INTERFACES.md conflict by documenting the biome config in `docs/interfaces/cave-world-and-cave-run.md` instead of the old monolithic file. Ensure digest version bump is retained. Add/update tests for deterministic generation per seed+height+config, band boundary transitions, and digest equality.
+- acceptance:
+  - CaveRun with default biome config generates three distinct vertical bands with correct material distributions (visual/screenshot verification).
+  - Same seed + size + config -> identical world (digest equality test).
+  - Changing biome config changes digest (intentional).
+  - All existing CaveRun tests pass; new tests cover band transitions and negative coordinates.
+  - Documentation in `docs/interfaces/cave-world-and-cave-run.md` reflects the new config schema.
+
 ### biome-descent: Multi-level descent through distinct biomes
 - status: todo
 - priority: 45

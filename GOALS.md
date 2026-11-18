@@ -107,7 +107,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Restructured 1,532-line INTERFACES.md into 11 subsystem files under docs/interfaces/ + 36-line index; all 55 H2+ headings preserved with 4 retitles per spec; stale blocks removed (save "not implemented", spell status, coding-stage sections); directional refs rewritten to cross-file links; known defects preserved; no version bump (docs-only)
 
 ### capture-hud: Include HUD overlay in CaptureComparison videos
-- status: todo
+- status: done
 - priority: 9
 - track: infra
 - depends: none

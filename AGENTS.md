@@ -2,9 +2,14 @@
 
 ## Project direction
 
-- Read [PLAN.md](PLAN.md) before choosing or changing architecture. This project
-  is currently in the planning stage; do not claim unimplemented features or
+- Read [PLAN.md](PLAN.md) before choosing or changing architecture, and pick
+  work from [GOALS.md](GOALS.md). Do not claim unimplemented features or
   commands exist.
+- Claim a goal before starting it with
+  `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq.py claim <id>`
+  and do not start a goal that is already claimed. Goals sharing an `areas`
+  value must not run concurrently. Mark the goal `done` in GOALS.md in the
+  merge that delivers it.
 - Target macOS and iOS from the start. Keep the Swift simulation core independent
   of UI, Metal, audio, platform input, and wall-clock timing. Rendering consumes
   published simulation state and must not mutate the world.

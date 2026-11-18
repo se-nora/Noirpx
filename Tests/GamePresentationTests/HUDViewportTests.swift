@@ -23,7 +23,8 @@ final class HUDViewportTests: XCTestCase {
                              controls: bottomReserved == 0 ? .keyboard : .touch)
                     ForEach(0..<6) { i in Text("Status \(i)") }
                     HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
-                                select: { selected = $0 })
+                                select: { selected = $0 },
+                                discoveredMaterials: Set(MaterialBrush.drawable))
                 }
                 .font(.system(.caption, design: .monospaced))
             })
@@ -43,7 +44,8 @@ final class HUDViewportTests: XCTestCase {
             let buttons = descendants(document).filter {
                 String(describing: type(of: $0)).contains("FocusRingView")
             }
-            XCTAssertEqual(buttons.count, 4 + MaterialBrush.allCases.count)
+            // 4 run/info + 1 erase + 15 discovered = 20
+            XCTAssertEqual(buttons.count, 4 + 1 + 15)
             XCTAssertEqual(scroll.contentView.bounds.width,
                            HostLayout.hudContentWidth(viewWidth: width), accuracy: 1)
             XCTAssertEqual(scroll.contentView.bounds.height,
@@ -63,15 +65,20 @@ final class HUDViewportTests: XCTestCase {
                 XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
             }
             scroll.contentView.scroll(to: .zero)
-            for (brush, keyCode) in zip(MaterialBrush.allCases, [18, 19, 20, 21, 23, 22, 26] as [UInt16]) {
-                let key = String(brush.rawValue)
+            // First 10 drawable materials get shortcuts '1'..'9','0'
+            // Keycodes: 18='1', 19='2', 20='3', 21='4', 23='5', 22='6', 26='7', 28='8', 25='9', 29='0'
+            let materialsWithShortcuts: [SimulationCore.Material] = [.solid, .sand, .water, .fire, .pitch, .oil, .steam, .lava, .acid, .blood]
+            let expectedKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25, 29]
+            for (material, keyCode) in zip(materialsWithShortcuts, expectedKeyCodes) {
+                let char = MaterialBrush.shortcutCharacter(for: material)!
+                let key = String(char)
                 let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                                                            timestamp: 0, windowNumber: window.windowNumber,
                                                            context: nil, characters: key,
                                                            charactersIgnoringModifiers: key, isARepeat: false,
                                                            keyCode: keyCode))
                 XCTAssertTrue(window.performKeyEquivalent(with: event))
-                XCTAssertEqual(selected, brush.material)
+                XCTAssertEqual(selected, material)
             }
             window.close()
         }

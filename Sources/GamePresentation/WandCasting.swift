@@ -1,8 +1,10 @@
 import SimulationCore
 
-/// Materials the wand can cast.
+/// Materials the wand can cast, derived automatically from `Material.allCases`
+/// so new enum cases become castable without code changes here.
 public enum WandMaterials {
-    public static let all: [SimulationCore.Material] = [.sand, .water, .fire, .steam, .lava, .acid, .blood, .gunpowder, .gold, .magicLiquid]
+    /// All drawable materials in `Material` rawValue order (excludes `.empty`).
+    public static let all: [SimulationCore.Material] = MaterialBrush.drawable
 
     public static func contains(_ material: SimulationCore.Material) -> Bool {
         all.contains(material)

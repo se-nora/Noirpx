@@ -1,244 +1,96 @@
 # Noirpx
 
-Noirpx is an early-stage original 2D pixel-simulation game for macOS and iOS.
-It is not yet a complete game. The Apple app offers Beacon Run, a small seeded
-challenge rendered with Metal and advanced at a fixed tick rate.
-The standalone core also has an opt-in parallel resident-world prototype,
-which is not connected to the app.
+Noirpx is an early-stage original 2D pixel-simulation roguelite for macOS and
+iOS, aiming to become Noita-like: every pixel is a simulated material. It is
+not yet a complete game. The app currently offers **Cave Run**, a seeded cave
+descent rendered with Metal and advanced at a fixed 60 ticks per second.
 
-- [Development plan](PLAN.md) records decisions and milestones.
-- [Interface contracts](INTERFACES.md) distinguish implemented APIs
-  from agreements needed by future work.
-- [Agent instructions](AGENTS.md) define collaboration and integration.
+- [Development plan](PLAN.md): vision, current state, gap analysis,
+  performance budgets and baselines, architecture invariants.
+- [Goal queue](GOALS.md): the prioritized, dependency-annotated work queue.
+- [Interface contracts](INTERFACES.md): simulation, material, save, spell,
+  and host contracts.
+- [Agent instructions](AGENTS.md): collaboration, worktrees, integration.
+- [Handoff](HANDOFF.md): short status note for the next contributor.
 
-## Headless prototype
+## Playing Cave Run
 
-`HeadlessFixture.make(seed:)` creates a simulation with a small scene queued for
-tick 1. Call `advance()` to complete each tick, then inspect `snapshot`, its
-chunks, or its stable `digest`. Commands replace one material at a position on
-an explicit future tick. See [INTERFACES.md](INTERFACES.md) for rule ordering,
-world limits, snapshot ownership, digest format, and prototype limitations.
+Cave Run generates a 256 × 128-cell cave from a seed, with a spawn pad at the
+top and a shaft leading down. The camera follows the character with 200 cells
+along the window's long edge. Falling too far ends the run; restart rebuilds
+the same seed, New Run advances the seed deterministically.
 
-In Beacon Run, collect both amber outlined beacons and touch the gate; it turns
-green when unlocked. Jump the gap and climb, paint away, or pulse through the sand pile.
-The red striped heat vent before the gate damages on contact: jump over it, or
-paint water at its base to cool it (blue). You start with three health; one
-hit grants 30 ticks of protection. Water in the base refreshes 120 ticks of
-cooling; the sensor includes water that falls just below the visible base onto
-the floor. The HUD shows both timers. Health does not regenerate. Falling
-below the course or losing all health ends the run; win and failure freeze the world until Restart.
-The beacons and gate are nonphysical markers, not materials. They are collected
-by touching them with the character, in either order. The gate can be visited
-early, but only wins when both beacons have been collected and the character
-touches it again. A Chime Warden patrols the floor after the second beacon:
-amber warns, red is dangerous on contact, and purple is recovery. Jump past it
-or hit it with the Silt Pulse; rock, sand and pitch shield it. When it overlaps you,
-a matching colored bar and bell icon appear on and above the player. It shares the vent's
-hit protection. It disappears if buried or its floor is removed. There is no
-overall time limit, score, or save. Above the start are five violet pitch cells.
-Paint fire next to one; after several heat transfers it ignites orange. Paint
-water directly above a hot or burning cell to quench it back to cold pitch.
-Burning pitch spreads heat to one neighbor at a time and burns away after 64
-processed turns (about 1.07 seconds at 60 Hz). Water may move or be consumed
-before it can quench, depending on tick order. Fire and burning oil hurt when
-inside the character; orange burning pitch also hurts when directly beside,
-above or below the body, but not at a corner. Hot fuel that is not burning is
-safe. Only the final positions after material reactions and movement count, so
-water can quench a hazard before it hits. Fire, vent and warden share the same
-shield; the HUD shows the last hit source while protected. Hazardous material
-touching the player is shown at its exact cells in black and white; boundary
-marks contrast with their visible surroundings where possible, and enclosed
-marks alternate in a checkerboard. Burning pitch
-away from the body remains orange. Painting
-can bridge the gap or alter the course: this is an open-ended tool, not a
-restricted scoring challenge. Water does not hurt the character.
+**macOS**
 
-The app shows a view following the character with 200 simulation cells along the
-long edge of the drawable. The other dimension follows
-the drawable's aspect ratio, rounded to whole cells, so small margins may appear.
-Resizing and rotation update the view and brush mapping. Nearest-neighbor
-sampling keeps cells distinct, although non-integer display scaling can produce
-uneven pixel widths. Physics
-updates chunks intersecting the camera and extends two viewport chunk widths
-beyond each visible edge (independently on each axis). More distant chunks stay
-resident but are frozen until the viewport's active region includes them again;
-they do not catch up on missed ticks. Physics cannot move or react across the
-active region boundary. Explicit commands still apply to frozen chunks. The
-renderer skips chunks outside the visible camera. The HUD displays the run seed.
-Restart reconstructs that same course and character from tick zero and discards
-queued edits; New Run deterministically advances the seed and starts another
-course. The course varies obstacle positions, gap width, sand height, objectives
-and vent placement within a tested, finishable route. Seeds can yield the same
-layout; the seed still affects material physics. There is no seed entry or save.
+| Input | Action |
+| --- | --- |
+| A / D or ← / → | Move |
+| W, Space, or ↑ | Jump |
+| Left mouse (click, drag, or hold) | Paint the selected material; holding paints every tick |
+| Right mouse (hold) | Cast the wand toward the cursor (mana and cooldown apply) |
+| 1–9, 0 | Select one of the first ten discovered materials |
+| F | Cycle the selected material |
+| [ / ] | Cycle wand slot |
+| C | Toggle the spell crafting grid (only outside active play) |
+| R / N | Restart (same seed) / New Run |
+| Tab | Show or hide the HUD |
 
-The HUD starts with the current objective and a compact reminder of movement,
-jump, pulse and painting controls; once both beacons are collected it points to
-the green gate. Open **Help** for the fuller controls, hazards and pitch
-instructions. Select **Lamp oil** to paint an optional flowing fuel; fire or
-burning pitch can ignite it, and adjacent water quenches hot oil. The oil remains
-nonblocking and is not placed in the course automatically. Water sinks through
-oil and sand sinks through both liquids, so oil tends to float above water in
-containers. This is a discrete cell rule, not continuous fluid physics; tick
-order can make hot oil consume adjacent water before it is displaced. Existing
-replays can change under these new rules. Open **Stats** to see submitted FPS, completed tick, rendered and
-allocated chunk counts, and the character's lower-left position. Rendered
-chunks contain at least one nonempty cell in the last submitted camera frame;
-allocated chunks are all nonempty chunks in the latest completed simulation
-snapshot, including frozen chunks. These counts can refer to different ticks.
-The simulation continues while diagnostics are open; controls and the timing
-baseline reset when opening and closing the panel. In compact windows, scroll
-the top-left HUD to reach every action and brush; keyboard brush shortcuts also
-work while the buttons are offscreen. On iOS the HUD leaves room at the bottom
-for the movement, pulse and jump controls.
+**iOS:** on-screen left, right, jump, and cycle-material buttons; drag to
+paint; the eye button toggles the HUD. Wand casting and crafting are not yet
+available on iOS.
 
-Move with A/D or the left/right arrow keys and jump with W, up, or space on
-macOS; hold F to fire the **Silt Pulse** in the last movement direction. On iOS,
-hold the on-screen left and right controls, tap jump, and tap or hold the bolt
-button for the pulse; controls can be used together. A cyan flash shows its
-path and the overlay shows readiness or remaining cooldown ticks. The pulse
-reaches 18 cells ahead in five horizontal lanes, removing the first sand in
-each lane. Rock and pitch (including while burning) stop it without damage; water, fire and oil let it pass. It can
-defeat the warden when a traced lane reaches it, and open a route through sand
-but cannot break the floor or rock step. At point-blank range the same five
-lanes also check inside the player, from the facing edge inward: an overlapping
-warden is hit only if no blocking material obstructs that lane. This close-range check
-does not excavate material. It fires at
-most once every 18 simulation ticks, including while held. The character is a 5 × 9-cell rectangle that
-collides with rock, sand, pitch, and world bounds, but not water, fire or oil. It advances after
-each material tick, automatically steps up obstacles at most three cells high
-while grounded (if there is headroom), and can jump only while grounded.
-Painting blocking materials directly inside the character is
-ignored. A queued edit or moving sand can still overlap it: the character does
-not block material movement. Blocking materials cannot be painted directly into a
-living warden; falling sand can bury and remove it.
+The brush palette shows erase plus every material discovered in the current
+session (seen in the active area or painted). Hovering a cell shows its
+material name at the bottom of the screen. The **Stats** panel shows FPS,
+tick, chunk counts, and the character position.
 
-Select a brush in the overlay, then click and drag on the scene on macOS or
-touch and drag on iOS. The brushes replace cells with empty space, rock, sand,
-water, fire, pitch, or lamp oil; number keys 1–7 select them as well. Strokes are applied on the
-next simulation tick, and moving materials may immediately fall or react. Input
-outside the displayed scene is ignored. Painting is disabled after a win or failure.
+Materials: rock, sand, water, fire, pitch, lamp oil, steam, lava, acid, blood,
+slime, ice, gunpowder, gold, and magic liquid. Powders fall and pile, liquids
+flow and settle by density (water sinks through oil, sand through both),
+steam rises, fire heats neighbors and ignites pitch and oil, and water
+quenches hot or burning fuel. See [INTERFACES.md](INTERFACES.md) for exact
+rules and ordering. Many of the newer materials do not yet react with each
+other; see [GOALS.md](GOALS.md).
 
-## Cave Run
+### Other core content
 
-Cave Run is a descent challenge in a generated vertical shaft. The world is
-256 × 128 cells (minimum 128 × 64) with a fixed spawn pad at the top and a
-shaft leading to a target depth. The camera follows the character with 200
-cells along the drawable's long edge.
-
-**Controls (macOS):**
-- A / ← — move left
-- D / → — move right
-- W / Space / ↑ — jump
-- [ / ] — cycle material
-- Drag — paint selected material
-- R — restart (same seed)
-- N — new run (advances seed deterministically)
-- Tab — toggle HUD visibility
-
-**Controls (iOS):**
-- On-screen left/right/jump/cycle-material buttons
-- Eye button (bottom-right) — toggle HUD visibility
-- Drag — paint selected material
-- No pulse, no wand casting, no spell crafting in Cave Run
-
-**HUD:**
-- Seed, world size, character position, simulation tick
-- Depth / descent goal (distance from spawn to shaft bottom)
-- Outcome banner:
-  - Playing: "Descend the shaft. Reach the bottom."
-  
-  - Fell: Orange "You fell too far. Try again!"
-
-The world is generated from a seed using the cave spawn template. The shaft
-geometry is deterministic per seed; depth is at least 32 cells. Restart
-reconstructs the identical world; New Run advances the seed by the golden-ratio
-constant and generates a new layout.
-
-Sand, water and oil cannot move diagonally past an occupied side cell. Oil
-does not displace water, sand or other oil. Sand can displace water or oil;
-water can displace oil downward. The displaced liquid moves into an empty side
-cell, or upward if both sides are occupied; the upward search may pass occupied
-cells. The displaced liquid does not move
-again in the same tick. See [INTERFACES.md](INTERFACES.md) for boundaries and
-resident-mode ordering.
-Fire prioritizes edge-adjacent water over heating; hot pitch consumes edge-adjacent
-water and cools, while unquenched burning pitch eventually disappears.
-Fire and burning pitch or oil heat one of eight neighbors per turn, including
-diagonally past solid corners. Water at a corner never quenches the source or
-the heated target. This changes older seeded replays involving diagonal heat.
-Fire lasts 32 processed turns and transfers 40 heat starting at age 2;
-pitch ignites at 100 and cools by 1 when not burning. Processed ticks are not necessarily displayed frames.
-Oil ignites at 80, cools by 1 when unburning, spreads heat from age 2 and
-burns out on its 48th burning turn. Its heat travels with it; it reacts before
-moving, and quenching consumes its turn.
-Fire and water have no effect across a frozen boundary.
-
-`ResidentSimulation` is a separate experimental mode for a larger sparse,
-fully resident world. It accepts a focus and a host-provided per-batch budget
-check, sleeps idle chunks, and computes proposals in parallel. Different
-deadline decisions can produce different worlds; it does not promise replay
-determinism. Its 480 × 270-cell viewport and host deadline are not implemented.
-
-To run the optional release-mode scheduling microbenchmark:
-
-```sh
-NOIRPX_BENCHMARK=1 swift test -c release --filter ResidentSchedulingBenchmark/testSchedulingOverhead
-```
-
-This synthetic benchmark is not a device performance certification.
-
-## Toolchain and targets
-
-The selected baseline is Xcode 27.2 (27B52), Swift 6.4.2, macOS 15+ and
-iOS 18+. The package manifest uses Swift tools version 6.0; the app currently
-uses Swift 5 language mode. No external dependencies are required. The core is
-plain Swift, with no UI, Metal, input-device, or clock imports. Other platforms
-have not been tested or promised.
-
-Representative targets are an Apple silicon M4 MacBook Air and an iPhone 16
-Pro. Plan for 60 simulation ticks and 60 frames per second, with display refresh
-and power settings recorded during device measurements; the iPhone's adaptive
-refresh must not change simulation results. These are targets, not measured
-performance. Initial verification used Debug builds on an Apple M3 Mac running
-macOS 27.0.1 and an iPhone 16 Pro Simulator running iOS 18.5, not the selected
-physical devices. Hardware display settings and Release performance remain to
-be recorded.
+`SimulationCore` also contains **Beacon Run**, the earlier fixed-course
+challenge (beacons, gate, heat vent, Silt Pulse, Chime Warden enemy), the
+headless fixture (`HeadlessFixture.make(seed:)`), a versioned save codec, and
+`ResidentSimulation`, an opt-in sparse 64,000 × 128,000 parallel world
+prototype. None of these is reachable from the app today; they are covered by
+tests and, for Beacon Run, by the capture tool.
 
 ## Build and test
 
-For current development, run tests and the app locally on the Mac. From the
-repository root with Xcode selected by `xcode-select`:
+From the repository root with Xcode selected by `xcode-select`:
 
 ```sh
 swift build --target SimulationCore
-swift test
+swift test --parallel
 xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
 open DerivedData/mac/Build/Products/Debug/Noirpx.app
 ```
 
-### Parallel test execution
+`scripts/checks.sh <worktree> --quick|--full|--ios` runs the same checks for a
+goal worktree. The full suite currently takes several minutes, dominated by a
+few exhaustive seed/size matrices; see PLAN.md "Performance" for the measured
+baseline and the `test-suite-speed` goal.
 
-To run tests in parallel (reduces SimulationCoreTests from ~5.5 min to ~1.5 min):
+`swift test --parallel` distributes individual tests across worker
+processes, so the slowest single test bounds its wall time. The Xcode test plan
+`Noirpx.xcodeproj/xcshareddata/xctestplans/ParallelTestPlan.xctestplan` runs
+classes in parallel and serializes the classes with shared state:
 
 ```sh
-# SwiftPM (parallelizes test targets, not classes within target)
-swift test --parallel
-
-# Xcode with test plan (parallelizes test classes, skips known-shared-state classes)
 xcodebuild test -scheme Noirpx -testPlan ParallelTestPlan \
   -destination 'platform=macOS' -parallel-testing-enabled YES \
   -parallel-testing-worker-count 4
 ```
 
-The test plan (`Noirpx.xcodeproj/xcshareddata/xctestplans/ParallelTestPlan.xctestplan`)
-serializes `CaveSpawnReplayTests` (global `caveMatrixCache`),
-`ScopedRegistrationTests` and `HUDViewportTests` (AppKit `NSApplication.shared`).
-All other test classes run in parallel.
-
-An iOS Simulator build is optional for platform-specific work and also runs
-locally:
+An iOS Simulator build is optional for platform-specific work:
 
 ```sh
 xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
@@ -246,12 +98,39 @@ xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -derivedDataPath DerivedData/ios-simulator CODE_SIGNING_ALLOWED=NO build
 ```
 
-The Xcode project builds the active architecture, rather than a universal Mac
-binary. To run on a simulator, open the project in Xcode and run the shared
-`Noirpx` scheme on an available simulator. Physical iPhone builds, installation,
-and launch are not required for current development. Local results do not
-establish physical-device behavior or performance.
+Physical iPhone builds are not part of routine validation. Local results do
+not establish physical-device behavior or performance.
+
+### Headless frame capture
+
+`CaptureComparison` renders frames without a window and writes raw RGBA
+frames to standard output; the loop uses it for before/after videos of merged
+goals. The frame size is the viewport in cells (200 × 113 for a 16:9 size).
+It runs `git checkout <ref>` in the given worktree, so point it at a scratch
+worktree:
+
+```sh
+swift build -c release --product CaptureComparison
+.build/release/CaptureComparison --ref HEAD --worktree <scratch-worktree> \
+  --world-type cave --ticks 240 --width 640 --height 360 > frames.rgba
+```
+
+### Benchmarks
+
+The optional resident-scheduling microbenchmark is synthetic and is not a
+device performance certification:
+
+```sh
+NOIRPX_BENCHMARK=1 swift test -c release --filter ResidentSchedulingBenchmark/testSchedulingOverhead
+```
+
+## Toolchain and targets
+
+Xcode 27.2 (27B52), Swift 6.4.2, macOS 15+ and iOS 18+. The package uses Swift
+tools version 6.0; the app uses Swift 5 language mode. No external
+dependencies. The core is plain Swift with no UI, Metal, input-device, or
+clock imports. Representative targets are an M4 MacBook Air and an iPhone 16
+Pro; development measurements so far are from an Apple M3 Mac.
 
 Swift sources use four-space indentation and standard Swift naming. The Xcode
-project uses Xcode's tab-indented project format. No formatter or CI is
-configured.
+project uses Xcode's tab-indented format. No formatter or CI is configured.

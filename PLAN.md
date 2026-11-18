@@ -1,371 +1,241 @@
 # Noirpx development plan
 
-## Vision and scope
+## Vision
 
-Build an original 2D action/exploration game with a destructible, material-based
-pixel world and emergent interactions. Noita is a gameplay inspiration, not a
-source of assets, code, names, levels, or other copied content. The first
-playable target is a small, stable vertical slice, not feature parity.
+Noirpx is an original 2D roguelite for macOS and iOS in which every pixel is a
+simulated material. The goal is to become **Noita-like**: a descent through
+destructible, procedurally generated caves where fire, liquids, gases,
+explosions, creatures, and the player's own spells interact through one
+material simulation, and where runs end in permadeath.
 
-Initial platforms are macOS and iOS, with keyboard/mouse and touch controls
-respectively. Keep the core portable enough to evaluate additional platforms
-later; no non-Apple platform is promised by the first release.
+Noita is a gameplay inspiration only. Use original names, assets, levels,
+spells, and code; take inspiration from genre mechanics, not content.
 
-For now, development and validation run locally on the Mac. Build and launch
-the macOS app and run applicable automated tests locally; physical iPhone
-deployment is not required for routine iterations. The physical-device checks
-and performance targets below remain future platform-release goals, not
-current iteration gates.
+The work queue that implements this plan is [GOALS.md](GOALS.md). Interface
+contracts are in [INTERFACES.md](INTERFACES.md); commands are in
+[README.md](README.md); collaboration rules are in [AGENTS.md](AGENTS.md).
 
-## Technology direction
+### Noita-likeness pillars
 
-- Implement the simulation as a Swift module with no dependency on Metal,
-  SwiftUI, UIKit, AppKit, or device clocks. Start with a Swift package for the
-  independently testable core; select the host project layout in milestone 0.
-- Use Metal for the Apple renderer, behind a renderer-facing snapshot interface.
-  Use thin Apple platform hosts for the application lifecycle, input, and display.
-- Keep game rules and world generation separate from both simulation mechanics
-  and presentation. Prefer data definitions over renderer-specific material
-  behavior.
-- Swift and Metal are a deliberate Apple-first choice, not complete
-  cross-platform support. For future platforms, evaluate Swift toolchain
-  availability and implement a new host and rendering backend; consider a C ABI
-  or a core migration only if a real target requires it.
-- Avoid external libraries until a concrete need is established. Record
-  consequential toolchain and hardware decisions below.
+1. **Living material world.** Many materials with distinct movement, heat,
+   and reactions; everything destructible; explosions and debris.
+2. **Spellcraft.** Spells are physical projectiles; wands have stats and slot
+   order; modifiers combine into emergent builds.
+3. **Hostile caves.** Creatures that are themselves physical and suffer from
+   the same fire, acid, and explosions as the player.
+4. **Descent and run structure.** Distinct biomes in a vertical descent, a
+   safe zone between levels (heal, shop, wand editing, perks), gold, and
+   permadeath with a run summary.
+5. **Player survival kit.** Health, burning and other status effects,
+   levitation, flasks of liquid.
+6. **Readable, atmospheric presentation.** Per-pixel material texture,
+   emissive glow, darkness, particles, sound.
+7. **Scale and performance.** Large worlds that simulate only what is active,
+   at a steady 60 ticks/second, on Mac and iPhone.
 
-### Milestone 0 baseline
+## Current state (main, v0.33.0, 2026-11-18)
 
-- Baseline: Xcode 27.2 (27B52), Swift 6.4.2, Swift tools 6.0 manifest,
-  macOS 15+ and iOS 18+. The host uses Swift 5 language mode. The package is
-  independent of Apple UI and Metal; portability beyond Apple platforms has
-  not been verified.
-- Representative devices: M4 MacBook Air and iPhone 16 Pro. Initial builds are
-  Debug and target the active architecture. Plan for 60 ticks/second and 60
-  frames/second; capture actual display refresh, power settings, OS, thermals,
-  and Release configuration when measuring on those devices.
-- A local Swift package supplies `SimulationCore`; a shared multiplatform Xcode
-  app target contains the minimal SwiftUI/Metal host. The initial contracts
-  and their unimplemented portions are documented in [INTERFACES.md](INTERFACES.md).
-  They require review by both core and renderer contributors before parallel
-  implementation depends on them.
-- Verification so far is on an M3 Mac and iPhone 16 Pro Simulator, not the
-  selected physical targets. A physical iPhone requires a signing team, unique
-  bundle ID, provisioning, and device access. See [README.md](README.md) for
-  commands and setup. Device measurements and contributor contract review remain
-  open; do not treat simulator results as physical-device validation.
+- **App:** the macOS/iOS app runs **Cave Run**: a seeded 256 × 128-cell cave
+  with a spawn pad and a descent shaft, a following camera, character
+  movement and jumping, material painting (hold to paint), wand casting
+  toward the cursor (hold right mouse on macOS), mana and cooldown, a spell
+  crafting grid available only outside active play, material discovery that
+  grows the brush palette, a hideable HUD, and restart / new-run. The only
+  outcomes are playing and "fell".
+- **Simulation core (`SimulationCore`):** a deterministic, single-owner,
+  fixed-tick grid of 64 × 64 chunks with seeded RNG, ordered commands, and a
+  stable digest. Sixteen materials: empty, rock (`solid`), sand, water, fire,
+  pitch, oil, steam, lava, acid, blood, slime, ice, gunpowder, gold, and magic
+  liquid. Implemented behavior includes falling powders, flowing liquids with
+  discrete density displacement, rising steam, heat transfer, ignition,
+  burning and burnout of pitch and oil, quenching, and diagonal heat. Many of
+  the newer materials only move; they do not yet react with each other.
+- **Gameplay in the core:** Cave world generation (layered value-noise
+  caves, sand and material pockets, spawn template, descent shaft), `CaveRun` session, a
+  fixed-tick character, spells/recipes (ten recipes) with ray-cast
+  resolution, wand controller and mana pool, save codec, and the earlier
+  **Beacon Run** course (markers, gate, heat vent, Silt Pulse, Chime Warden
+  enemy). Beacon Run remains in the core, tests, and the capture tool, but is
+  no longer reachable from the app.
+- **Resident world:** an opt-in, sparse 64,000 × 128,000 parallel prototype
+  with sleeping chunks and host deadlines. It is not connected to the app and
+  does not promise determinism.
+- **Presentation (`GamePresentation` + `AppleHost`):** SwiftUI HUD, a Metal
+  renderer that rebuilds a viewport texture from a full snapshot every frame,
+  macOS keyboard/mouse and iOS touch input. The whole host lives in one
+  ~1,100-line file.
+- **Tooling:** `scripts/checks.sh`, `scripts/bump-version.sh`,
+  `scripts/new-goal-worktree.sh`, the `CaptureComparison` headless frame
+  capture tool, and an Xcode parallel test plan.
+
+## Gap analysis toward Noita-like play
+
+| Pillar | Have | Missing (goal ids in GOALS.md) |
+| --- | --- | --- |
+| Living material world | 16 materials, heat, burning, density | Reactions between materials (`material-reactions`), explosions (`explosions`), flying debris (`particles-debris`), rigid bodies (not yet queued) |
+| Spellcraft | Recipes, mana, cooldown, crafting grid, instant ray-cast | Projectiles (`projectile-entities`), wand stats and modifiers (`wand-stats`), terrain-shaping spells (`digging-spells`) |
+| Hostile caves | One scripted Beacon Run enemy | Creature framework and cave enemies (`creatures`), gold drops (`gold-pickups`) |
+| Descent and run structure | One shaft, restart/new run | Levels and biomes (`biome-descent`), safe zone and shop (`sanctuary`), perks (`perks`), death summary (`run-summary`), persistence of runs (not yet queued) |
+| Survival kit | Move and jump; falling ends the run | Health and status effects (`player-health`), levitation (`levitation`), flasks (`flasks`) |
+| Presentation | Flat colors, unclamped camera, no audio | Per-cell texture and camera bounds (`pixel-look`), glow and darkness (`lighting-glow`), audio (not yet queued) |
+| Scale and performance | 256 × 128 world, full scans and snapshots | Benchmark (`sim-benchmark-harness`), allocation-free tick (`sim-hot-loop-allocations`), dirty rects (`sim-dirty-rects`), incremental snapshots (`snapshot-incremental`), multithreading (`sim-parallel-chunks`), tall streamed world (`world-streaming`) |
+
+Infrastructure goals that unblock parallel work come first: a warm-build check
+script (`checks-warm-builds`), a fast default test tier (`test-suite-speed`),
+splitting the host file (`host-split`), and restructuring INTERFACES.md by
+subsystem (`interfaces-doc-split`).
+
+When the queue runs low, the loop's planning pass derives new goals from this
+table and the pillars. Keep the table current when goals land.
+
+## Performance
+
+### Budgets
+
+- **Game:** 60 simulation ticks/second and 60 rendered frames/second; p95
+  simulation tick at most 8 ms and p95 frame at most 16.67 ms in representative
+  gameplay. These are hypotheses until measured on the selected physical
+  devices (M4 MacBook Air, iPhone 16 Pro) in Release. Local Mac numbers are
+  local results, not iPhone evidence.
+- **Development loop:** default `swift test --parallel` tier at most 60 s wall
+  time with a warm build on the development Mac; no default-tier test over 3 s
+  in Debug; a no-change rerun of `scripts/checks.sh --quick` starts tests
+  within 5 s. Exhaustive matrices belong to an opt-in slow tier.
+
+### Baselines (development Mac: Apple M3, 8 cores, macOS 27.2.1, Xcode 27.2, Debug)
+
+Measured 2026-11-18 on main at v0.33.0. Another test run was active on the
+machine for part of the serial run, so treat the absolute numbers as upper
+bounds; the ranking is the useful part.
+
+| Measurement | Result |
+| --- | --- |
+| `swift build --build-tests` from clean | 21.7 s |
+| macOS app Debug `xcodebuild` from clean | 20.2 s |
+| `swift test --skip-build`, serial | 9 min 06 s, 388 tests (1 benchmark skipped) |
+| Tests over 3 s | 12 tests = 493 of 544 test-seconds |
+| `CaveSpawnReplayTests.testLiveReplayAllSeedsAndSizes` | 253 s (lower bound on any parallel run) |
+| `CaveWorldGenTests.testDeterminismMatrix` | 44 s |
+| `BeaconCourseTests.testRepresentativeCoursesAreFinishableWithoutPainting` | 40 s |
+| `CaveWorldGenTests.testSpawnContractMatrix` | 32 s |
+| Other matrices and replays (8 tests) | 10–16 s each |
+
+Causes: Debug builds of a per-cell hot loop that dispatches through class
+instances and builds arrays and closures per cell, dictionary-hashed chunks,
+`CaveRun` setup that enqueues one command per cell, and exhaustive seed × size
+matrices in the default suite. `scripts/checks.sh` additionally builds into a
+fresh temporary directory every run, so each check starts cold.
+
+The earlier synthetic resident-scheduling microbenchmark (Release, 1,024
+chunks with one sand cell each) measured full ticks of 2.8–10.9 ms for chunk
+widths 16–128; repeat it with
+`NOIRPX_BENCHMARK=1 swift test -c release --filter ResidentSchedulingBenchmark/testSchedulingOverhead`.
+It does not represent the game's deterministic mode. The
+`sim-benchmark-harness` goal adds representative Release scenes; record their
+baseline here when it lands.
 
 ## Architecture and invariants
 
 ### Simulation
 
-- The authoritative world is a grid of material cells. A fixed-size chunk is
-  the unit of allocation, activity tracking, dirty tracking, and streaming.
-  Define chunk dimensions and cell layout after a measured prototype; use
-  explicit coordinates and correct floor division at negative boundaries.
-- A simulation tick advances the world at a fixed rate independently of display
-  refresh. The initial target is 60 ticks/second. Supply ordered input commands
-  and a seeded random stream to the core; it never reads real time or input
-  devices directly.
-- Start with a single simulation owner and deterministic update order. Define
-  movement, collisions, and competing reactions explicitly, including the rule
-  that a moved cell cannot be advanced twice in the same tick. Cover chunk edges
-  and negative coordinates with tests. Parallel simulation is a later measured
-  optimization, not a prerequisite.
-- The original deterministic mode must reproduce the same state for the same
-  initial state, seed, tick-indexed inputs, and simulation version. The
-  separately selected resident-world mode uses host deadlines and intentionally
-  does not promise this reproducibility. Cross-device determinism remains
-  unverified and must not be relied upon for saves or networking.
-- Begin with static solids, empty space, sand, water, and simple fire/reactions.
-  Define rules, state transitions, and boundary behavior before expanding the
-  material set. World generation, entities, and tools communicate through
-  explicit simulation commands.
-- The current discrete density rule lets water sink through oil and sand through
-  either liquid, using the existing bounded liquid displacement search. This
-  changes old replays and approximates buoyancy rather than simulating pressure;
-  quenching and resident batch order can change the outcome. See INTERFACES.md
-  for ordering, thermal state, and boundary details.
+- The authoritative world is a grid of material cells in fixed-size chunks
+  (currently 64 × 64, row-major material identifiers, bounded integer world).
+  Use explicit coordinates and correct floor division at negative boundaries.
+- A tick advances the world at a fixed rate independent of display refresh.
+  The core receives ordered, tick-indexed commands and a seeded random
+  stream; it never reads real time or input devices.
+- One simulation owner and a deterministic update order. Movement,
+  collisions, and competing reactions are explicit, and a moved cell cannot
+  advance twice in a tick. Parallel simulation must reproduce the serial
+  results bit for bit (see `sim-parallel-chunks`).
+- The deterministic mode reproduces the same state for the same initial
+  state, seed, tick-indexed inputs, and simulation version. Rule changes may
+  change old replays; document them in the interface contract. The resident
+  mode intentionally depends on host deadlines. Cross-device determinism is
+  unverified and must not be relied on for saves or networking.
+- World generation, entities, spells, and tools act on the world only through
+  explicit simulation commands or documented core APIs. Prefer data
+  definitions over renderer-specific material behavior.
 
 ### Rendering and scheduling
 
-- The host schedules fixed simulation ticks and independently schedules display
-  frames. Use a monotonic clock and an accumulator; cap catch-up work initially
-  at four ticks per display callback. If the machine falls behind, slow
-  simulation time rather than skipping authoritative ticks. Reset the time
-  baseline on suspend/resume so background time does not create a catch-up
-  storm. These are initial policies to validate on devices.
-- Publish immutable, revisioned state at completed tick boundaries. The renderer
-  may reuse the latest available snapshot, interpolate presentation-only state,
-  and upload changed chunks; it cannot change the authoritative grid. The
-  snapshot contract must specify ownership and lifetime through GPU completion,
-  full initial sync, chunk removal, and recovery when intermediate revisions are
-  skipped. Measure copying, memory pressure, and upload cost rather than
-  assuming a particular buffering scheme.
-- A render frame must not directly cause a simulation update. In the original
-  deterministic mode, changing display frequency must not change tick results
-  for the same tick-indexed inputs. The opt-in resident mode instead depends on
-  its host's budget decisions, so display and device timing can affect results.
-- Render the material grid with crisp pixel scaling and a camera. UI, lighting,
-  effects, and audio are consumers of game state, not sources of physics.
+- The host schedules fixed ticks with a monotonic clock and an accumulator,
+  caps catch-up at four ticks per display callback, slows simulation time
+  rather than skipping ticks, and resets the baseline on suspend/resume.
+- The core publishes immutable, revisioned state at completed tick
+  boundaries. The renderer may reuse or interpolate presentation-only state
+  and upload changed regions; it can never change the authoritative grid. The
+  snapshot contract covers ownership through GPU completion, full sync, chunk
+  removal, and skipped revisions.
+- A render frame never causes a simulation update. In the deterministic mode,
+  display frequency cannot change tick results.
+- UI, lighting, effects, and audio consume game state; they are not sources
+  of physics.
 
 ### Platform and lifecycle
 
-- Translate keyboard/mouse and touch into shared gameplay commands. Design for
-  safe areas, orientation changes, interruption/backgrounding, and varying
-  display rates; do not require precise mouse-like touch input.
-- Design save data as a versioned representation of authoritative state, seed,
-  and required progression. Write atomically and handle failures explicitly.
-  Define migrations and deterministic compatibility before shipping saves.
+- Keyboard/mouse and touch map to shared gameplay commands. Design for safe
+  areas, rotation, interruption, and varying display rates; do not require
+  mouse precision on touch.
+- Saves are versioned representations of authoritative state, seed, and
+  progression, written atomically with explicit failure handling.
 - Keep renderer resources, world memory, and background behavior bounded for
-  iOS. Measure on physical devices, not just Simulator.
+  iOS, and measure on physical devices before claiming device performance.
 
-## Delivery milestones
+### Toolchain
 
-Each milestone ends with a reviewable change, recorded checks, and an updated
-plan if assumptions change. Later milestones depend on earlier contracts, not
-necessarily on every feature in an earlier milestone.
+Xcode 27.2, Swift 6.4.2 (tools 6.0 manifest), macOS 15+ and iOS 18+; the app
+uses Swift 5 language mode. A local Swift package supplies `SimulationCore`
+and `GamePresentation`; a shared multiplatform Xcode app target hosts them. No
+external dependencies. Add a dependency, platform requirement, or generated
+asset only for a demonstrated need, and record the decision here.
 
-### 0. Foundation and decisions
+## Milestones
 
-1. Select supported Xcode/Swift and OS versions and at least one representative
-   iPhone and Mac; record hardware, display settings, and build configuration.
-2. Establish the Swift package, Apple host project(s), shared modules, formatting
-   conventions, and repeatable build/test commands. Add CI only after those
-   commands work locally.
-3. Write short interface contracts for coordinates/chunks, material definitions,
-   simulation commands/ticks, snapshots, renderer lifecycle, and input mapping.
-   Define error behavior and ownership; validate contracts with both core and
-   renderer contributors before implementation branches diverge.
+Milestones group goals; GOALS.md is the executable queue.
 
-**Exit:** Clean checkout builds and tests on macOS, the iOS app builds for
-Simulator, and documented commands are reproducible. Decide and document how to
-build/run on a physical iPhone, including signing prerequisites.
+- **M0–M2 Foundation, deterministic prototype, renderable hosts — done
+  locally.** Package, hosts, contracts, deterministic core with tests, Metal
+  renderer, fixed-tick scheduler, macOS/iOS input. Still open: independent
+  core/renderer contract review and physical-iPhone lifecycle/touch
+  verification.
+- **M3 Performance foundation — in progress.** Fast test tiers, Release
+  benchmark harness, allocation-free tick, dirty rectangles, incremental
+  snapshots and uploads. Exit: budgets above met locally in Release for the
+  benchmark scenes, with numbers recorded here; device runs remain a release
+  gate.
+- **M4 Noita-like core loop.** Explosions, reactions, projectiles, health and
+  status, levitation, creatures, pixel look. Exit: a Cave Run where the player
+  fights creatures with projectile spells, can die to fire, acid, explosions,
+  or enemies, and the world visibly reacts.
+- **M5 Run structure.** Biome descent, sanctuary with shop and wand editing,
+  gold, perks, run summary, flasks, lighting. Exit: a full multi-level run
+  from spawn to death or a final level, with distinct biomes.
+- **M6 Scale and hardening.** Multithreaded chunks, streamed tall world, saves
+  of runs, audio, accessibility, settings, physical-device performance
+  validation on Mac and iPhone.
 
-### 1. Deterministic simulation prototype
+## Collaboration
 
-Implement chunked grid storage, seeded tick advancement, and the initial
-material rules without a renderer dependency. Include a small headless fixture
-and state digest.
-
-**Exit:** Automated tests cover cell movement and reactions, conflicts, no
-double updates, chunk/negative-coordinate boundaries, and repeatable state
-digests for fixed seeds and commands. An idle region must not change. Core tests
-run without a GPU or Apple UI.
-
-**Prototype decisions:** At the project owner's request, the single-owner
-implementation now uses 64×64 chunks (previously 16×16), with row-major
-material identifiers and a bounded integer world. This is not a measured
-performance choice; larger chunks increase per-chunk memory and scanning cost.
-The digest version changed with the layout. Commands,
-rule ordering, SplitMix64, full immutable snapshots, and the digest format are
-documented in [INTERFACES.md](INTERFACES.md). It scans allocated chunks on each
-tick, but the host limits physics to a viewport-based region; activity and dirty
-tracking, streaming, resource budgets, and GPU
-uploads are not implemented. Full snapshots make skipped revisions and chunk
-removal unambiguous but require memory and upload measurements.
-
-An iPhone 16 Pro Debug Time Profiler capture of an interactive scene identified
-repeated empty-chunk scans during cell movement and full-frame background
-rasterization as CPU hot spots. The deterministic mode now tracks occupied-cell
-counts, and the renderer initializes packed RGBA pixels in bulk. This does not
-change the resident mode or establish a target-device performance guarantee.
-
-The contract is provisional and has not been agreed by separate core and
-renderer contributors. Their independent review remains open; neither
-cross-device determinism nor target-device performance has been established.
-
-**Resident-world direction:** The project owner authorized a single-owner
-implementation after reviewing the proposed change. The new opt-in mode uses
-a 64,000 × 128,000 sparse, fully resident world; configurable power-of-two
-chunks default to 64 × 64; inactive chunks sleep. Parallel proposal/commit
-batches use a host deadline and prioritize proximity to the future viewport
-center with aging for distant work. Delayed chunks run slowly, not via
-catch-up replay. The intended viewport is 480 × 270 cells, but resident mode
-is not yet connected to the host. Outcomes may vary with deadline and batch choices;
-the original deterministic mode remains available. See
-[INTERFACES.md](INTERFACES.md) for ordering, fairness, and deadline limitations.
-
-The time budget remains unchosen. A synthetic Release microbenchmark on an
-Apple M3, macOS 27.0.1 and Xcode 27.2 used 1,024 active chunks containing one
-sand cell each, five runs per width and batch size 8. Median planning/full-tick
-times in milliseconds were: width 16: 0.123/2.791; 32: 0.119/3.672;
-64: 0.115/5.270; 128: 0.113/10.941. Planning was 1.0–4.5% of the measured
-full tick in this narrow scene; it includes sorting but no batch work. A
-100,000-call loop measured `DispatchTime.now().uptimeNanoseconds` at about
-9 ns per call on this host, not including a real host's budget logic. Use the
-README benchmark command to repeat it. It is not a sustained, dense-world,
-viewport, memory, or target-device test; allocation, sorting, full snapshots,
-batch overrun, thermals, and real iPhone behavior still need measurement.
-
-### 2. Renderable world and platform hosts
-
-**Incremental prototype:** The Apple host renders the deterministic fixture in a
-centered camera with 200 cells along the drawable's long edge, adapting the other
-dimension to its aspect ratio. The camera follows the character. It uses a 60 Hz host accumulator, four-step catch-up cap,
-and lifecycle baseline reset. An overlay reports submitted FPS, tick, app
-version, rendered and allocated chunk counts, and the character position;
-the fixture can be restarted. The
-overlay also selects a material brush; mouse and touch strokes enqueue cell
-replacements for the next deterministic tick, alongside basic character controls.
-Chunks beyond two viewport chunk spans from each camera edge are frozen until
-they re-enter the active region, and physics cannot cross its boundary. The
-renderer skips chunks outside the camera and rebuilds a texture per frame from a
-complete snapshot. This is
-not the planned 480 × 270 resident viewport or a performance-validated renderer.
-Independent contract review, resident
-mode integration, physical-device validation and the remaining exit criteria
-are still open.
-
-Create a Metal renderer that consumes published snapshots and renders a test
-scene. Add macOS and iOS hosts, a camera, resize handling, and an independent
-fixed-tick scheduler. Provide basic keyboard/mouse and touch input.
-
-**Exit:** Both hosts display and interact with the same fixture. Automated
-scheduler/snapshot tests demonstrate identical results at different display
-rates for the deterministic mode, and explicitly cover budget-dependent results
-for resident mode, skipped snapshot revisions, and chunk removal. Verify
-lifecycle and touch behavior on a physical iPhone; report any device or signing
-limitation.
-
-### 3. Performance and world scale
-
-Add a repeatable representative scene and instrumentation for simulation time,
-frame time, memory, dirty chunks, and upload volume. Prototype active-region
-updates and chunk streaming only as measurement warrants; establish explicit
-world boundaries and unload/persistence rules before streaming.
-
-**Exit:** On the selected physical Mac and iPhone, record at least a 60-second
-release-build run with scene dimensions, active-cell count, device/OS, thermal
-state, and measurement method. Initial targets are 60 simulation ticks/second
-and 60 rendered frames/second, with p95 simulation tick time at most 8 ms and
-p95 frame time at most 16.67 ms. Report sustained tick/frame rates, p95 and
-worst times, peak memory, and thermal behavior. These are provisional budgets;
-if missed, document bottlenecks and agree on revised scope or budgets rather
-than hiding the result. Simulator results do not replace device measurements.
-
-### 4. Small playable vertical slice
-
-**Current increment:** Beacon Run generates a bounded, reproducible course from a
-seed, varying the gap, step, sand pile, markers and vent. It has two collectible
-markers, a locked goal, fall and health failure, same-seed restart and deterministic
-new runs. A visible heat vent before the goal can be jumped or cooled with water;
-health, hit protection and cooling run on fixed ticks.
-The Silt Pulse is a short-range, facing-directed sand excavator with fixed-tick
-cooldown and visible feedback; rock shields sand and is never destroyed.
-Five suspended pitch cells near the start provide an optional brush experiment:
-fire heats them until they ignite into a 64-processed-turn orange burning state;
-burning cells transfer heat to eight neighboring flammable cells, and edge-adjacent
-water quenches hot pitch. Diagonal heat can pass solid corners; diagonal water
-does not quench. This intentional rule change alters older seeded replays when
-diagonal targets participate.
-Pitch retains its identity and is blocking until burned away; see
-the exact deterministic and resident proposal rules in [INTERFACES.md](INTERFACES.md).
-The optional lamp-oil brush adds a nonblocking, flowing flammable material;
-its heat and burn age travel with each cell. It reuses liquid movement and
-flammable reactions, with no new scene hazard: paint it near fire or pitch to
-experiment. Its lower 80 heat threshold, 48-turn burnout, water priority and
-reaction-before-movement ordering are defined in the interface contract.
-Fire and burning oil now hurt on body overlap, and blocking burning pitch also
-hurts at shared edges. Only post-physics, post-movement cells count, so water
-can prevent a hit by quenching first; all hazards share one shield and the HUD
-reports the source. These optional brush interactions do not add fire to the
-unedited seeded route. Contact-cell boundaries contrast with visible neighbors
-where possible, enclosed cells form a black/white checkerboard, and the bell retains
-phase-colored pixels; rendering does not change simulation state.
-The contact rule changes gameplay replay outcomes, not
-the material digest format; see [INTERFACES.md](INTERFACES.md).
-This changes replay results and consumes an old retired identifier, without
-providing old-data migration.
-The fixture does not obstruct the normal standing course; a bounded-width,
-scrollable HUD leaves it and its paint targets clear in tested host geometries.
-The HUD presents a concise objective and platform control reminder before the
-status and palette; the objective changes when the gate unlocks or a run ends.
-This addresses an observed macOS start screen where movement, jumping, pulse and
-the goal were only explained in Help, while pitch instructions occupied the HUD.
-The macOS input view also uses single-owner registrations for its keyboard
-monitor and focus observer, avoiding repeated removal during view replacement.
-SwiftUI layout tests cover scroll access at 320×300 and larger windows. Display
-callbacks may skip states, and touch readability remains unverified on hardware.
-One original Chime Warden patrols the supported floor after the second marker,
-telegraphing a periodic contact attack; the pulse can defeat it through clear
-lanes. It reverses at terrain and disappears if buried or unsupported rather
-than navigating or falling through changed terrain.
-Painting can change or bypass obstacles, apart from blocking material placed
-directly inside the player or living warden. The fixed-tick
-character and course state live in the platform-independent core; the material
-snapshot digest does not include them. There is no save or automatic respawn.
-The generator uses constrained variations of a single route, not a general
-reachability solver or a large procedural world. See [INTERFACES.md](INTERFACES.md)
-for exact rules and bounds.
-Enjoyment, mobile readability, physical touch behavior and performance are not
-established by automated tests; milestone exit remains open.
-
-**Increment: CaveRun host wiring** — Added Cave Run as a selectable world mode
-alongside Beacon Run and Cave World. Host wires `CaveRun` simulation type with
-camera follow (`FixtureViewport` 200 long-edge cells), 256×128 default size,
-outcome HUD (playing/fell), Restart (same seed), New Run (golden-ratio
-seed advance), and `generate()` throw surfaced as error. Input: macOS A/D/←/→ move,
-W/Space/↑ jump, [/] cycle material, R/N restart/new run; iOS on-screen buttons
-for move/jump/cycle (no pulse/wand). HUD shows size, position, tick, seed, depth.
-Marketing version bumped to 0.27.0.
-
-Add a controllable character, a compact generated level, basic collision and
-damage, one original tool/weapon, material interactions, a goal/failure loop,
-and readable mobile controls. Keep the slice small enough to profile and test.
-
-**Exit:** A player can start, explore, interact with materials, reach a goal or
-fail, and restart on both platforms. Test gameplay rules and verify touch,
-readability, frame pacing, and interruptions on a physical iPhone.
-
-### 5. Persistence and production hardening
-
-Add versioned saves, atomic writes and recovery/error reporting, settings,
-accessibility options, audio, lifecycle handling, and a repeatable regression
-suite. Expand content only after the slice is stable.
-
-**Exit:** Save/load round trips and failure paths are tested; interrupted
-sessions recover according to documented behavior; both platforms meet the
-agreed performance budgets in representative gameplay.
-
-### 6. Expansion and future platforms
-
-Iterate on content, procedural generation, enemies, tools, material interactions,
-and accessibility. Evaluate non-Apple platforms against actual demand, Swift
-toolchain availability, input, rendering, packaging, and performance. Treat
-networking as a separate future decision, not an implicit determinism promise.
-
-## Parallel work and integration
-
-Use the branch/worktree process in [AGENTS.md](AGENTS.md). Assign an owner to
-each task, keep a single integrator for `main`, and agree on shared interfaces
-before parallel branches depend on them. A proposed initial work breakdown:
-
-| Workstream | Can begin | Depends on / coordination |
-| --- | --- | --- |
-| Foundation and contracts | Immediately | Establish package/project layout and shared APIs first |
-| Material rules and test cases | Immediately | Specify behavior independent of storage; align APIs with foundation |
-| Simulation core | After core contracts | Coordinate chunk and command interfaces with renderer |
-| Renderer and Apple hosts | After snapshot contract | Use fixtures until the core publishes real snapshots |
-| Input and UX prototypes | Immediately as design/isolated prototypes | Integrate after host and command interfaces stabilize |
-| Benchmark design | Immediately | Baseline implementation depends on core and hosts |
-
-Integrate small, independently reviewed changes in dependency order. A task is
-done only when relevant tests pass, its interfaces and documentation are
-updated, and its changes have been integrated into the stable `main` branch.
-If a merge or post-merge check fails, stop further integration and coordinate a
-fix; do not rewrite shared history or discard another agent's work.
+Use the branch/worktree process in [AGENTS.md](AGENTS.md): one owner per goal
+branch and worktree under `/Users/nora/Noirpx-worktrees`, a single integrator
+for `main` at a time, and agreed interfaces before dependent branches start.
+Goals in GOALS.md that share an `areas` value never run concurrently; goals
+with disjoint areas may run in parallel. A goal is done when its checks pass,
+its documentation and contracts are updated, its GOALS.md entry is marked
+`done`, and it is merged into `main`.
 
 ## Open decisions and risks
 
-- Physical device access, signing credentials, and display settings for the
-  selected M4 MacBook Air and iPhone 16 Pro remain to be confirmed.
-- Chunk size, cell representation, snapshot buffering, and streaming policy require
-  profiling; aggressive copying or GPU uploads can exhaust iOS memory/bandwidth.
-- Fixed-tick scheduling alone does not ensure determinism; rule ordering, RNG,
-  numeric behavior, and inputs all matter.
-- Thermal throttling, touch ergonomics, and suspension can change feasibility on
-  iPhone. Validate early on hardware.
-- The initial performance budgets are hypotheses, not established results.
-- Scope can grow toward an entire commercial game; protect the vertical slice and
-  prioritize a reliable material simulation and playable loop.
+- Physical device access, signing, and display settings for the selected
+  M4 MacBook Air and iPhone 16 Pro remain to be confirmed.
+- Chunk size, cell layout, snapshot buffering, and streaming policy still
+  need measurement; full snapshots and per-frame texture rebuilds will not
+  scale to a Noita-sized world.
+- Fixed-tick scheduling alone does not ensure determinism; rule ordering, RNG
+  consumption, numeric behavior, and inputs all matter, especially once
+  simulation runs on several threads.
+- Thermal throttling, touch ergonomics, and suspension can change
+  feasibility on iPhone. iOS currently lacks wand casting in Cave Run.
+- Scope can grow without bound. Each goal must be the smallest coherent,
+  mergeable step; protect a playable, stable build on `main`.

@@ -4,21 +4,44 @@ import GamePresentation
 
 final class GamePresentationTests: XCTestCase {
     func testMaterialBrushPalette() {
-        XCTAssertEqual(MaterialBrush.allCases.map(\.rawValue), [1, 2, 3, 4, 5, 6, 7])
-        XCTAssertEqual(MaterialBrush.erase.material, .empty)
-        XCTAssertEqual(MaterialBrush.rock.material, .solid)
-        XCTAssertEqual(MaterialBrush.sand.material, .sand)
-        XCTAssertEqual(MaterialBrush.water.material, .water)
-        XCTAssertEqual(MaterialBrush.fire.material, .fire)
-        XCTAssertEqual(MaterialBrush.pitch.material, .pitch)
-        XCTAssertEqual(MaterialBrush.oil.material, .oil)
-        XCTAssertEqual(MaterialBrush.erase.title, "Erase")
-        XCTAssertEqual(MaterialBrush.rock.title, "Rock")
-        XCTAssertEqual(MaterialBrush.sand.title, "Sand")
-        XCTAssertEqual(MaterialBrush.water.title, "Water")
-        XCTAssertEqual(MaterialBrush.fire.title, "Fire")
-        XCTAssertEqual(MaterialBrush.pitch.title, "Pitch")
-        XCTAssertEqual(MaterialBrush.oil.title, "Lamp oil")
+        // drawable = all Materials except .empty, in enum declaration order
+        XCTAssertEqual(MaterialBrush.drawable.count, 15)
+        XCTAssertEqual(MaterialBrush.drawable.first, .solid)
+        XCTAssertEqual(MaterialBrush.drawable.last, .magicLiquid)
+
+        // CRITICAL: drawable MUST auto-derive from Material.allCases.
+        // Adding a new Material enum case automatically makes it drawable
+        // without any code changes in GamePresentation.
+        let expectedDrawable = SimulationCore.Material.allCases.filter { $0 != .empty }
+        XCTAssertEqual(MaterialBrush.drawable, expectedDrawable,
+                       "MaterialBrush.drawable must equal Material.allCases minus .empty")
+
+        // shortcutCharacter: first 10 get '1'..'9','0'; rest nil
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .solid), "1")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .sand), "2")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .water), "3")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .fire), "4")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .pitch), "5")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .oil), "6")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .steam), "7")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .lava), "8")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .acid), "9")
+        XCTAssertEqual(MaterialBrush.shortcutCharacter(for: .blood), "0")
+        XCTAssertNil(MaterialBrush.shortcutCharacter(for: .slime))
+        XCTAssertNil(MaterialBrush.shortcutCharacter(for: .ice))
+        XCTAssertNil(MaterialBrush.shortcutCharacter(for: .gunpowder))
+        XCTAssertNil(MaterialBrush.shortcutCharacter(for: .gold))
+        XCTAssertNil(MaterialBrush.shortcutCharacter(for: .magicLiquid))
+
+        // title(for:) uses wandName
+        XCTAssertEqual(MaterialBrush.title(for: .empty), "Erase")
+        XCTAssertEqual(MaterialBrush.title(for: .solid), "Rock")
+        XCTAssertEqual(MaterialBrush.title(for: .sand), "Sand")
+        XCTAssertEqual(MaterialBrush.title(for: .water), "Water")
+        XCTAssertEqual(MaterialBrush.title(for: .fire), "Fire")
+        XCTAssertEqual(MaterialBrush.title(for: .pitch), "Pitch")
+        XCTAssertEqual(MaterialBrush.title(for: .oil), "Lamp oil")
+        XCTAssertEqual(MaterialBrush.eraseTitle, "Erase")
     }
 
     func testGameplayInputHorizontalAndJumpOnly() {

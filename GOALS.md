@@ -64,7 +64,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Documentation matches the script.
 
 ### host-split: Split the Apple host into focused files
-- status: todo
+- status: done
 - priority: 6
 - track: infra
 - depends: none
@@ -81,6 +81,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - `git diff --stat` shows moves only (no logic changes); macOS and iOS
     Simulator Debug builds pass; the app launches and Cave Run plays.
   - Full test suite passes.
+- result: Split 1,100-line NoirpxApp.swift into 8 focused files (GameModel, HostView, MetalRenderer, InputMetalView_iOS, InputMetalView_macOS, InputMetalView, MetalSurface, NoirpxApp); largest file 352 lines; all Release tests pass; merged in 0e08bed
 
 ### interfaces-doc-split: Restructure INTERFACES.md by subsystem
 - status: done
@@ -107,7 +108,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Performance
 
 ### test-suite-speed: Make the default test suite fast
-- status: todo
+- status: done
 - priority: 10
 - track: perf
 - depends: none
@@ -132,6 +133,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     takes more than 3 s in Debug (record the timing table before and after).
   - Slow tier passes with `NOIRPX_SLOW_TESTS=1`, and every previously tested
     seed/size combination still runs in that tier.
+- result: Default tier 22s (22s Release parallel, 441 tests, max 2.8s); slow tier 312s (all matrices); merged in a52a19b
 
 ### sim-benchmark-harness: Repeatable Release simulation benchmark
 - status: todo

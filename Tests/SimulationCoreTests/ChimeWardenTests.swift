@@ -34,22 +34,44 @@ final class ChimeWardenTests: XCTestCase {
         return run
     }
 
-    func testSpawnBoundsAndPatrolAcrossSeeds() throws {
-        for seed in 0..<4096 {
-            let course = BeaconCourse(seed: UInt64(seed))
-            XCTAssertTrue(course.patrolX.contains(course.patrolSpawn.x))
-            XCTAssertGreaterThan(course.patrolX.lowerBound, course.sand.upperBound)
-            XCTAssertGreaterThan(course.patrolX.lowerBound, course.beacons[1].x + BeaconRun.markerWidth)
-            XCTAssertLessThan(course.patrolX.upperBound + ChimeWarden.width, course.ventX.lowerBound)
-            XCTAssertEqual(course.patrolSpawn.y, -1)
+    /// Checks warden spawn bounds and patrol for a given seed range.
+    /// Asserts 256 iterations per chunk.
+    private func checkSpawnBoundsAndPatrolChunk(startSeed: UInt64, endSeed: UInt64) {
+        var comboCount = 0
+        for seed in startSeed...endSeed {
+            comboCount += 1
+            let course = BeaconCourse(seed: seed)
+            XCTAssertTrue(course.patrolX.contains(course.patrolSpawn.x), "seed \(seed): patrolSpawn not in patrolX")
+            XCTAssertGreaterThan(course.patrolX.lowerBound, course.sand.upperBound, "seed \(seed): patrolX.lowerBound <= sand.upperBound")
+            XCTAssertGreaterThan(course.patrolX.lowerBound, course.beacons[1].x + BeaconRun.markerWidth, "seed \(seed): patrolX.lowerBound <= beacons[1].x + markerWidth")
+            XCTAssertLessThan(course.patrolX.upperBound + ChimeWarden.width, course.ventX.lowerBound, "seed \(seed): patrolX.upperBound + width >= ventX.lowerBound")
+            XCTAssertEqual(course.patrolSpawn.y, -1, "seed \(seed): patrolSpawn.y != -1")
             var warden = ChimeWarden(position: course.patrolSpawn)
             for _ in 0..<180 {
                 warden.advance(bounds: course.patrolX) { $0.y == -2 ? .solid : .empty }
-                XCTAssertTrue(warden.alive)
-                XCTAssertTrue(course.patrolX.contains(warden.position.x))
+                XCTAssertTrue(warden.alive, "seed \(seed): warden died during patrol")
+                XCTAssertTrue(course.patrolX.contains(warden.position.x), "seed \(seed): warden position out of patrolX")
             }
         }
+        XCTAssertEqual(comboCount, 256, "Expected 256 seed combos for chunk \(startSeed)-\(endSeed)")
     }
+
+    func testSpawnBoundsPatrol_0_255() { checkSpawnBoundsAndPatrolChunk(startSeed: 0, endSeed: 255) }
+    func testSpawnBoundsPatrol_256_511() { checkSpawnBoundsAndPatrolChunk(startSeed: 256, endSeed: 511) }
+    func testSpawnBoundsPatrol_512_767() { checkSpawnBoundsAndPatrolChunk(startSeed: 512, endSeed: 767) }
+    func testSpawnBoundsPatrol_768_1023() { checkSpawnBoundsAndPatrolChunk(startSeed: 768, endSeed: 1023) }
+    func testSpawnBoundsPatrol_1024_1279() { checkSpawnBoundsAndPatrolChunk(startSeed: 1024, endSeed: 1279) }
+    func testSpawnBoundsPatrol_1280_1535() { checkSpawnBoundsAndPatrolChunk(startSeed: 1280, endSeed: 1535) }
+    func testSpawnBoundsPatrol_1536_1791() { checkSpawnBoundsAndPatrolChunk(startSeed: 1536, endSeed: 1791) }
+    func testSpawnBoundsPatrol_1792_2047() { checkSpawnBoundsAndPatrolChunk(startSeed: 1792, endSeed: 2047) }
+    func testSpawnBoundsPatrol_2048_2303() { checkSpawnBoundsAndPatrolChunk(startSeed: 2048, endSeed: 2303) }
+    func testSpawnBoundsPatrol_2304_2559() { checkSpawnBoundsAndPatrolChunk(startSeed: 2304, endSeed: 2559) }
+    func testSpawnBoundsPatrol_2560_2815() { checkSpawnBoundsAndPatrolChunk(startSeed: 2560, endSeed: 2815) }
+    func testSpawnBoundsPatrol_2816_3071() { checkSpawnBoundsAndPatrolChunk(startSeed: 2816, endSeed: 3071) }
+    func testSpawnBoundsPatrol_3072_3327() { checkSpawnBoundsAndPatrolChunk(startSeed: 3072, endSeed: 3327) }
+    func testSpawnBoundsPatrol_3328_3583() { checkSpawnBoundsAndPatrolChunk(startSeed: 3328, endSeed: 3583) }
+    func testSpawnBoundsPatrol_3584_3839() { checkSpawnBoundsAndPatrolChunk(startSeed: 3584, endSeed: 3839) }
+    func testSpawnBoundsPatrol_3840_4095() { checkSpawnBoundsAndPatrolChunk(startSeed: 3840, endSeed: 4095) }
 
     func testCollisionSupportAndPhaseTiming() {
         var warden = ChimeWarden(position: .init(x: 107, y: -1))

@@ -7,17 +7,28 @@ import XCTest
 final class CaveRunTests: XCTestCase {
     // MARK: - Idle stability
 
-    /// Character stays grounded at spawn for 60 ticks with no input.
-    func testIdleStaysAtSpawn() throws {
-        for seed in [1, 42] {
-            for (width, height) in [(256, 128), (128, 64)] {
-                var run = try CaveRun(seed: UInt64(seed), width: width, height: height)
+    /// Character stays grounded at spawn for 60 ticks with no input (seed 1).
+    func testIdleStaysAtSpawn_1() throws {
+        for (width, height) in [(256, 128), (128, 64)] {
+            var run = try CaveRun(seed: 1, width: width, height: height)
 
-                for tick in 1...60 {
-                    try run.advance(horizontal: 0, jump: false)
-                    XCTAssertTrue(run.character.grounded, "Not grounded at idle tick \(tick), seed \(seed), size \(width)×\(height)")
-                    XCTAssertEqual(run.character.position, run.world.spawn, "Position drifted at idle tick \(tick), seed \(seed), size \(width)×\(height)")
-                }
+            for tick in 1...60 {
+                try run.advance(horizontal: 0, jump: false)
+                XCTAssertTrue(run.character.grounded, "Not grounded at idle tick \(tick), seed 1, size \(width)×\(height)")
+                XCTAssertEqual(run.character.position, run.world.spawn, "Position drifted at idle tick \(tick), seed 1, size \(width)×\(height)")
+            }
+        }
+    }
+
+    /// Character stays grounded at spawn for 60 ticks with no input (seed 42).
+    func testIdleStaysAtSpawn_42() throws {
+        for (width, height) in [(256, 128), (128, 64)] {
+            var run = try CaveRun(seed: 42, width: width, height: height)
+
+            for tick in 1...60 {
+                try run.advance(horizontal: 0, jump: false)
+                XCTAssertTrue(run.character.grounded, "Not grounded at idle tick \(tick), seed 42, size \(width)×\(height)")
+                XCTAssertEqual(run.character.position, run.world.spawn, "Position drifted at idle tick \(tick), seed 42, size \(width)×\(height)")
             }
         }
     }
@@ -117,26 +128,86 @@ final class CaveRunTests: XCTestCase {
         return (.descended(run.world.spawn.y - run.character.position.y), run.world.spawn.y - run.character.position.y)
     }
 
-    func testLiveReplay256x128Seeds() throws {
-        for seed in [1, 2, 3, 4, 42, 64] {
-            let (outcome, descent) = try replay(seed: UInt64(seed), width: 256, height: 128, expectedMinDescent: 32)
-            XCTAssertEqual(outcome, .descended(descent), "Seed \(seed) 256×128: \(outcome)")
-            XCTAssertGreaterThanOrEqual(descent, 32, "Seed \(seed) descent \(descent) < 32")
-        }
+    /// 256×128 replay per seed (~2.4 s each). Default tier: seeds 1, 2, 3, 4, 42, 64.
+    func testLiveReplay256x128_1() throws {
+        let (outcome, descent) = try replay(seed: 1, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 1 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
     }
 
-    func testLiveReplay128x64Seeds() throws {
-        for seed in [1, 2, 3, 4, 42, 64] {
-            let (outcome, descent) = try replay(seed: UInt64(seed), width: 128, height: 64)
-            XCTAssertEqual(outcome, .descended(descent), "Seed \(seed) 128×64: \(outcome)")
-        }
+    /// 256×128 replay per seed (~2.4 s each). Default tier.
+    func testLiveReplay256x128_2() throws {
+        let (outcome, descent) = try replay(seed: 2, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 2 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
+    }
+
+    /// 256×128 replay per seed (~2.4 s each). Default tier.
+    func testLiveReplay256x128_3() throws {
+        let (outcome, descent) = try replay(seed: 3, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 3 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
+    }
+
+    /// 256×128 replay per seed (~2.4 s each). Default tier.
+    func testLiveReplay256x128_4() throws {
+        let (outcome, descent) = try replay(seed: 4, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 4 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
+    }
+
+    /// 256×128 replay per seed (~2.4 s each). Default tier.
+    func testLiveReplay256x128_42() throws {
+        let (outcome, descent) = try replay(seed: 42, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 42 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
+    }
+
+    /// 256×128 replay per seed (~2.4 s each). Default tier.
+    func testLiveReplay256x128_64() throws {
+        let (outcome, descent) = try replay(seed: 64, width: 256, height: 128, expectedMinDescent: 32)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 64 256×128: \(outcome)")
+        XCTAssertGreaterThanOrEqual(descent, 32)
+    }
+
+    func testLiveReplay128x64_1() throws {
+        let (outcome, descent) = try replay(seed: 1, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 1 128×64: \(outcome)")
+    }
+
+    func testLiveReplay128x64_2() throws {
+        let (outcome, descent) = try replay(seed: 2, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 2 128×64: \(outcome)")
+    }
+
+    func testLiveReplay128x64_3() throws {
+        let (outcome, descent) = try replay(seed: 3, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 3 128×64: \(outcome)")
+    }
+
+    func testLiveReplay128x64_4() throws {
+        let (outcome, descent) = try replay(seed: 4, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 4 128×64: \(outcome)")
+    }
+
+    func testLiveReplay128x64_42() throws {
+        let (outcome, descent) = try replay(seed: 42, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 42 128×64: \(outcome)")
+    }
+
+    func testLiveReplay128x64_64() throws {
+        let (outcome, descent) = try replay(seed: 64, width: 128, height: 64)
+        XCTAssertEqual(outcome, .descended(descent), "Seed 64 128×64: \(outcome)")
     }
 
     // MARK: - Deterministic replay
 
     /// Same seed, size, and inputs produce identical position sequence and snapshot digests.
     /// Different seeds produce divergent results. Uses walk+fall inputs per spec.
+    /// Slow tier: full 256×128, 50-tick coverage.
     func testDeterministicReplay() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         // Test with seeds 1 and 42 as per spec
         for seed in [UInt64(1), UInt64(42)] {
             let width = 256
@@ -170,6 +241,7 @@ final class CaveRunTests: XCTestCase {
 
             XCTAssertEqual(positionsA, positionsB, "Character positions diverge for seed \(seed)")
             XCTAssertEqual(digestsA, digestsB, "Snapshot digests diverge for seed \(seed)")
+            comboCount += 2
 
             // Different seeds should produce different results (check both positions and digests)
             if seed == 1 {
@@ -186,8 +258,67 @@ final class CaveRunTests: XCTestCase {
                 }
                 XCTAssertNotEqual(positionsA, positionsC, "Different seeds (1 vs 42) produced identical positions")
                 XCTAssertNotEqual(digestsA, digestsC, "Different seeds (1 vs 42) produced identical digests")
+                comboCount += 1
             }
         }
+        XCTAssertEqual(comboCount, 5, "Expected 5 run comparisons (2 same-seed + 1 cross-seed)")
+    }
+
+    /// Default-tier deterministic-replay proxy: same-seed equality at 128×64 over 20 ticks.
+    func testDeterministicReplayQuick_128x64() throws {
+        let width = 128
+        let height = 64
+
+        func runPositions(seed: UInt64) throws -> ([CellPosition], [UInt64]) {
+            var run = try CaveRun(seed: seed, width: width, height: height)
+            var positions: [CellPosition] = []
+            var digests: [UInt64] = []
+            for tick in 1...20 {
+                let horizontal = tick <= 7 ? -1 : 0
+                try run.advance(horizontal: horizontal, jump: false)
+                positions.append(run.character.position)
+                digests.append(run.simulation.snapshot.digest)
+                if run.outcome != .playing { break }
+            }
+            return (positions, digests)
+        }
+
+        let (positionsA, digestsA) = try runPositions(seed: 1)
+        let (positionsB, digestsB) = try runPositions(seed: 1)
+        XCTAssertEqual(positionsA, positionsB, "Character positions diverge for same seed")
+        XCTAssertEqual(digestsA, digestsB, "Snapshot digests diverge for same seed")
+
+        let (positionsC, digestsC) = try runPositions(seed: 42)
+        // Cross-seed divergence: digests differ (worlds are different). Character
+        // positions stay identical at this size because both fall out of bounds the
+        // same way; position divergence is covered by the 256×128 method below.
+        XCTAssertNotEqual(digestsA, digestsC, "Different seeds (1 vs 42) produced identical snapshot digests")
+    }
+
+    /// Default-tier deterministic-replay proxy: cross-seed divergence at 256×128.
+    /// Positions first diverge at tick 23, so this runs 25 ticks.
+    func testDeterministicReplayCrossSeed_256x128() throws {
+        let width = 256
+        let height = 128
+
+        func runPositions(seed: UInt64) throws -> ([CellPosition], [UInt64]) {
+            var run = try CaveRun(seed: seed, width: width, height: height)
+            var positions: [CellPosition] = []
+            var digests: [UInt64] = []
+            for tick in 1...25 {
+                let horizontal = tick <= 7 ? -1 : 0
+                try run.advance(horizontal: horizontal, jump: false)
+                positions.append(run.character.position)
+                digests.append(run.simulation.snapshot.digest)
+                if run.outcome != .playing { break }
+            }
+            return (positions, digests)
+        }
+
+        let (positionsA, digestsA) = try runPositions(seed: 1)
+        let (positionsC, digestsC) = try runPositions(seed: 42)
+        XCTAssertNotEqual(positionsA, positionsC, "Different seeds (1 vs 42) produced identical positions")
+        XCTAssertNotEqual(digestsA, digestsC, "Different seeds (1 vs 42) produced identical snapshot digests")
     }
 
     // MARK: - Mutations (seed 42, 256×128)
@@ -199,22 +330,25 @@ final class CaveRunTests: XCTestCase {
     private func makeMutatedRun(
         mutate: (inout [CellPosition: Material], CaveSpawnTemplate.Layout) -> Void
     ) throws -> MutatedRun {
-        let (world, prePass) = CaveWorldGenerator(seed: 42, width: 256, height: 128).generateInspected(
-            stampSpawnTemplate: true, capturePrePass: true)
+        let (world, prePass) = caveMatrixCache.world(for: 42, width: 256, height: 128)
         guard let prePass = prePass else { XCTFail("prePass missing"); throw TestError.missingPrePass }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); throw TestError.missingLayout }
 
         let termination = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
             guard gx >= 0, gx < 256, gy >= 0, gy < 128 else { return false }
-            return prePass[gy][gx] == Material.empty
+            return prePass[gy][gx] == .empty
         }
 
         var mutatedCells = world.cells
         mutate(&mutatedCells, layout)
 
         let mutatedWorld = CaveWorld(
-            seed: world.seed, size: world.size, extents: world.extents,
-            spawn: world.spawn, goal: world.goal, cells: mutatedCells
+            seed: world.seed,
+            size: world.size,
+            extents: world.extents,
+            spawn: world.spawn,
+            goal: world.goal,
+            cells: mutatedCells
         )
 
         // Build simulation with mutated world
@@ -299,11 +433,10 @@ final class CaveRunTests: XCTestCase {
 
     func testNarrowMutation() throws {
         // Narrow: cols 8-10 solid for rows carveBottom...pf
-        let (world, prePass) = CaveWorldGenerator(seed: 42, width: 256, height: 128).generateInspected(
-            stampSpawnTemplate: true, capturePrePass: true)
+        let (world, prePass) = caveMatrixCache.world(for: 42, width: 256, height: 128)
         guard let prePass = prePass else { XCTFail("prePass missing"); return }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
-        let termination = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+        let termination = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == .empty }
 
         var mutatedCells = world.cells
         for gy in termination.carveBottomRow...layout.padFloorRow {
@@ -313,7 +446,6 @@ final class CaveRunTests: XCTestCase {
                 mutatedCells[CellPosition(x: wx, y: wy)] = .solid
             }
         }
-
         let mutatedWorld = CaveWorld(
             seed: world.seed, size: world.size, extents: world.extents,
             spawn: world.spawn, goal: world.goal, cells: mutatedCells

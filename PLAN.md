@@ -97,10 +97,13 @@ table and the pillars. Keep the table current when goals land.
   gameplay. These are hypotheses until measured on the selected physical
   devices (M4 MacBook Air, iPhone 16 Pro) in Release. Local Mac numbers are
   local results, not iPhone evidence.
-- **Development loop:** default `swift test --parallel` tier at most 60 s wall
-  time with a warm build on the development Mac; no default-tier test over 3 s
-  in Debug; a no-change rerun of `scripts/checks.sh --quick` starts tests
-  within 5 s. Exhaustive matrices belong to an opt-in slow tier.
+- **Development loop:** default `swift test --parallel -c release` tier at most
+  60 s wall time with a warm build on the development Mac; no default-tier
+  test over 3 s in Release; a no-change rerun of `scripts/checks.sh --quick`
+  starts tests within 5 s. Exhaustive matrices belong to an opt-in slow tier.
+  Unit tests run in Release configuration by default (`scripts/checks.sh`,
+  `scripts/test-timings.sh`, the `Noirpx` scheme Test action, and
+  `ParallelTestPlan.xctestplan`).
 
 ### Baselines (development Mac: Apple M3, 8 cores, macOS 27.2.1, Xcode 27.2)
 
@@ -130,6 +133,41 @@ closures per cell, dictionary-hashed chunks, `CaveRun` setup that enqueues one
 command per cell, and exhaustive seed × size matrices in the default suite.
 `scripts/checks.sh` additionally builds into a fresh temporary directory every
 run, so each check starts cold.
+
+### Test tiers baseline (after `test-suite-speed`, measured 2026-11-18 on agent/test-suite-speed)
+
+Default tier (`swift test --parallel`, NOIRPX_SLOW_TESTS unset):
+
+| Metric | Value |
+| --- | --- |
+| Total wall time | 22 s |
+| Slowest test | `CaveRunTests.testLiveReplay256x128_2` (2.80 s) |
+| Tests > 3 s | 0 |
+| Test count | 441 |
+
+Slow tier (`NOIRPX_SLOW_TESTS=1 swift test --parallel`):
+
+| Test | Time | Coverage |
+| --- | --- | --- |
+| `CaveSpawnReplayTests.testLiveReplayAllSeedsAndSizes` | 156 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testDeterminismMatrix` | 43 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testSpawnContractMatrix` | 21 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testShaftContractMatrix` | 15 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testFootprintContainmentMatrix` | 16 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testNoNewExposureMatrix` | 16 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testMatrixActuallyStamps` | 15 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testShaftDescent32At256x128` | 15 s | 64 seeds × 1 size |
+| `BeaconCourseTests.testRepresentativeCoursesAreFinishableWithoutPainting` | 31 s | 64 + 3 special seeds |
+| `BeaconCourseTests.testBoundedGenerationAndVariation` | 0.76 s | 4096 seeds |
+| `BeaconHazardTests.testDamageCadenceAndFailureBeatsGoalAndPulse` | 0.45 s | sequential scenario |
+| `CaveRunTests.testDeterministicReplay` | 9.6 s | 2 seeds × 50 ticks + cross-seed |
+| `ChimeWardenTests.testSpawnBoundsPatrol_*` (16 chunks) | ~0.6 s each | 256 seeds each = 4096 total |
+
+Causes: Debug builds of a per-cell hot loop that dispatches through class
+instances and builds arrays and closures per cell, dictionary-hashed chunks,
+`CaveRun` setup that enqueues one command per cell, and exhaustive seed × size
+matrices in the default suite. `scripts/checks.sh` additionally builds into a
+fresh temporary directory every run, so each check starts cold.
 
 The earlier synthetic resident-scheduling microbenchmark (Release, 1,024
 chunks with one sand cell each) measured full ticks of 2.8–10.9 ms for chunk

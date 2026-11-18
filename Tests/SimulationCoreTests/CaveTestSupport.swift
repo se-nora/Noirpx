@@ -39,7 +39,8 @@ final class CaveWorldMatrixCache: @unchecked Sendable {
 }
 
 /// Global matrix cache for the test suite.
-/// NOT safe for concurrent mutation. CaveSpawnReplayTests must run serially.
+/// Protected by NSLock; safe for concurrent access.
+/// Historical note: Xcode ParallelTestPlan skips CaveSpawnReplayTests to avoid class-level shared state across parallel runners.
 let caveMatrixCache = CaveWorldMatrixCache()
 
 // MARK: - Enqueue helper

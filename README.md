@@ -74,10 +74,39 @@ xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
 open DerivedData/mac/Build/Products/Debug/Noirpx.app
 ```
 
+### Test tiers
+
+The test suite has two tiers to keep the development loop fast while preserving
+exhaustive coverage:
+
+**Default tier** — runs on every loop stage (`swift test --parallel`):
+- Completes in ≤ 22 s wall time (warm build, development Mac)
+- No single test exceeds 3 s
+- Covers a small representative subset of seed/size combinations
+- Sufficient to catch regressions in core simulation logic
+
+**Slow tier** — runs before delivering sim-rules, sim-engine, or worldgen goals:
+```sh
+NOIRPX_SLOW_TESTS=1 swift test --parallel
+```
+- Runs all exhaustive matrices (64 seeds × 2 sizes for cave generation, 4096
+  seeds for beacon courses, 4096 warden seeds, 4096 bounded-generation
+  iterations, full deterministic-replay cross-seed divergence)
+- Completes in several minutes
+- Every previously tested seed/size combination still executes
+
+The `scripts/test-timings.sh` script prints a per-test timing table and total
+wall time for either tier:
+
+```sh
+./scripts/test-timings.sh           # default tier
+./scripts/test-timings.sh --slow    # slow tier
+```
+
 `scripts/checks.sh <worktree> --quick|--full|--ios` runs the same checks for a
-goal worktree. The full suite currently takes several minutes, dominated by a
-few exhaustive seed/size matrices; see PLAN.md "Performance" for the measured
-baseline and the `test-suite-speed` goal.
+goal worktree. The full suite currently takes several minutes in slow tier;
+see PLAN.md "Performance" for the measured baseline and the `test-suite-speed`
+goal.
 
 `swift test --parallel` distributes individual tests across worker
 processes, so the slowest single test bounds its wall time. The Xcode test plan

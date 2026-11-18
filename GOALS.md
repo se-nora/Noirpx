@@ -136,7 +136,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Default tier 22s (22s Release parallel, 441 tests, max 2.8s); slow tier 312s (all matrices); merged in a52a19b
 
 ### sim-benchmark-harness: Repeatable Release simulation benchmark
-- status: todo
+- status: done
 - priority: 12
 - track: perf
 - depends: none
@@ -156,6 +156,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     by less than 15% at p50 on the development Mac.
   - PLAN.md "Performance" has the baseline table with host, OS, Xcode, and
     configuration.
+- result: merged (8ff122e → main via merge commit); SimBenchmark target with 5 scenes, 600 ticks each; p50 stability <15% across 3 runs (sand 2.9%, water 1.6%, fire 8.2%, idle 5.9%, cave 6.3%); digests deterministic; PLAN.md baseline table present with host/OS/Xcode/Release config (note: table carries v0.34.0 numeric provenance, differs from v0.36.0 observed values — documented limit); all checks pass.
 
 ### sim-hot-loop-allocations: Remove per-cell allocation from the tick loop
 - status: todo

@@ -8,12 +8,26 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* NoirpxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* NoirpxApp.swift */; };
+		A10000000000000000000004 /* GameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* GameModel.swift */; };
+		A10000000000000000000005 /* HostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* HostView.swift */; };
+		A10000000000000000000006 /* MetalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MetalSurface.swift */; };
+		A10000000000000000000007 /* InputMetalView_macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* InputMetalView_macOS.swift */; };
+		A10000000000000000000008 /* InputMetalView_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* InputMetalView_iOS.swift */; };
+		A10000000000000000000009 /* InputMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* InputMetalView.swift */; };
+		A1000000000000000000000A /* MetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MetalRenderer.swift */; };
 		A10000000000000000000002 /* SimulationCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* SimulationCore */; };
 		A10000000000000000000003 /* GamePresentation in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000002 /* GamePresentation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* NoirpxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoirpxApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* GameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* HostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostView.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* MetalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalSurface.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* InputMetalView_macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputMetalView_macOS.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* InputMetalView_iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputMetalView_iOS.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* InputMetalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputMetalView.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* MetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRenderer.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* Noirpx.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noirpx.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -42,6 +56,13 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000001 /* NoirpxApp.swift */,
+				A20000000000000000000003 /* GameModel.swift */,
+				A20000000000000000000004 /* HostView.swift */,
+				A20000000000000000000005 /* MetalSurface.swift */,
+				A20000000000000000000006 /* InputMetalView_macOS.swift */,
+				A20000000000000000000007 /* InputMetalView_iOS.swift */,
+				A20000000000000000000008 /* InputMetalView.swift */,
+				A20000000000000000000009 /* MetalRenderer.swift */,
 			);
 			path = AppleHost;
 			sourceTree = "<group>";
@@ -118,6 +139,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* NoirpxApp.swift in Sources */,
+				A10000000000000000000004 /* GameModel.swift in Sources */,
+				A10000000000000000000005 /* HostView.swift in Sources */,
+				A10000000000000000000006 /* MetalSurface.swift in Sources */,
+				A10000000000000000000007 /* InputMetalView_macOS.swift in Sources */,
+				A10000000000000000000008 /* InputMetalView_iOS.swift in Sources */,
+				A10000000000000000000009 /* InputMetalView.swift in Sources */,
+				A1000000000000000000000A /* MetalRenderer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -155,7 +183,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.33.0;
+				MARKETING_VERSION = 0.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -179,7 +207,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.33.0;
+				MARKETING_VERSION = 0.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.Noirpx;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

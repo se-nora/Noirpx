@@ -85,8 +85,7 @@ public struct CaveRun {
         // 5. Material damage (fire, lava, acid overlap on body cells)
         if damageProtectionTimer == 0 {
             let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
-            let thermalStateAt: (CellPosition) throws -> ThermalCellState = { try simulation.thermalState(at: $0) }
-            if CaveRun.touchesHazard(character.position, materialAt: materialAt, thermalStateAt: thermalStateAt) {
+            if CaveRun.touchesHazard(character.position, materialAt: materialAt) {
                 health = max(health - 1, 0)
                 damageProtectionTimer = 30
                 if health == 0 {
@@ -122,8 +121,7 @@ public struct CaveRun {
 
     /// Checks if character body overlaps any hazardous material (fire, lava, acid) at its current position.
     static func touchesHazard(_ position: CellPosition,
-                              materialAt: (CellPosition) -> Material,
-                              thermalStateAt: (CellPosition) throws -> ThermalCellState) -> Bool {
+                              materialAt: (CellPosition) -> Material) -> Bool {
         for y in position.y..<(position.y + FixtureCharacter.height) {
             for x in position.x..<(position.x + FixtureCharacter.width) {
                 let cell = CellPosition(x: x, y: y)
@@ -136,10 +134,6 @@ public struct CaveRun {
                     return true
                 case .acid:
                     return true
-                case .oil:
-                    if (try? thermalStateAt(cell))?.isBurning ?? false { return true }
-                case .pitch:
-                    if (try? thermalStateAt(cell))?.isBurning ?? false { return true }
                 default:
                     break
                 }

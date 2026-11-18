@@ -104,9 +104,14 @@ wall time for either tier:
 ```
 
 `scripts/checks.sh <worktree> --quick|--full|--ios` runs the same checks for a
-goal worktree. The full suite currently takes several minutes in slow tier;
-see PLAN.md "Performance" for the measured baseline and the `test-suite-speed`
-goal.
+goal worktree, reusing that worktree's `.build` directory (SwiftPM's default
+scratch path) and `DerivedData/mac` or `DerivedData/ios-simulator`, so a second
+run with no source change is incremental. Each step prints its start time and
+elapsed seconds. Concurrent runs in one worktree are not supported (they would
+share the `.build` lock); different worktrees build independently. The full
+suite currently takes several minutes, dominated by a few exhaustive seed/size
+matrices; see PLAN.md "Performance" for the measured baseline and the
+`test-suite-speed` goal.
 
 All unit tests run in **Release** configuration by default:
 `scripts/checks.sh`, `scripts/test-timings.sh`, the `Noirpx` scheme's Test

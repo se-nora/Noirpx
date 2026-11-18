@@ -44,7 +44,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### checks-warm-builds: Reuse build products in the check script
-- status: todo
+- status: done
 - priority: 5
 - track: infra
 - depends: none
@@ -62,6 +62,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     starts tests within 5 s of invocation (record both runs' timings).
   - Two worktrees can run checks concurrently without lock contention.
   - Documentation matches the script.
+- result: merged 2c8d1a3; cold 38s/warm 20s/first-test <1s; concurrent worktrees exit 0 (49s wall); --full/--ios BUILD SUCCEEDED; README/docs match
 
 ### host-split: Split the Apple host into focused files
 - status: done

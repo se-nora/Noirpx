@@ -53,10 +53,13 @@
 - Follow the repository's existing patterns and the milestone acceptance
   criteria. Prefer small, testable changes and add focused tests for behavior,
   boundaries, deterministic replay, and regressions as relevant.
-- For each implementation iteration, increment the app's minor marketing
-  version once before building (for example, 0.1.0 becomes 0.2.0), resetting
-  the patch component to zero. Keep `MARKETING_VERSION` consistent across
-  the app's Debug and Release build configurations.
+- For each implementation iteration that changes the app's behavior or
+  appearance, increment the app's minor marketing version once before
+  building (for example, 0.1.0 becomes 0.2.0), resetting the patch component
+  to zero. Changes with no visual or gameplay effect (documentation,
+  refactoring, internal cleanups, tests-only) may instead use a patch bump
+  (`scripts/bump-version.sh --patch`). Keep `MARKETING_VERSION` consistent
+  across the app's Debug and Release build configurations.
 - For now, run applicable automated checks locally, build the macOS app, and
   launch it locally after each implementation iteration. Report the results and
   any blocker. Do not build, install, or launch on a physical iPhone as part of

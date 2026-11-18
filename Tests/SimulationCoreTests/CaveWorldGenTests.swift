@@ -425,10 +425,13 @@ final class CaveWorldGenTests: XCTestCase {
 
     // MARK: - New static tests for template (seeds 1...64 at 256×128 and 128×64)
 
-    func testSpawnContractMatrix() {
+    func testSpawnContractMatrix() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let res = staticResult(seed: UInt64(seed), width: width, height: height)
                 let world = res.world
                 let layout = res.layout
@@ -454,50 +457,70 @@ final class CaveWorldGenTests: XCTestCase {
                 XCTAssertTrue(5 * gy >= 3 * height, "spawn not in top 40%: gy=\(gy), h=\(height)")
             }
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
-    func testShaftContractMatrix() {
+    func testShaftContractMatrix() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let res = staticResult(seed: UInt64(seed), width: width, height: height)
                 checkShaftContract(world: res.world, prePass: res.prePass, layout: res.layout, term: res.term)
             }
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
-    func testShaftDescent32At256x128() {
+    func testShaftDescent32At256x128() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         for seed in 1...64 {
+            comboCount += 1
             let res = staticResult(seed: UInt64(seed), width: 256, height: 128)
             XCTAssertGreaterThanOrEqual(res.term.descent, 32, "Descent < 32 for seed \(seed) at 256×128")
         }
+        XCTAssertEqual(comboCount, 64, "Expected 64 seeds")
     }
 
-    func testFootprintContainmentMatrix() {
+    func testFootprintContainmentMatrix() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let res = staticResult(seed: UInt64(seed), width: width, height: height)
                 checkFootprintContainment(world: res.world, prePass: res.prePass, layout: res.layout)
             }
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
-    func testNoNewExposureMatrix() {
+    func testNoNewExposureMatrix() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let res = staticResult(seed: UInt64(seed), width: width, height: height)
                 checkNoNewExposure(world: res.world, prePass: res.prePass, layout: res.layout)
             }
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
-    func testDeterminismMatrix() {
+    func testDeterminismMatrix() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             var seenCells = Set<[CellPosition: Material]>()
             for seed in 1...64 {
+                comboCount += 1
                 let gen1 = CaveWorldGenerator(seed: UInt64(seed), width: width, height: height)
                 let gen2 = CaveWorldGenerator(seed: UInt64(seed), width: width, height: height)
                 let w1 = gen1.generate()
@@ -510,6 +533,7 @@ final class CaveWorldGenTests: XCTestCase {
             }
             XCTAssertEqual(seenCells.count, 64, "Cells dictionaries not pairwise distinct for \(width)×\(height)")
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
     func testFitsPredicate() {
@@ -588,14 +612,72 @@ final class CaveWorldGenTests: XCTestCase {
         XCTAssertEqual(checksum2, "eed50386c2748f26345c229991f9983f571faab475ccb9738c70ff2efc26e058")
     }
 
-    func testMatrixActuallyStamps() {
+    func testMatrixActuallyStamps() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let res = staticResult(seed: UInt64(seed), width: width, height: height)
                 let layout = res.layout
                 XCTAssertEqual(res.world.spawn.x, layout.originX + layout.spawnCell.0, "Template not stamped for seed \(seed) \(width)×\(height)")
                 XCTAssertEqual(res.world.spawn.y, layout.originY + layout.spawnCell.1, "Template not stamped for seed \(seed) \(width)×\(height)")
+            }
+        }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
+    }
+
+    // MARK: - Default-tier spot checks
+
+    func testDeterminismSpotCheck() {
+        let seeds = [1, 42]
+        let sizes = [(256, 128), (128, 64)]
+        for (width, height) in sizes {
+            for seed in seeds {
+                let gen1 = CaveWorldGenerator(seed: UInt64(seed), width: width, height: height)
+                let gen2 = CaveWorldGenerator(seed: UInt64(seed), width: width, height: height)
+                let w1 = gen1.generate()
+                let w2 = gen2.generate()
+                XCTAssertEqual(w1, w2, "Two generate() calls differ for seed \(seed) \(width)×\(height)")
+                let (inspectedWorld, _) = gen1.generateInspected(stampSpawnTemplate: true, capturePrePass: false)
+                XCTAssertEqual(w1, inspectedWorld, "generate() vs generateInspected differ for seed \(seed) \(width)×\(height)")
+            }
+        }
+    }
+
+    func testSpawnContractSpotCheck() {
+        let seeds = [1, 42]
+        let sizes = [(256, 128), (128, 64)]
+        for (width, height) in sizes {
+            for seed in seeds {
+                let res = staticResult(seed: UInt64(seed), width: width, height: height)
+                let world = res.world
+                let layout = res.layout
+                checkBodyEmpty(world, layout: layout)
+                checkSupportSolid(world, layout: layout)
+                checkHeadroom(world, layout: layout)
+                checkClearanceRadius(world, layout: layout, prePass: res.prePass, term: res.term)
+            }
+        }
+    }
+
+    func testShaftFootprintExposureStampsSpotCheck() {
+        let seeds = [1, 42]
+        let sizes = [(256, 128), (128, 64)]
+        for (width, height) in sizes {
+            for seed in seeds {
+                let res = staticResult(seed: UInt64(seed), width: width, height: height)
+                let world = res.world
+                let prePass = res.prePass
+                let layout = res.layout
+                let term = res.term
+                checkShaftContract(world: world, prePass: prePass, layout: layout, term: term)
+                checkFootprintContainment(world: world, prePass: prePass, layout: layout)
+                checkNoNewExposure(world: world, prePass: prePass, layout: layout)
+                // Stamp assertions
+                XCTAssertEqual(world.spawn.x, layout.originX + layout.spawnCell.0, "Template not stamped for seed \(seed) \(width)×\(height)")
+                XCTAssertEqual(world.spawn.y, layout.originY + layout.spawnCell.1, "Template not stamped for seed \(seed) \(width)×\(height)")
             }
         }
     }

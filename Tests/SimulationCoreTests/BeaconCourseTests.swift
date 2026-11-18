@@ -2,9 +2,12 @@ import XCTest
 @testable import SimulationCore
 
 final class BeaconCourseTests: XCTestCase {
-    func testBoundedGenerationAndVariation() {
+    func testBoundedGenerationAndVariation() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         var layouts = Set<String>()
         for seed in 0..<4096 {
+            comboCount += 1
             let course = BeaconCourse(seed: UInt64(seed))
             XCTAssertEqual(course, BeaconCourse(seed: UInt64(seed)))
             XCTAssertTrue((36...40).contains(course.gap.lowerBound))
@@ -24,12 +27,42 @@ final class BeaconCourseTests: XCTestCase {
             XCTAssertLessThan(course.goal.x + BeaconRun.markerWidth, 160)
             layouts.insert("\(course.gap)-\(course.step)-\(course.sand)-\(course.sandHeight)-\(course.beacons)-\(course.ventX)")
         }
+        XCTAssertEqual(comboCount, 4096, "Expected 4096 seed combos")
         XCTAssertGreaterThan(layouts.count, 3000)
     }
 
+    func testBoundedGenerationSpotCheck() {
+        let seeds = (0..<64).map(UInt64.init)
+        var layouts = Set<String>()
+        for seed in seeds {
+            let course = BeaconCourse(seed: seed)
+            XCTAssertEqual(course, BeaconCourse(seed: seed))
+            XCTAssertTrue((36...40).contains(course.gap.lowerBound))
+            XCTAssertTrue((10...12).contains(course.gap.count))
+            XCTAssertTrue((14...16).contains(course.step.lowerBound))
+            XCTAssertEqual(course.step.count, 5)
+            XCTAssertTrue((65...69).contains(course.sand.lowerBound))
+            XCTAssertEqual(course.sand.count, 6)
+            XCTAssertTrue((14...16).contains(course.sandHeight))
+            XCTAssertLessThan(course.step.upperBound, course.beacons[0].x)
+            XCTAssertLessThan(course.beacons[0].x + BeaconRun.markerWidth, course.gap.lowerBound)
+            XCTAssertLessThan(course.gap.upperBound + 12, course.sand.lowerBound)
+            XCTAssertLessThan(course.sand.upperBound + 12, course.beacons[1].x)
+            XCTAssertLessThan(course.beacons[1].x + BeaconRun.markerWidth, course.ventX.lowerBound)
+            XCTAssertEqual(course.ventX.count, 7)
+            XCTAssertEqual(course.goal.x, course.ventX.upperBound + 1)
+            XCTAssertLessThan(course.goal.x + BeaconRun.markerWidth, 160)
+            layouts.insert("\(course.gap)-\(course.step)-\(course.sand)-\(course.sandHeight)-\(course.beacons)-\(course.ventX)")
+        }
+        XCTAssertGreaterThan(layouts.count, 50)
+    }
+
     func testRepresentativeCoursesAreFinishableWithoutPainting() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let seeds = (0..<64).map(UInt64.init) + [42, UInt64.max, 0x9e3779b97f4a7c3f]
         for seed in seeds {
+            comboCount += 1
             var run = try BeaconRun(seed: seed)
             var jumped = false
             for _ in 0..<400 where run.outcome == .playing {
@@ -43,6 +76,22 @@ final class BeaconCourseTests: XCTestCase {
             XCTAssertEqual(run.outcome, .won, "seed \(seed), at \(run.character.position)")
             XCTAssertGreaterThan(run.health, 0, "seed \(seed)")
         }
+        XCTAssertEqual(comboCount, 67, "Expected 67 seed combos")
+    }
+
+    func testSingleCourseFinishable() throws {
+        var run = try BeaconRun(seed: 42)
+        var jumped = false
+        for _ in 0..<400 where run.outcome == .playing {
+            let x = run.character.position.x
+            let jump = !jumped && x >= run.course.gap.lowerBound - 5 && run.character.grounded
+            if jump { jumped = true }
+            try run.advance(horizontal: 1, jump: jump, pulse: x > run.course.gap.upperBound)
+        }
+        XCTAssertTrue(jumped)
+        XCTAssertEqual(run.collected, [true, true])
+        XCTAssertEqual(run.outcome, .won)
+        XCTAssertGreaterThan(run.health, 0)
     }
 
     func testDifferentSeedsProduceDifferentActualTerrain() throws {

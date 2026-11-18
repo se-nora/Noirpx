@@ -30,6 +30,7 @@ final class BeaconHazardTests: XCTestCase {
     }
 
     func testDamageCadenceAndFailureBeatsGoalAndPulse() throws {
+        try skipUnlessSlowTier()
         var run = try reachVent()
         for _ in 1..<BeaconRun.damageIntervalTicks {
             try run.advance(horizontal: 0, jump: false)

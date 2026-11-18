@@ -120,6 +120,35 @@ bounds; the ranking is the useful part.
 | `CaveWorldGenTests.testSpawnContractMatrix` | 32 s |
 | Other matrices and replays (8 tests) | 10–16 s each |
 
+### Test tiers baseline (after `test-suite-speed`, measured 2026-11-18 on agent/test-suite-speed)
+
+Default tier (`swift test --parallel`, NOIRPX_SLOW_TESTS unset):
+
+| Metric | Value |
+| --- | --- |
+| Total wall time | 22 s |
+| Slowest test | `CaveRunTests.testLiveReplay256x128_2` (2.80 s) |
+| Tests > 3 s | 0 |
+| Test count | 441 |
+
+Slow tier (`NOIRPX_SLOW_TESTS=1 swift test --parallel`):
+
+| Test | Time | Coverage |
+| --- | --- | --- |
+| `CaveSpawnReplayTests.testLiveReplayAllSeedsAndSizes` | 156 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testDeterminismMatrix` | 43 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testSpawnContractMatrix` | 21 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testShaftContractMatrix` | 15 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testFootprintContainmentMatrix` | 16 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testNoNewExposureMatrix` | 16 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testMatrixActuallyStamps` | 15 s | 64 seeds × 2 sizes |
+| `CaveWorldGenTests.testShaftDescent32At256x128` | 15 s | 64 seeds × 1 size |
+| `BeaconCourseTests.testRepresentativeCoursesAreFinishableWithoutPainting` | 31 s | 64 + 3 special seeds |
+| `BeaconCourseTests.testBoundedGenerationAndVariation` | 0.76 s | 4096 seeds |
+| `BeaconHazardTests.testDamageCadenceAndFailureBeatsGoalAndPulse` | 0.45 s | sequential scenario |
+| `CaveRunTests.testDeterministicReplay` | 9.6 s | 2 seeds × 50 ticks + cross-seed |
+| `ChimeWardenTests.testSpawnBoundsPatrol_*` (16 chunks) | ~0.6 s each | 256 seeds each = 4096 total |
+
 Causes: Debug builds of a per-cell hot loop that dispatches through class
 instances and builds arrays and closures per cell, dictionary-hashed chunks,
 `CaveRun` setup that enqueues one command per cell, and exhaustive seed × size

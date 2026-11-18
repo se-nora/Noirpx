@@ -131,10 +131,13 @@ final class CaveSpawnReplayTests: XCTestCase {
 
     // MARK: - Main test: all seeds and both verified sizes
 
-    func testLiveReplayAllSeedsAndSizes() {
+    func testLiveReplayAllSeedsAndSizes() throws {
+        try skipUnlessSlowTier()
+        var comboCount = 0
         let sizes = [(256, 128), (128, 64)]
         for (width, height) in sizes {
             for seed in 1...64 {
+                comboCount += 1
                 let (world, prePass) = matrixCache.world(for: UInt64(seed), width: width, height: height)
                 guard let layout = CaveSpawnTemplate.layout(width: width, height: height) else {
                     XCTFail("Layout should exist for \(width)×\(height)")
@@ -170,32 +173,110 @@ final class CaveSpawnReplayTests: XCTestCase {
                 }
             }
         }
+        XCTAssertEqual(comboCount, 128, "Expected 128 seed×size combos")
     }
 
-    // MARK: - Non-vacuity mutations (seed 42, 256×128)
+    // MARK: - Default-tier representative replays
 
-    func testPlugMutation() {
-        let (world, prePass) = matrixCache.world(for: 42, width: 256, height: 128)
-        guard var prePass = prePass else { XCTFail("prePass missing"); return }
-        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
-
-        // Plug: make 7 band cells at row pf-10 solid
-        let pf = layout.padFloorRow
-        let plugRow = pf - 10
-        for gx in layout.shaftLeftCol...layout.shaftRightCol {
-            prePass[plugRow][gx] = .solid
+    /// Default-tier proxy for one seed/size combination of `testLiveReplayAllSeedsAndSizes`.
+    /// Asserts descent >= termination descent (and >= 32 for 256×128), matching the slow-tier assertion.
+    private func assertRepresentativeReplay(seed: Int, width: Int, height: Int) {
+        let (world, prePass) = matrixCache.world(for: UInt64(seed), width: width, height: height)
+        guard let layout = CaveSpawnTemplate.layout(width: width, height: height) else {
+            XCTFail("Layout should exist for \(width)×\(height)")
+            return
+        }
+        guard let prePass = prePass else {
+            XCTFail("prePass missing for seed \(seed) \(width)×\(height)")
+            return
         }
 
-        // Re-generate world with modified prePass by creating a generator that uses our prePass
-        // Since we can't easily inject prePass, we modify the generated world's cells directly
-        var mutatedWorld = world
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
+            guard gx >= 0, gx < width, gy >= 0, gy < height else { return false }
+            return prePass[gy][gx] == Material.empty
+        }
+
+        let outcome = replay(world: world, termination: term)
+
+        switch outcome {
+        case .descended(let d):
+            XCTAssertGreaterThanOrEqual(d, term.descent, "Descent \(d) < termination descent \(term.descent) for seed \(seed) \(width)×\(height)")
+            if width == 256 && height == 128 {
+                XCTAssertGreaterThanOrEqual(d, 32, "256×128 descent \(d) < 32 for seed \(seed)")
+            }
+        case .insufficientDescent(let d):
+            XCTFail("Insufficient descent \(d) (need \(term.descent)) for seed \(seed) \(width)×\(height)")
+        case .bodyOverlap(let tick, let phase, let cell):
+            XCTFail("Body overlap at tick \(tick) phase \(phase) cell \(cell) for seed \(seed) \(width)×\(height)")
+        case .harmfulBody(let tick, let phase, let cell):
+            XCTFail("Harmful body at tick \(tick) phase \(phase) cell \(cell) for seed \(seed) \(width)×\(height)")
+        case .idleFailed(let tick):
+            XCTFail("Idle failed at tick \(tick) for seed \(seed) \(width)×\(height)")
+        }
+    }
+
+    /// Slow tier: 256×128 representative replay (~3.7 s).
+    func testLiveReplayRep_1_256x128() throws {
+        try skipUnlessSlowTier()
+        assertRepresentativeReplay(seed: 1, width: 256, height: 128)
+    }
+
+    /// Slow tier: 256×128 representative replay (~3.7 s).
+    func testLiveReplayRep_42_256x128() throws {
+        try skipUnlessSlowTier()
+        assertRepresentativeReplay(seed: 42, width: 256, height: 128)
+    }
+
+    /// Slow tier: 256×128 representative replay (~3.7 s).
+    func testLiveReplayRep_64_256x128() throws {
+        try skipUnlessSlowTier()
+        assertRepresentativeReplay(seed: 64, width: 256, height: 128)
+    }
+
+    func testLiveReplayRep_1_128x64() {
+        assertRepresentativeReplay(seed: 1, width: 128, height: 64)
+    }
+
+    func testLiveReplayRep_42_128x64() {
+        assertRepresentativeReplay(seed: 42, width: 128, height: 64)
+    }
+
+    func testLiveReplayRep_64_128x64() {
+        assertRepresentativeReplay(seed: 64, width: 128, height: 64)
+    }
+
+    // MARK: - Mutation tests (split into control + mutation per type; 256×128 gated slow)
+
+    /// Control for plug mutation: unmutated world should descend. Slow tier (256×128 replay ~3.8 s).
+    func testPlugMutationControl_42_256x128() throws {
+        try skipUnlessSlowTier()
+        let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
+        guard let prePass = prePass else { XCTFail("prePass missing"); return }
+        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+
+        let controlOutcome = replay(world: world, termination: term)
+        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
+    }
+
+    /// Plug mutation: narrow the shaft at the pad floor by making row pf-10 solid across the shaft.
+    /// Expected: insufficientDescent(10). Slow tier (256×128 replay ~3.4 s).
+    func testPlugMutation_42_256x128() throws {
+        try skipUnlessSlowTier()
+        let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
+        guard let prePass = prePass else { XCTFail("prePass missing"); return }
+        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+
+        // Plug: row pf-10, columns shaftLeftCol...shaftRightCol become solid
+        let plugRow = layout.padFloorRow - 10
         var mutatedCells = world.cells
         for gx in layout.shaftLeftCol...layout.shaftRightCol {
             let wx = layout.originX + gx
             let wy = layout.originY + plugRow
             mutatedCells[CellPosition(x: wx, y: wy)] = .solid
         }
-        mutatedWorld = CaveWorld(
+        let mutatedWorld = CaveWorld(
             seed: world.seed,
             size: world.size,
             extents: world.extents,
@@ -203,14 +284,6 @@ final class CaveSpawnReplayTests: XCTestCase {
             goal: world.goal,
             cells: mutatedCells
         )
-
-        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in
-            prePass[gy][gx] == Material.empty
-        }
-
-        // Control: unmutated world should descend
-        let controlOutcome = replay(world: world, termination: term)
-        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
         let outcome = replay(world: mutatedWorld, termination: term)
         if case .insufficientDescent(let d) = outcome {
@@ -220,7 +293,22 @@ final class CaveSpawnReplayTests: XCTestCase {
         }
     }
 
-    func testNarrowMutation() {
+    /// Control for narrow mutation: unmutated world should descend. Slow tier (256×128 replay ~3.8 s).
+    func testNarrowMutationControl_42_256x128() throws {
+        try skipUnlessSlowTier()
+        let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
+        guard let prePass = prePass else { XCTFail("prePass missing"); return }
+        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+
+        let controlOutcome = replay(world: world, termination: term)
+        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
+    }
+
+    /// Narrow mutation: columns 8-10 solid for rows carveBottom...pf.
+    /// Expected: insufficientDescent(0). Slow tier (256×128 replay ~3.8 s).
+    func testNarrowMutation_42_256x128() throws {
+        try skipUnlessSlowTier()
         let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
         guard let prePass = prePass else { XCTFail("prePass missing"); return }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
@@ -240,9 +328,6 @@ final class CaveSpawnReplayTests: XCTestCase {
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
 
-        let controlOutcome = replay(world: world, termination: term)
-        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
-
         let outcome = replay(world: mutatedWorld, termination: term)
         if case .insufficientDescent(let d) = outcome {
             XCTAssertEqual(d, 0, "Narrow shaft should give descent 0, got \(d)")
@@ -251,7 +336,22 @@ final class CaveSpawnReplayTests: XCTestCase {
         }
     }
 
-    func testEmbeddedBlockMutation() {
+    /// Control for embedded block mutation: unmutated world should descend. Slow tier (256×128 replay ~3.9 s).
+    func testEmbeddedBlockMutationControl_42_256x128() throws {
+        try skipUnlessSlowTier()
+        let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
+        guard let prePass = prePass else { XCTFail("prePass missing"); return }
+        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+
+        let controlOutcome = replay(world: world, termination: term)
+        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
+    }
+
+    /// Embedded block mutation: cell (17+2, pf+5) = (19, pf+5) becomes solid.
+    /// Expected: bodyOverlap at tick 1, postPhysics. Slow tier (256×128 replay ~3.9 s).
+    func testEmbeddedBlockMutation_42_256x128() throws {
+        try skipUnlessSlowTier()
         let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
         guard let prePass = prePass else { XCTFail("prePass missing"); return }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
@@ -271,9 +371,6 @@ final class CaveSpawnReplayTests: XCTestCase {
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
 
-        let controlOutcome = replay(world: world, termination: term)
-        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
-
         let outcome = replay(world: mutatedWorld, termination: term)
         if case .bodyOverlap(let tick, let phase, let cell) = outcome {
             XCTAssertEqual(tick, 1, "Expected tick 1, got \(tick)")
@@ -285,7 +382,22 @@ final class CaveSpawnReplayTests: XCTestCase {
         }
     }
 
-    func testHarmfulBranchMutation() {
+    /// Control for harmful branch mutation: unmutated world should descend. Slow tier (256×128 replay ~3.8 s).
+    func testHarmfulBranchMutationControl_42_256x128() throws {
+        try skipUnlessSlowTier()
+        let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
+        guard let prePass = prePass else { XCTFail("prePass missing"); return }
+        guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
+        let term = CaveSpawnTemplate.termination(layout: layout) { gx, gy in prePass[gy][gx] == Material.empty }
+
+        let controlOutcome = replay(world: world, termination: term)
+        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
+    }
+
+    /// Harmful branch mutation: same cell as embedded block but make it magicLiquid.
+    /// Expected: harmfulBody at tick 1, postPhysics. Slow tier (256×128 replay ~3.8 s).
+    func testHarmfulBranchMutation_42_256x128() throws {
+        try skipUnlessSlowTier()
         let (world, prePass) = matrixCache.world(for: UInt64(42), width: 256, height: 128)
         guard let prePass = prePass else { XCTFail("prePass missing"); return }
         guard let layout = CaveSpawnTemplate.layout(width: 256, height: 128) else { XCTFail("Layout missing"); return }
@@ -303,9 +415,6 @@ final class CaveSpawnReplayTests: XCTestCase {
             seed: world.seed, size: world.size, extents: world.extents,
             spawn: world.spawn, goal: world.goal, cells: mutatedCells
         )
-
-        let controlOutcome = replay(world: world, termination: term)
-        XCTAssertEqual(controlOutcome, .descended(term.descent), "Control should descend")
 
         let outcome = replay(world: mutatedWorld, termination: term)
         if case .harmfulBody(let tick, let phase, let cell) = outcome {

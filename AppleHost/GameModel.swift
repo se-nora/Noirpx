@@ -41,6 +41,7 @@ final class GameModel: ObservableObject {
     }
 
     var caveRun: CaveRun?
+    var worldBounds: FixtureViewport.CellRange? = nil
     private var scheduler = FixedTickScheduler()
     private var activeChunks: ChunkRegion?
     private var drawableSize: (width: Double, height: Double)?
@@ -159,9 +160,16 @@ final class GameModel: ObservableObject {
 
     private func updateActiveChunks() {
         guard let drawableSize,
-              let run = caveRun,
-              let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                             center: run.character.cameraCenter, longEdgeCells: 200) else {
+              let run = caveRun else {
+            activeChunks = nil
+            worldBounds = nil
+            return
+        }
+        let extents = run.world.extents
+        worldBounds = FixtureViewport.CellRange(x: extents.minX...extents.maxX, y: extents.minY...extents.maxY)
+        guard let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
+                                             center: run.character.cameraCenter, longEdgeCells: 200,
+                                             worldBounds: worldBounds) else {
             activeChunks = nil
             return
         }

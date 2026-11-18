@@ -9,7 +9,7 @@ extension InputMetalView {
         guard bounds.width > 0, bounds.height > 0,
               let viewport = FixtureViewport(drawableWidth: Double(drawableSize.width),
                                              drawableHeight: Double(drawableSize.height), center: cameraCenter,
-                                             longEdgeCells: 200),
+                                             longEdgeCells: 200, worldBounds: worldBounds),
               let cell = viewport.cell(atX: Double(x / bounds.width * drawableSize.width),
                                        y: Double(y / bounds.height * drawableSize.height)) else {
             return nil

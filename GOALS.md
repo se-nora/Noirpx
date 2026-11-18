@@ -521,7 +521,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tests for summary data; screenshot of the summary.
 
 ### world-streaming: Tall cave world with on-demand chunks
-- status: todo
+- status: done
 - priority: 70
 - track: noita
 - depends: sim-dirty-rects, biome-descent

@@ -64,7 +64,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Documentation matches the script.
 
 ### host-split: Split the Apple host into focused files
-- status: todo
+- status: done
 - priority: 6
 - track: infra
 - depends: none
@@ -81,6 +81,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - `git diff --stat` shows moves only (no logic changes); macOS and iOS
     Simulator Debug builds pass; the app launches and Cave Run plays.
   - Full test suite passes.
+- result: Split 1,100-line NoirpxApp.swift into 8 focused files (GameModel, HostView, MetalRenderer, InputMetalView_iOS, InputMetalView_macOS, InputMetalView, MetalSurface, NoirpxApp); largest file 352 lines; all Release tests pass; merged in 0e08bed
 
 ### interfaces-doc-split: Restructure INTERFACES.md by subsystem
 - status: done

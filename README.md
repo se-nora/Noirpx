@@ -157,6 +157,18 @@ device performance certification:
 NOIRPX_BENCHMARK=1 swift test -c release --filter ResidentSchedulingBenchmark/testSchedulingOverhead
 ```
 
+`SimBenchmark` runs five seeded Release scenes (sand avalanche, water/oil
+pool, fire/oil burn, idle cave, Cave Run) for 600 measured ticks each and
+prints one line per scene with p50/p95/max tick time plus snapshot-publish
+and rasterization microseconds. Pass `--digest` to also print each scene's
+final snapshot digest as 16 hex characters:
+
+```sh
+swift build -c release --product SimBenchmark
+.build/release/SimBenchmark
+.build/release/SimBenchmark --digest
+```
+
 ## Toolchain and targets
 
 Xcode 27.2 (27B52), Swift 6.4.2, macOS 15+ and iOS 18+. The package uses Swift

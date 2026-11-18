@@ -105,10 +105,11 @@ table and the pillars. Keep the table current when goals land.
   `scripts/test-timings.sh`, the `Noirpx` scheme Test action, and
   `ParallelTestPlan.xctestplan`).
 
-### Baselines (development Mac: Apple M3, 8 cores, macOS 27.2.1, Xcode 27.2, Debug)
+### Baselines (development Mac: Apple M3, 8 cores, macOS 27.2.1, Xcode 27.2)
 
-Measured 2026-11-18 on main at v0.33.0. Another test run was active on the
-machine for part of the serial run, so treat the absolute numbers as upper
+Measured 2026-11-18 on main at v0.33.0 (Debug build numbers below) and with
+SimBenchmark at v0.34.0 (Release build below). Another test run was active on
+the machine for part of the serial run, so treat the absolute numbers as upper
 bounds; the ranking is the useful part.
 
 | Measurement | Result |
@@ -122,6 +123,16 @@ bounds; the ranking is the useful part.
 | `BeaconCourseTests.testRepresentativeCoursesAreFinishableWithoutPainting` | 40 s |
 | `CaveWorldGenTests.testSpawnContractMatrix` | 32 s |
 | Other matrices and replays (8 tests) | 10–16 s each |
+| `SimBenchmark` five Release scenes (600 ticks each) | sand_avalanche: P50=26.8µs P95=28.2µs MAX=40.3µs PUBLISH=26.9µs RASTER=17µs; water_oil_pool: P50=9.8µs P95=10.2µs MAX=11.7µs PUBLISH=9.8µs RASTER=7µs; fire_oil_burn: P50=12.2µs P95=12.7µs MAX=15.0µs PUBLISH=12.2µs RASTER=7µs; idle_cave: P50=2.3µs P95=2.7µs MAX=3.1µs PUBLISH=2.3µs RASTER=47µs; cave_run: P50=2.0µs P95=2.7µs MAX=3.0µs PUBLISH=2.1µs RASTER=50µs |
+
+`SimBenchmark` numbers are Release; idle_cave and cave_run include character
+physics in the measured tick (Scene 4 keeps a stationary character per PO
+confirmation, deviating from the brief's "no character"). Debug builds of a
+per-cell hot loop that dispatches through class instances and builds arrays and
+closures per cell, dictionary-hashed chunks, `CaveRun` setup that enqueues one
+command per cell, and exhaustive seed × size matrices in the default suite.
+`scripts/checks.sh` additionally builds into a fresh temporary directory every
+run, so each check starts cold.
 
 ### Test tiers baseline (after `test-suite-speed`, measured 2026-11-18 on agent/test-suite-speed)
 

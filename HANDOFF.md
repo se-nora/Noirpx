@@ -1,222 +1,47 @@
-# Handoff: deterministic simulation prototype
+# Handoff
 
-## Hold-to-draw increment (2026-11-17, v0.31.0)
+Status note for the next contributor or loop pass. Keep it short and current;
+history lives in git and in the loop journal.
 
-The hold-to-draw feature enables continuous material painting and wand casting
-while the mouse button (or touch) is held:
+## State on main (2026-11-18, v0.33.0)
 
-- **macOS left button hold:** paints `selectedMaterial` at the cursor cell once
-  per simulation tick. Cursor movement while held updates the paint cell;
-  stroke interpolation between drag samples still enqueues intermediate cells.
-- **macOS right button hold:** starts wand cast toward cursor; when the ray
-  completes, if still held, retries `startCasting()` respecting cooldown/mana
-  via `WandController`. Release cancels with mana refund if no batch placed.
-- **iOS touch hold:** material paint only (no right-button equivalent).
-- **Implementation:** `HeldInput` (GamePresentation) tracks `paintHeld`,
-  `paintCell`, `castHeld`. Consumed once per tick in `GameModel.update(at:)`.
-  `InputMetalView` mouse/touch handlers call `setPaintHeld`/`updatePaintHeldCell`
-  and `setCastHeld`. No `SimulationCore` changes.
-- **Tests:** `HoldToDrawTests` (13 tests) cover state machine, one-paint-per-tick,
-  cursor follow, cooldown gating, mana gating, deterministic replay.
-- **All tests pass:** `swift test --parallel` (379 tests, 0 failures).
-- **Builds pass:** macOS Debug, iOS Simulator Debug (Xcode 27.2, Swift 6.4.2).
-- **App launches:** macOS app starts, renders, responds to input; manual verify
-  hold-to-draw paint and cast.
-- **Version:** MARKETING_VERSION bumped 0.30.0 → 0.31.0 (Debug + Release).
-- **INTERFACES.md:** appended Hold-to-draw input appendix documenting contract.
+- The app plays Cave Run with painting, wand casting, crafting outside active
+  play, material discovery, and a hideable HUD. See [PLAN.md](PLAN.md)
+  "Current state" for the full inventory and the Noita gap analysis.
+- Last full local verification of this state: `swift build --build-tests`
+  passed; serial `swift test` passed 388 tests (one optional benchmark
+  skipped) in 9 min 06 s; the macOS Debug app built and launched. A headless
+  Cave Run capture shows flat material colors and empty space beyond the world
+  edge (queued as `pixel-look`). iOS was not built for this note.
 
-**Unverified dimensions:** iOS touch ergonomics on physical device, on-device
-performance, visual quality of continuous spray/bolt.
+## How work is chosen
 
-## Following camera and material movement increment
+[GOALS.md](GOALS.md) is the queue. Before starting a goal, claim it so no
+second instance works on it:
 
-The fixture camera follows the character; rendering, painting, and active
-physics regions use the shifted viewport. Both simulation modes prevent
-diagonal movement past an occupied side cell and let sand displace water.
-The changed rules affect simulation results and are not compatible with old
-replays; see [INTERFACES.md](INTERFACES.md) for ordering and boundary details.
-Character state remains separate from the material snapshot and digest.
+```sh
+python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq.py list
+python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq.py claim <goal-id>
+```
 
-On the development Mac, the full Swift package suite and focused material and
-viewport tests passed, as did thread-sanitized resident and material tests.
-Debug macOS, iOS Simulator, and signed iOS device builds
-passed; the generic iOS destinations emitted placeholder OS-version warnings.
-The signed app installed and launched on the physical iPhone 16 Pro, and its
-process remained running. Camera behavior, touch interaction, lifecycle, and
-performance were not visually verified on the phone.
+`claim` exits 3 if the goal is already being worked on and 4 if its
+dependencies are not done or it shares an area with a running goal. Goals
+with disjoint `areas` may run in parallel. Delivery marks the goal `done` in
+GOALS.md in the same merge.
 
-## Character controls increment
+## Next up
 
-The deterministic fixture app has a basic fixed-tick character, rock and sand collision, three-cell step-up,
-keyboard movement and jump on macOS, and on-screen controls on iOS. The host
-extends the fixture floor; restart returns the
-character. Character state is separate from the material snapshot and digest.
-See [README.md](README.md) and [INTERFACES.md](INTERFACES.md) for controls,
-semantics, and limitations. The playable vertical slice remains incomplete.
+Ready now, in priority order and runnable in parallel where areas differ:
+`checks-warm-builds`, `host-split`, `interfaces-doc-split`,
+`test-suite-speed` (after `checks-warm-builds`, same area),
+`sim-benchmark-harness`, `pixel-look`, `explosions`, `material-reactions`
+(after `explosions`, same area), and `biome-descent`.
 
-For the initial character increment, the full Swift package suite passed (55 tests, one
-optional benchmark skipped), as did Debug macOS, iOS Simulator, and signed iOS
-device builds. The signed app installed and launched on the connected physical
-iPhone 16 Pro, and its process remained running. Xcode reported a placeholder
-OS-version warning for the generic iOS destinations. Actual control interaction,
-visual appearance, lifecycle behavior, and performance were not verified on
-the phone.
+## Known issues
 
-For the sand-collision and stair increment, the full Swift package suite and
-focused character tests passed, as did Debug macOS, iOS Simulator, and signed
-iOS device builds. The updated app installed and launched on the physical
-iPhone 16 Pro and its process remained running; visual and touch interaction
-were not verified. The generic iOS builds emitted the placeholder OS-version
-warning.
-
-## Fixture input increment
-
-The deterministic fixture has a material brush on macOS and iOS. The overlay
-selects erase, rock, sand, water or fire; keys 1–5 also select brushes. Mouse
-and single-touch strokes map through the renderer's centered viewport and queue
-cell replacements for the next tick. See [INTERFACES.md](INTERFACES.md).
-
-On the development Mac, `swift test` passed with the optional scheduling
-benchmark skipped; Debug macOS arm64 and generic iOS Simulator builds passed
-with signing disabled. Xcode warned that App Intents metadata extraction was
-skipped. Input mapping, interpolation and command ordering have package tests,
-but actual mouse, keyboard and touch interaction, lifecycle, physical devices,
-and performance have not been verified for this increment. Independent
-core/renderer contract review remains open.
-
-## Fixture renderer increment
-
-The Apple host now displays and advances the deterministic fixture and shows
-version, submitted FPS, tick, and an unavailable character position. Restart
-replays the fixture. The camera is fixed at 32 × 18 cells; character gameplay,
-resident mode, movable camera and gameplay input remain unimplemented. See
-[INTERFACES.md](INTERFACES.md) for scheduling and renderer ownership.
-
-On the development Mac, `swift test` passed 34 tests with the optional
-benchmark skipped; Debug macOS and iOS Simulator builds passed with signing
-disabled. On an iPhone 16 Pro Simulator running iOS 18.4, the fixture and
-overlay appeared and the displayed tick increased between screenshots. This was
-a smoke test, not a physical-device, interaction, lifecycle, or performance
-validation. Xcode reported a Simulator placeholder OS-version warning.
-
-## Resident-world prototype update (2026-11-09)
-
-The project owner authorized a single-owner implementation of a separate
-resident-world mode. [ResidentSimulation.swift](Sources/SimulationCore/ResidentSimulation.swift)
-implements a sparse 64,000 × 128,000 world with configurable power-of-two
-chunk widths (default 64), parallel proposal batches, sleeping/wake-up,
-focus-based priority with aging, and a host-provided per-batch deadline check.
-It intentionally does not promise deterministic replay; the earlier
-deterministic mode remains unchanged. The intended viewport is 480 × 270
-cells, but the host still only clears the screen and supplies no focus or
-deadline. See [INTERFACES.md](INTERFACES.md) and [PLAN.md](PLAN.md) for precise
-semantics, unchosen budget, memory limits, and benchmark results. Independent
-core/renderer review remains open, not claimed as completed.
-
-The resident-world prototype was merged to `main`. After integration on the
-development Mac, the core build and full suite passed (30 tests; the optional
-benchmark was skipped), as did Debug macOS and iOS Simulator builds. Focused
-Thread Sanitizer tests and the optional Release microbenchmark passed before
-integration. Xcode emitted a Simulator placeholder OS-version warning. No
-physical-device, dense-world, sustained performance, rendering, or real-host
-deadline tests were performed.
-
-The remaining sections describe earlier handoffs and are historical.
-
-## Milestone 1 integration update (2026-11-09)
-
-The single-owner headless simulation prototype was merged provisionally into
-`main`. See [INTERFACES.md](INTERFACES.md) for its rules, storage, commands,
-snapshot and digest contracts, and [PLAN.md](PLAN.md) for remaining risks.
-The host still only displays a clear color. The separate core/renderer
-contributor review and agreement remain outstanding; do not treat these
-provisional contracts as approved for diverging dependent branches.
-
-After integration on the development Mac with Xcode 27.2,
-`swift build --target SimulationCore` and `swift test` passed (18 tests). The
-README's Debug macOS arm64 and generic iOS Simulator `xcodebuild` commands also
-passed with signing disabled. Xcode emitted a Simulator placeholder OS-version
-warning. No physical-device build or run, cross-device replay, performance
-measurement, or renderer validation was performed for this change.
-
-The remainder describes the earlier foundation handoff and is historical.
-
-This handoff records the state after the foundation and rename, before
-milestone 1. Read [AGENTS.md](AGENTS.md), [PLAN.md](PLAN.md), and
-[INTERFACES.md](INTERFACES.md) before starting; the plan and contracts are
-authoritative where this summary omits detail.
-
-## Current state
-
-- `main` contains the foundation, rename to Noirpx, and a default development
-  team for signing. The current Xcode project is
-  [Noirpx.xcodeproj](Noirpx.xcodeproj).
-- [SimulationCore](Sources/SimulationCore/Simulation.swift) is a standalone
-  Swift package product. It stores a seed and completed tick count, returns a
-  value snapshot, and advances one tick at a time. The seed does not yet
-  generate randomness; no world or material rules exist.
-- [The Apple host](AppleHost/NoirpxApp.swift) takes an initial snapshot and
-  displays a Metal clear color. It does not update the simulation, render
-  materials, schedule ticks, or handle gameplay input. It is not a game yet.
-- Baseline: Xcode 27.2, Swift 6.4.2, macOS 15+ and iOS 18+; target devices are
-  an M4 MacBook Air and iPhone 16 Pro. See [README.md](README.md) for the
-  precise build commands, signing setup, and toolchain details.
-
-## Verification and outstanding foundation work
-
-- Core build and two tests passed; Debug macOS arm64, iOS Simulator, and signed
-  iPhone builds passed. The simulator app installed and launched on an iPhone 16
-  Pro simulator (iOS 18.5). The physical iPhone 16 Pro app installed and
-  launched after the user trusted its developer profile. A successful launch
-  is not a visual, lifecycle, or performance validation.
-- The Mac used for checks was an M3, not the selected M4 Air. No physical
-  target display settings or Release performance measurements were recorded.
-  Cross-device determinism and non-Apple platform builds were not tested.
-- Proposed contracts still need review by both core and renderer contributors
-  before dependent implementation branches diverge. Decide unresolved storage,
-  rules, errors, and snapshot ownership together rather than treating the
-  placeholder snapshot as the final interface. The foundation section of the
-  plan predates the physical-device launch noted above.
-- The default development team is committed, but credentials and profiles are
-  not. Other contributors must configure a team and unique bundle identifier
-  as needed. Do not commit credentials, private keys, or profiles.
-- Build caches were removed during cleanup and will be regenerated by the
-  commands. Two local Git stashes contain previous signing-setting backups;
-  leave them alone unless their owner requests cleanup.
-
-## Next phase: milestone 1
-
-1. Review and agree on the relevant core/renderer contracts first, especially
-   coordinates, commands, completed-tick snapshots, and ownership. Record
-   decisions and open questions in [INTERFACES.md](INTERFACES.md) and
-   [PLAN.md](PLAN.md).
-2. Define testable material behavior, conflict resolution, boundary behavior,
-   deterministic traversal and RNG, and how to prevent a cell from moving twice
-   in one tick. Choose provisional chunk dimensions and cell layout only with
-   an explicit rationale; measure before treating them as permanent.
-3. Implement a single-owner chunked core, ordered tick-indexed commands,
-   seeded advancement, and the initial empty, solid, sand, water, and simple
-   fire/reaction rules. Keep UI, Metal, input devices, and clocks out of the
-   package. Provide a small headless fixture and stable state digest.
-4. Test movement, reactions, competing updates, no double movement, chunk
-   edges and negative coordinates, idle regions, and repeatable digests for
-   identical seeds and commands. Do not assume cross-device determinism until
-   it is tested. Keep all core tests runnable without a GPU or Apple UI.
-5. Update the contracts and plan when decisions change; keep rendering,
-   scheduling, camera, and platform input for later milestones unless a
-   separately agreed dependency requires otherwise.
-
-## Working and integration procedure
-
-Start from current `main`, inspect its state and existing worktrees, and create
-a new task-specific branch/worktree as described in [AGENTS.md](AGENTS.md).
-Agree on ownership, interfaces, dependencies, and files before parallel work.
-Do not develop directly on `main` or overwrite existing worktrees or changes.
-Before integration, update the branch from `main` without rewriting history,
-review the diff, and run applicable checks. A single integrator merges from the
-clean `main` worktree, reruns affected checks, and stops if they fail.
-
-Start validation with `swift build --target SimulationCore` and `swift test`;
-use the macOS and iOS Simulator `xcodebuild` commands in [README.md](README.md)
-when package or host integration is affected. Record commands, results, skipped
-checks, and any signing or physical-device limitations.
+- The default test suite is slow (see PLAN.md "Performance").
+- Many merged feature worktrees remain under `/Users/nora/Noirpx-worktrees`;
+  the loop now removes worktrees after their merges, but older ones were left
+  in place. Do not delete worktrees you do not own.
+- Independent core/renderer contract review and physical-iPhone validation
+  remain open.

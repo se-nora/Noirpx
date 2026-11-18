@@ -83,7 +83,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Full test suite passes.
 
 ### interfaces-doc-split: Restructure INTERFACES.md by subsystem
-- status: todo
+- status: done
 - priority: 8
 - track: infra
 - depends: none
@@ -102,6 +102,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Every section heading of the old file maps to a new location (list the
     mapping in the delivery notes); no normative rule is lost.
   - INTERFACES.md is an index under 80 lines; all repository links resolve.
+- result: Restructured 1,532-line INTERFACES.md into 11 subsystem files under docs/interfaces/ + 36-line index; all 55 H2+ headings preserved with 4 retitles per spec; stale blocks removed (save "not implemented", spell status, coding-stage sections); directional refs rewritten to cross-file links; known defects preserved; no version bump (docs-only)
 
 ## Performance
 

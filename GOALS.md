@@ -108,7 +108,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Performance
 
 ### test-suite-speed: Make the default test suite fast
-- status: todo
+- status: done
 - priority: 10
 - track: perf
 - depends: none
@@ -133,6 +133,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     takes more than 3 s in Debug (record the timing table before and after).
   - Slow tier passes with `NOIRPX_SLOW_TESTS=1`, and every previously tested
     seed/size combination still runs in that tier.
+- result: Default tier 22s (22s Release parallel, 441 tests, max 2.8s); slow tier 312s (all matrices); merged in a52a19b
 
 ### sim-benchmark-harness: Repeatable Release simulation benchmark
 - status: todo

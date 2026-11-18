@@ -97,10 +97,13 @@ table and the pillars. Keep the table current when goals land.
   gameplay. These are hypotheses until measured on the selected physical
   devices (M4 MacBook Air, iPhone 16 Pro) in Release. Local Mac numbers are
   local results, not iPhone evidence.
-- **Development loop:** default `swift test --parallel` tier at most 60 s wall
-  time with a warm build on the development Mac; no default-tier test over 3 s
-  in Debug; a no-change rerun of `scripts/checks.sh --quick` starts tests
-  within 5 s. Exhaustive matrices belong to an opt-in slow tier.
+- **Development loop:** default `swift test --parallel -c release` tier at most
+  60 s wall time with a warm build on the development Mac; no default-tier
+  test over 3 s in Release; a no-change rerun of `scripts/checks.sh --quick`
+  starts tests within 5 s. Exhaustive matrices belong to an opt-in slow tier.
+  Unit tests run in Release configuration by default (`scripts/checks.sh`,
+  `scripts/test-timings.sh`, the `Noirpx` scheme Test action, and
+  `ParallelTestPlan.xctestplan`).
 
 ### Baselines (development Mac: Apple M3, 8 cores, macOS 27.2.1, Xcode 27.2, Debug)
 

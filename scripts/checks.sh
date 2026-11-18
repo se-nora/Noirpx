@@ -17,19 +17,19 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 case "$mode" in
   --quick)
-    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
-    swift test --parallel --scratch-path "$SCRATCH"
+    echo "=== swift test --parallel -c release --scratch-path $SCRATCH ==="
+    swift test --parallel -c release --scratch-path "$SCRATCH"
     ;;
   --full)
-    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
-    swift test --parallel --scratch-path "$SCRATCH"
+    echo "=== swift test --parallel -c release --scratch-path $SCRATCH ==="
+    swift test --parallel -c release --scratch-path "$SCRATCH"
     echo
     echo "=== xcodebuild macOS Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=macOS' build
     ;;
   --ios)
-    echo "=== swift test --parallel --scratch-path $SCRATCH ==="
-    swift test --parallel --scratch-path "$SCRATCH"
+    echo "=== swift test --parallel -c release --scratch-path $SCRATCH ==="
+    swift test --parallel -c release --scratch-path "$SCRATCH"
     echo
     echo "=== xcodebuild iOS Simulator Debug ==="
     xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build

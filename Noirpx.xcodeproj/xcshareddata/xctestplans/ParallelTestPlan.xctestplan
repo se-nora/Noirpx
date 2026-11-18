@@ -10,7 +10,7 @@
          parallelizable = "YES"
          skipTestExecution = "NO"
          testTargetID = "com.noirpx.SimulationCoreTests"
-         buildConfiguration = "Debug">
+         buildConfiguration = "Release">
          <TestsToSkip>
             <TestIdentifier
                identifier = "CaveSpawnReplayTests"
@@ -23,7 +23,7 @@
          parallelizable = "YES"
          skipTestExecution = "NO"
          testTargetID = "com.noirpx.GamePresentationTests"
-         buildConfiguration = "Debug">
+         buildConfiguration = "Release">
          <TestsToSkip>
             <TestIdentifier
                identifier = "ScopedRegistrationTests"

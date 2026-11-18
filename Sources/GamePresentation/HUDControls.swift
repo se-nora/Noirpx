@@ -18,6 +18,8 @@ public struct HUDControls: View {
     private let wand: Wand
     private let manaPool: ManaPool
     private let onCycleWandSlot: (Int) -> Void
+    private let health: Int
+    private let maxHealth: Int
 
     public init(selected: SimulationCore.Material, restart: @escaping () -> Void, newRun: @escaping () -> Void,
                 diagnostics: @escaping () -> Void, help: @escaping () -> Void,
@@ -28,7 +30,9 @@ public struct HUDControls: View {
                 showSpellCraftingAllowed: Bool = false,
                 wand: Wand = Wand(),
                 manaPool: ManaPool = ManaPool(),
-                onCycleWandSlot: @escaping (Int) -> Void = { _ in }) {
+                onCycleWandSlot: @escaping (Int) -> Void = { _ in },
+                health: Int = 3,
+                maxHealth: Int = 3) {
         self.selected = selected
         self.restart = restart
         self.newRun = newRun
@@ -42,6 +46,8 @@ public struct HUDControls: View {
         self.wand = wand
         self.manaPool = manaPool
         self.onCycleWandSlot = onCycleWandSlot
+        self.health = health
+        self.maxHealth = maxHealth
     }
 
     /// Discovered drawable materials, sorted by Material.rawValue for stable order.
@@ -58,6 +64,14 @@ public struct HUDControls: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 5) {
+            // Health bar
+            HStack(spacing: 2) {
+                ForEach(0..<maxHealth, id: \.self) { index in
+                    Text(index < health ? "❤️" : "♡")
+                        .font(.system(size: 16))
+                        .foregroundStyle(index < health ? Color.red : Color.gray.opacity(0.4))
+                }
+            }
             // Wand slot bar + mana
             WandSlotHUD(wand: wand, manaPool: manaPool, onCycleSlot: onCycleWandSlot)
 

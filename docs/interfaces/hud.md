@@ -22,8 +22,8 @@ and refresh the renderer. The sequence is local, with no seed entry or save.
 
 - **Outcome UI (HUD):**
   - `.playing`: "Descend the shaft. Reach the bottom."
-  - `.fell`: Red bold "You fell!"
-  - `.fell`: Orange bold "You fell too far. Try again!"
+  - `.died`: Red bold "You died!"
+  - `.died`: Orange bold "You died! Try again!"
 
 ## HUD Integration
 

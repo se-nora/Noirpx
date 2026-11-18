@@ -3,7 +3,7 @@
 public struct CaveRun {
     public enum Outcome: Equatable, Sendable {
         case playing
-        case fell
+        case died
     }
 
     public let seed: UInt64
@@ -12,6 +12,10 @@ public struct CaveRun {
     public private(set) var character: FixtureCharacter
     public private(set) var outcome: Outcome = .playing
     public private(set) var simulation: Simulation
+
+    public let maxHealth: Int = 3
+    public private(set) var health: Int = 3
+    public private(set) var damageProtectionTimer: Int = 0
 
     internal private(set) var fallLimit: Int
 
@@ -59,7 +63,7 @@ public struct CaveRun {
         self.fallLimit = world.spawn.y - termination.descent - 4
     }
 
-    /// Advances one tick. Order: material tick → character advance → outcome checks.
+    /// Advances one tick. Order: material tick → character advance → damage checks → outcome checks.
     /// Terminal outcomes freeze further input and paint.
     public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
@@ -67,15 +71,81 @@ public struct CaveRun {
         // 1. Material tick
         try simulation.advance(activeChunks: activeChunks)
 
-        // 2. Character physics on completed material tick
+        // 2. Capture pre-advance grounded state for fall-damage transition detection
+        let wasGrounded = character.grounded
+
+        // 3. Character physics on completed material tick (sets lastLandingImpactVelocity on landing)
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
 
-        // 3. Outcome checks (order matters)
-        // 3a. Fell check (uses fallLimit with margin)
+        // 4. Decrement damage protection timer on playing ticks
+        if damageProtectionTimer > 0 {
+            damageProtectionTimer -= 1
+        }
+
+        // 5. Material damage (fire, lava, acid overlap on body cells)
+        if damageProtectionTimer == 0 {
+            let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
+            let thermalStateAt: (CellPosition) throws -> ThermalCellState = { try simulation.thermalState(at: $0) }
+            if CaveRun.touchesHazard(character.position, materialAt: materialAt, thermalStateAt: thermalStateAt) {
+                health = max(health - 1, 0)
+                damageProtectionTimer = 30
+                if health == 0 {
+                    outcome = .died
+                    return
+                }
+            }
+        }
+
+        // 6. Fall damage (airborne → grounded transition while falling)
+        if !wasGrounded && character.grounded {
+            let impactSpeed = character.lastLandingImpactVelocity
+            var fallDamage = 0
+            if impactSpeed >= 12 { fallDamage = 3 }
+            else if impactSpeed > 10 { fallDamage = 2 }
+            else if impactSpeed > 8 { fallDamage = 1 }
+            if fallDamage > 0 {
+                health = max(health - fallDamage, 0)
+                damageProtectionTimer = 30
+                if health == 0 {
+                    outcome = .died
+                    return
+                }
+            }
+        }
+
+        // 7. Fall-limit breach — instant death
         if character.position.y <= fallLimit {
-            outcome = .fell
+            outcome = .died
             return
         }
+    }
+
+    /// Checks if character body overlaps any hazardous material (fire, lava, acid) at its current position.
+    static func touchesHazard(_ position: CellPosition,
+                              materialAt: (CellPosition) -> Material,
+                              thermalStateAt: (CellPosition) throws -> ThermalCellState) -> Bool {
+        for y in position.y..<(position.y + FixtureCharacter.height) {
+            for x in position.x..<(position.x + FixtureCharacter.width) {
+                let cell = CellPosition(x: x, y: y)
+                guard Simulation.coordinateBounds.contains(cell.x), Simulation.coordinateBounds.contains(cell.y) else { continue }
+                let mat = materialAt(cell)
+                switch mat {
+                case .fire:
+                    return true
+                case .lava:
+                    return true
+                case .acid:
+                    return true
+                case .oil:
+                    if (try? thermalStateAt(cell))?.isBurning ?? false { return true }
+                case .pitch:
+                    if (try? thermalStateAt(cell))?.isBurning ?? false { return true }
+                default:
+                    break
+                }
+            }
+        }
+        return false
     }
 
     /// Paints a material for the next tick. Disabled after terminal outcome.

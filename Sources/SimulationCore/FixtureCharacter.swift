@@ -6,7 +6,8 @@ public struct FixtureCharacter: Equatable, Sendable {
 
     public private(set) var position: CellPosition
     public private(set) var grounded = false
-    internal var verticalVelocity = 0
+    public private(set) var verticalVelocity = 0
+    public private(set) var lastLandingImpactVelocity = 0
     internal var verticalRemainder = 0
 
     /// Camera center for viewport tracking (body center).
@@ -58,6 +59,7 @@ public struct FixtureCharacter: Equatable, Sendable {
 
         grounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
         if grounded && verticalVelocity <= 0 {
+            lastLandingImpactVelocity = abs(verticalVelocity)
             verticalVelocity = 0
             verticalRemainder = 0
         }

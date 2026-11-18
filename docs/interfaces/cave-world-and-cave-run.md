@@ -120,8 +120,8 @@ Each `advance(horizontal:jump:)` call executes in this exact order:
    deterministic physics tick on the active region (default: all chunks).
 2. **Character advance**: `character.advance(snapshot: horizontal: jump:)` on
    the completed snapshot.
-3. **Fell check**: `character.position.y <= fallLimit` → `.fell`.
-4. **Fall check**: `character.position.y <= fallLimit` → `.fell`.
+3. **Fall-limit check**: `character.position.y <= fallLimit` → `.died`.
+4. **Fall-limit check**: `character.position.y <= fallLimit` → `.died`.
 
 Once `outcome != .playing`, further `advance` calls are no-ops (input frozen,
 paint disabled by host). Insufficient descent (grounded mid-shaft) is detected

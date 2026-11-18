@@ -79,8 +79,8 @@ struct HostView: View {
                     Text("Tick \(run.simulation.snapshot.tick)")
                     let depth = run.world.spawn.y - run.character.position.y
                     Text("Depth \(depth)")
-                    if run.outcome == .fell {
-                        Text("You fell too far. Try again!").foregroundStyle(.orange).fontWeight(.bold)
+                    if run.outcome == .died {
+                        Text("You died!").foregroundStyle(.red).fontWeight(.bold)
                     } else {
                         Text("Descend the shaft.")
                     }
@@ -97,7 +97,9 @@ struct HostView: View {
                             showSpellCraftingAllowed: model.isCraftingAllowed,
                             wand: model.wandController.wand,
                             manaPool: model.wandController.manaPool,
-                            onCycleWandSlot: { direction in model.cycleWandSlot(direction) })
+                            onCycleWandSlot: { direction in model.cycleWandSlot(direction) },
+                            health: model.caveRun?.health ?? 3,
+                            maxHealth: model.caveRun?.maxHealth ?? 3)
                 Text("Paint: drag; keys 1–9, 0 (discovered materials)")
                 Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
                 // Spell crafting HUD (only presented in safe zones)

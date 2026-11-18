@@ -39,10 +39,10 @@ overall_start="$(now)"
 
 case "$mode" in
   --quick)
-    run_step "swift test" swift test --parallel --scratch-path "$SCRATCH"
+    run_step "swift test" swift test --parallel -c release --scratch-path "$SCRATCH"
     ;;
   --full)
-    run_step "swift test" swift test --parallel --scratch-path "$SCRATCH"
+    run_step "swift test" swift test --parallel -c release --scratch-path "$SCRATCH"
     run_step "xcodebuild macOS Debug" \
         xcodebuild -project Noirpx.xcodeproj -scheme Noirpx \
         -configuration Debug -destination 'platform=macOS,arch=arm64' \

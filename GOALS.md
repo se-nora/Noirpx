@@ -44,7 +44,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### checks-warm-builds: Reuse build products in the check script
-- status: todo
+- status: done
 - priority: 5
 - track: infra
 - depends: none
@@ -62,6 +62,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     starts tests within 5 s of invocation (record both runs' timings).
   - Two worktrees can run checks concurrently without lock contention.
   - Documentation matches the script.
+- result: merged 2c8d1a3; cold 38s/warm 20s/first-test <1s; concurrent worktrees exit 0 (49s wall); --full/--ios BUILD SUCCEEDED; README/docs match
 
 ### host-split: Split the Apple host into focused files
 - status: done
@@ -534,3 +535,23 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - acceptance:
   - Tests: deterministic on-demand generation, unload/reload equality, memory
     bound; benchmark shows steady tick time while descending.
+
+### hud-material-discovery: HUD material discovery and scroll replaces material picker
+- status: todo
+- priority: 13
+- track: noita
+- depends: none
+- areas: hud
+- why: The material picker is a separate list that takes screen space and
+  duplicates the drawing selection. A compact HUD bar with discovered materials
+  that scrolls is more Noita-like and keeps the viewport clear.
+- scope: Replace the material picker with a two-line HUD bar showing discovered
+  materials. The bar scrolls horizontally when more materials are discovered
+  than fit. Items are selectable for drawing (tap/click to set the active draw
+  material). Remove the separate drawing-material list/view entirely. The HUD
+  bar shows only materials the player has discovered (picked up or seen).
+- acceptance:
+  - The HUD bar renders at most two rows of material icons and scrolls.
+  - Tapping/clicking a material in the bar sets it as the active draw material.
+  - The old material picker and drawing selection list are removed.
+  - Cave Run plays with the new HUD; no separate picker view remains (screenshot).

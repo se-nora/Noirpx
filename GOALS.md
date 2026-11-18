@@ -106,6 +106,35 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - INTERFACES.md is an index under 80 lines; all repository links resolve.
 - result: Restructured 1,532-line INTERFACES.md into 11 subsystem files under docs/interfaces/ + 36-line index; all 55 H2+ headings preserved with 4 retitles per spec; stale blocks removed (save "not implemented", spell status, coding-stage sections); directional refs rewritten to cross-file links; known defects preserved; no version bump (docs-only)
 
+### capture-hud: Include HUD overlay in CaptureComparison videos
+- status: todo
+- priority: 9
+- track: infra
+- depends: none
+- areas: renderer, hud, tests-infra
+- why: The headless CaptureComparison tool outputs raw simulation frames for
+  video comparison and telegram reports, but the HUD (health, depth, seed,
+  wand stats, material bar, diagnostics) is not included. Adding the HUD makes
+  reported videos immediately readable without cross-referencing logs.
+- scope: Extend `Sources/CaptureComparison/main.swift` to composite the HUD
+  onto captured frames. Reuse `GamePresentation` HUD view logic (or a
+  headless equivalent) to render the same HUD state shown in Cave Run:
+  version, seed, size, position, tick, depth, outcome banner, material/wand
+  bar, crafting grid when open, FPS/chunks, and error messages. Add a
+  `--hud` flag to enable it (default off for backward compatibility). Keep
+  the capture headless (no SwiftUI window); render HUD via an offscreen
+  Metal or CoreGraphics pass composited over the simulation pixels.
+- acceptance:
+  - `--hud` flag produces frames with HUD visible at the same layout as the
+    live app (top-left scrollable panel, bottom material name, iOS buttons
+    excluded).
+  - Beacon and Cave world captures both support the flag.
+  - Frame dimensions and pixel format unchanged; existing `--info` output
+    still matches.
+  - A new test (or updated capture-comparison test) verifies HUD pixels are
+    non-empty in a known region for a fixed seed.
+  - No changes to the live app's HUD rendering or behavior.
+
 ## Performance
 
 ### test-suite-speed: Make the default test suite fast

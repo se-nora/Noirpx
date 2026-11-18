@@ -1,6 +1,6 @@
 #!/bin/sh
 # scripts/test-timings.sh
-# Runs swift test --parallel and prints a sorted timing table plus total wall time.
+# Runs swift test --parallel -c release and prints a sorted timing table plus total wall time.
 # Usage: ./scripts/test-timings.sh [--slow] [--scratch-path DIR]
 
 set -eu
@@ -18,13 +18,13 @@ done
 XUNIT="${TMPDIR:-/tmp}/noirpx-timings.$$.xml"
 trap 'rm -f "$XUNIT"' EXIT
 
-echo "=== Running swift test --parallel (slow=$SLOW) ==="
+echo "=== Running swift test --parallel -c release (slow=$SLOW) ==="
 START=$(date +%s)
 STATUS=0
 if [ $SLOW -eq 1 ]; then
-    NOIRPX_SLOW_TESTS=1 swift test --parallel $SCRATCH --xunit-output "$XUNIT" || STATUS=$?
+    NOIRPX_SLOW_TESTS=1 swift test --parallel -c release $SCRATCH --xunit-output "$XUNIT" || STATUS=$?
 else
-    swift test --parallel $SCRATCH --xunit-output "$XUNIT" || STATUS=$?
+    swift test --parallel -c release $SCRATCH --xunit-output "$XUNIT" || STATUS=$?
 fi
 END=$(date +%s)
 ELAPSED=$((END - START))

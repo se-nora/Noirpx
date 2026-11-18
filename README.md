@@ -67,7 +67,7 @@ From the repository root with Xcode selected by `xcode-select`:
 
 ```sh
 swift build --target SimulationCore
-swift test --parallel
+swift test --parallel -c release
 xcodebuild -project Noirpx.xcodeproj -scheme Noirpx -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
@@ -79,7 +79,7 @@ open DerivedData/mac/Build/Products/Debug/Noirpx.app
 The test suite has two tiers to keep the development loop fast while preserving
 exhaustive coverage:
 
-**Default tier** — runs on every loop stage (`swift test --parallel`):
+**Default tier** — runs on every loop stage (`swift test --parallel -c release`):
 - Completes in ≤ 22 s wall time (warm build, development Mac)
 - No single test exceeds 3 s
 - Covers a small representative subset of seed/size combinations
@@ -87,7 +87,7 @@ exhaustive coverage:
 
 **Slow tier** — runs before delivering sim-rules, sim-engine, or worldgen goals:
 ```sh
-NOIRPX_SLOW_TESTS=1 swift test --parallel
+NOIRPX_SLOW_TESTS=1 swift test --parallel -c release
 ```
 - Runs all exhaustive matrices (64 seeds × 2 sizes for cave generation, 4096
   seeds for beacon courses, 4096 warden seeds, 4096 bounded-generation
@@ -108,7 +108,11 @@ goal worktree. The full suite currently takes several minutes in slow tier;
 see PLAN.md "Performance" for the measured baseline and the `test-suite-speed`
 goal.
 
-`swift test --parallel` distributes individual tests across worker
+All unit tests run in **Release** configuration by default:
+`scripts/checks.sh`, `scripts/test-timings.sh`, the `Noirpx` scheme's Test
+action, and `ParallelTestPlan.xctestplan` all use Release.
+
+`swift test --parallel -c release` distributes individual tests across worker
 processes, so the slowest single test bounds its wall time. The Xcode test plan
 `Noirpx.xcodeproj/xcshareddata/xctestplans/ParallelTestPlan.xctestplan` runs
 classes in parallel and serializes the classes with shared state:

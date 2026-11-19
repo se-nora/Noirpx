@@ -78,6 +78,17 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         // rasterizes to the same pixels, independent of display callback count.
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
                                             frame: snapshot.tick)
+        // Emissive+player light map with radial falloff (deterministic, snapshot-only).
+        let lightPixels = FixturePixels.lightMap(snapshot: snapshot, viewport: viewport, character: character)
+        guard let lightTexture = device.makeTexture(descriptor: textureDescriptor) else {
+            report("Could not create light map texture.")
+            return
+        }
+        lightPixels.withUnsafeBytes { bytes in
+            lightTexture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
+                                 mipmapLevel: 0, withBytes: bytes.baseAddress!,
+                                 bytesPerRow: viewport.columns * 4)
+        }
         // Draw projectile overlay on top of rasterized frame.
         var mutablePixels = frame.pixels
         drawProjectiles(on: &mutablePixels, viewport: viewport, projectiles: snapshot.projectiles)
@@ -90,6 +101,9 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
                                         width: viewport.width, height: viewport.height, znear: 0, zfar: 1))
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentTexture(texture, index: 0)
+        encoder.setFragmentTexture(lightTexture, index: 1)
+        var ambient: Float = 0.15
+        encoder.setFragmentBytes(&ambient, length: MemoryLayout<Float>.size, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
         buffer.present(drawable)
@@ -141,10 +155,17 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         float2 uvs[] = { float2(0, 1), float2(2, 1), float2(0, -1) };
         return { float4(positions[id], 0, 1), uvs[id] };
     }
-    fragment float4 fragmentMain(VertexOut in [[stage_in]], texture2d<float> image [[texture(0)]]) {
+    fragment float4 fragmentMain(VertexOut in [[stage_in]],
+                                  texture2d<float> image [[texture(0)]],
+                                  texture2d<float> lightMap [[texture(1)]],
+                                  constant float& ambient [[buffer(0)]]) {
         constexpr sampler nearestSampler(filter::nearest, address::clamp_to_edge);
-        return image.sample(nearestSampler, in.uv);
+        float3 base = image.sample(nearestSampler, in.uv).rgb;
+        float3 light = lightMap.sample(nearestSampler, in.uv).rgb;
+        float3 lit = base * ambient + light;
+        return float4(clamp(lit, 0.0, 1.0), 1.0);
     }
+    """
     /// Draws projectile dots on top of the rasterized pixel buffer.
     /// Projectiles are drawn as 1-pixel points tinted by their primary material.
     private func drawProjectiles(on pixels: inout [UInt8], viewport: FixtureViewport,

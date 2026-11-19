@@ -42,6 +42,8 @@ class MaterialBehavior: @unchecked Sendable {
     var acts: Bool { false }
     var usesDirection: Bool { false }
     var ignitionThreshold: UInt16? { nil }
+    /// Blast resistance: higher = harder to destroy. 0 means never targeted.
+    var hardness: Int { 0 }
 
     func heated(_ state: ThermalCellState, amount: UInt16) -> ThermalCellState {
         guard let threshold = ignitionThreshold, !state.isBurning else { return state }
@@ -88,10 +90,15 @@ struct MaterialAction {
     var moved: [CellPosition] = []
     var thermalTransfers: [(source: CellPosition, destination: CellPosition)] = []
     var thermalWrites: [(CellPosition, ThermalCellState)] = []
+    /// Explosion requests produced by this cell's behavior this tick.
+    /// Drained by Simulation.advance() after the material pass, before the tick is published.
+    var explosions: [ExplosionInput] = []
 }
 
 final class EmptyBehavior: MaterialBehavior, @unchecked Sendable {}
-final class SolidBehavior: MaterialBehavior, @unchecked Sendable {}
+final class SolidBehavior: MaterialBehavior, @unchecked Sendable {
+    override var hardness: Int { 90 }
+}
 
 class MovingBehavior: MaterialBehavior, @unchecked Sendable {
     override var acts: Bool { true }
@@ -152,6 +159,7 @@ class MovingBehavior: MaterialBehavior, @unchecked Sendable {
 }
 
 final class SandBehavior: MovingBehavior, @unchecked Sendable {
+    override var hardness: Int { 30 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .water || material == .oil
     }
@@ -167,6 +175,7 @@ class LiquidMovementBehavior: MovingBehavior, @unchecked Sendable {
 }
 
 final class WaterBehavior: LiquidMovementBehavior, @unchecked Sendable {
+    override var hardness: Int { 5 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .oil && dy < 0
     }
@@ -271,6 +280,7 @@ class FlameBehavior: ReactiveBehavior, @unchecked Sendable {
 }
 
 final class FireBehavior: FlameBehavior, @unchecked Sendable {
+    override var hardness: Int { 0 }
 
     override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
                           direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
@@ -368,11 +378,13 @@ class FlammableBehavior: FlameBehavior, @unchecked Sendable {
 }
 
 final class PitchBehavior: FlammableBehavior, @unchecked Sendable {
+    override var hardness: Int { 10 }
     override var ignitionThreshold: UInt16? { 100 }
 }
 
 final class OilBehavior: FlammableBehavior, @unchecked Sendable {
     private static let movement = LiquidMovementBehavior()
+    override var hardness: Int { 5 }
     override var ignitionThreshold: UInt16? { 80 }
     override var burnoutAge: UInt16 { 48 }
     override var usesDirection: Bool { true }
@@ -432,6 +444,7 @@ final class OilBehavior: FlammableBehavior, @unchecked Sendable {
 final class SteamBehavior: MovingBehavior, @unchecked Sendable {
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
+    override var hardness: Int { 0 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         // Steam rises through liquids like bubbles - can displace water and oil when moving upward
         (material == .water || material == .oil) && dy > 0
@@ -481,6 +494,7 @@ final class LavaBehavior: MaterialBehavior, @unchecked Sendable {
     private static let movement = LiquidMovementBehavior()
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
+    override var hardness: Int { 20 }
     func canDisplace(_ material: Material, dy: Int) -> Bool { false }
 
     override func destinations(source: CellPosition, direction: Int,
@@ -561,6 +575,7 @@ final class LavaBehavior: MaterialBehavior, @unchecked Sendable {
 final class AcidBehavior: LiquidMovementBehavior, @unchecked Sendable {
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
+    override var hardness: Int { 15 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .oil && dy < 0
     }
@@ -596,6 +611,7 @@ final class AcidBehavior: LiquidMovementBehavior, @unchecked Sendable {
 
 final class BloodBehavior: FlammableBehavior, @unchecked Sendable {
     private static let movement = LiquidMovementBehavior()
+    override var hardness: Int { 5 }
     override var ignitionThreshold: UInt16? { 60 }
     override var burnoutAge: UInt16 { 24 }
     override var usesDirection: Bool { true }
@@ -653,6 +669,7 @@ final class BloodBehavior: FlammableBehavior, @unchecked Sendable {
 final class SlimeBehavior: MovingBehavior, @unchecked Sendable {
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
+    override var hardness: Int { 15 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool { false }
     override func offsets(direction: Int) -> [(Int, Int)] {
         [(0, -1), (direction, 0), (-direction, 0)]
@@ -686,6 +703,7 @@ final class SlimeBehavior: MovingBehavior, @unchecked Sendable {
 }
 
 final class IceBehavior: MovingBehavior, @unchecked Sendable {
+    override var hardness: Int { 40 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .water || material == .oil
     }
@@ -747,6 +765,7 @@ final class IceBehavior: MovingBehavior, @unchecked Sendable {
 }
 
 final class GunpowderBehavior: MovingBehavior, @unchecked Sendable {
+    override var hardness: Int { 5 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .water || material == .oil
     }
@@ -754,11 +773,6 @@ final class GunpowderBehavior: MovingBehavior, @unchecked Sendable {
     override var usesDirection: Bool { true }
     override func offsets(direction: Int) -> [(Int, Int)] {
         [(0, -2), (0, -1), (direction, -1), (-direction, -1)]
-    }
-
-    private func fireOrEmpty(_ pos: CellPosition, _ direction: Int) -> Bool {
-        let hash = (pos.x &* 31) ^ (pos.y &* 17) ^ (direction &* 13)
-        return (hash & 1) == 0
     }
 
     override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
@@ -780,33 +794,13 @@ final class GunpowderBehavior: MovingBehavior, @unchecked Sendable {
         }
         if explodes {
             var action = MaterialAction()
-            var candidates: [CellPosition] = []
-            for dy in -3...3 {
-                for dx in -3...3 {
-                    if dx == 0 && dy == 0 { continue }
-                    let t = CellPosition(x: source.x + dx, y: source.y + dy)
-                    guard canVisit(t) else { continue }
-                    candidates.append(t)
-                }
-            }
-            candidates.sort { a, b in
-                let da = abs(a.x - source.x) + abs(a.y - source.y)
-                let db = abs(b.x - source.x) + abs(b.y - source.y)
-                if da != db { return da < db }
-                if a.y != b.y { return a.y < b.y }
-                return a.x < b.x
-            }
-            let selected = Array(candidates.prefix(12))
-            let sourceMat: Material = fireOrEmpty(source, direction) ? .fire : .empty
-            action.writes.append((source, sourceMat))
+            // Enqueue an explosion request instead of directly applying effects.
+            // Explosion will be processed by Simulation.advance after the material pass.
+            action.explosions.append(ExplosionInput(center: source, radius: 3, power: 100))
+            // The gunpowder cell itself is consumed by the explosion logic.
+            action.writes.append((source, .empty))
             action.moved.append(source)
             action.thermalWrites.append((source, .zero))
-            for t in selected {
-                let mat: Material = fireOrEmpty(t, direction) ? .fire : .empty
-                action.writes.append((t, mat))
-                action.moved.append(t)
-                if mat == .fire { action.thermalWrites.append((t, .zero)) }
-            }
             return action
         }
         return super.resolve(source: source, current: .gunpowder, destinations: destinations,
@@ -817,6 +811,7 @@ final class GunpowderBehavior: MovingBehavior, @unchecked Sendable {
 }
 
 final class GoldBehavior: MovingBehavior, @unchecked Sendable {
+    override var hardness: Int { 60 }
     override func canDisplace(_ material: Material, dy: Int) -> Bool {
         material == .water || material == .oil
     }
@@ -830,6 +825,7 @@ final class GoldBehavior: MovingBehavior, @unchecked Sendable {
 final class MagicLiquidBehavior: MaterialBehavior, @unchecked Sendable {
     override var acts: Bool { true }
     override var usesDirection: Bool { true }
+    override var hardness: Int { 10 }
     private static let cycle: [Material: Material] = [
         .solid: .sand, .sand: .water, .water: .oil, .oil: .pitch,
         .pitch: .fire, .fire: .steam, .steam: .empty

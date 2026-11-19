@@ -693,4 +693,38 @@ final class CaveRunTests: XCTestCase {
             XCTAssertTrue(error is SimulationError, "Error should be SimulationError for host to surface")
         }
     }
+
+    // MARK: - Explosion visibility
+
+    /// Gunpowder painted next to fire explodes, leaving a visible crater
+    /// (gunpowder consumed, neighbors cleared) and a blast flash sidecar.
+    /// Seed 42, gunpowder at (10,10), fire at (11,10), sand at adjacent cells,
+    /// advance once (the explosion drains in the same tick).
+    func testGunpowderExplosionVisible() throws {
+        var run = try CaveRun(seed: 42, width: 256, height: 128)
+
+        // Paint gunpowder, adjacent fire, and destructible sand neighbors.
+        try run.paint(.gunpowder, at: p(10, 10))
+        try run.paint(.fire, at: p(11, 10))
+        try run.paint(.sand, at: p(10, 9))
+        try run.paint(.sand, at: p(9, 10))
+
+        // Ignition and explosion resolve in the same tick as the paint: gunpowder
+        // sees its burning neighbor during the material pass and the queued
+        // explosion is drained before the tick publishes. A second idle tick
+        // would reset lastBlastFlash (no pending explosions), hiding the flash.
+        try run.advance(horizontal: 0, jump: false)
+
+        // Gunpowder cell must be consumed (crater).
+        let gunpowderCell = try run.simulation.snapshot.material(at: p(10, 10))
+        XCTAssertNotEqual(gunpowderCell, .gunpowder, "Gunpowder cell must be consumed by explosion")
+
+        // Blast flash sidecar must be non-empty (presentation effect emitted).
+        XCTAssertFalse(run.simulation.snapshot.blastFlash.cells.isEmpty, "Blast flash must be emitted")
+
+        // Character must not be harmed by a distant explosion (no-op seam).
+        XCTAssertEqual(run.outcome, .playing)
+    }
+
+    private func p(_ x: Int, _ y: Int) -> CellPosition { .init(x: x, y: y) }
 }

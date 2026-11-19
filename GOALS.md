@@ -134,6 +134,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - A new test (or updated capture-comparison test) verifies HUD pixels are
     non-empty in a known region for a fixed seed.
   - No changes to the live app's HUD rendering or behavior.
+- result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
 
 ## Performance
 

@@ -273,7 +273,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result:
 
 ### simcore-file-layout: Group SimulationCore by domain and put one type per file
-- status: todo
+- status: done
+- result: Moved Sources/SimulationCore into Materials/World/Entities/Spells/Session/Persistence/Math with one top-level type per file (git mv + pure splits); added scripts/simcore-layout.sh guard wired into checks.sh --quick/--full/--ios, updated docs path refs, patch bump 0.43.0->0.43.1. Verified: swift build green, 512/512 tests pass (baseline 512), public declarations diff empty, layout guard exits 0 with negative controls firing, quick+full checks green on main. Unverified: iOS Simulator build (optional, not run).
 - priority: 6
 - track: infra
 - depends: none

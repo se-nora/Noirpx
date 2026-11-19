@@ -45,7 +45,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### capture-hud-fix: Investigate and fix HUD missing in CaptureComparison videos
-- status: todo
+- status: done
 - priority: 4
 - track: infra
 - depends: none
@@ -57,6 +57,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Automated test asserts non-empty HUD pixels in known regions (top-left panel, bottom pill).
   - Telegram video reports show HUD in cave/beacon captures.
   - No regression in live app HUD rendering.
+- result: Investigation showed the HUD was NOT missing when `--hud` is passed correctly — `--hud` vs no-hud differs in hundreds of pixels on frame 0 (HeadlessHUD.composite is wired in both BeaconCapture and CaveCapture). The real defect was the documented acceptance command and tooling: it used non-existent flags (`--cave`, `--frames`, `--out`), omitted the required `--ref`, and the tool only wrote raw RGBA to stdout (no PNG writer), so it could never produce `/tmp/test.png`. Fix: added an `--out <path>` PNG writer to CaptureComparison (CoreGraphics/ImageIO CGImageDestination, first frame; raw-RGBA stdout path unchanged when `--out` is absent), corrected the GOALS acceptance command to real flags (`--ref HEAD --world-type cave --ticks 10 --out`), and added a fixed-seed capture-path test (`testCapturedFrameContainsHUDForFixedSeed`) asserting HUD pixels appear in the top-left panel and bottom material pill, alongside the existing capture-size tests. MARKETING_VERSION 0.40.0 -> 0.40.1 (tooling-only, no live-app appearance change). Verification: `swift test --parallel -c release` green; `xcodebuild` macOS Debug BUILD SUCCEEDED; acceptance PNG 200x113 with readable HUD (NOIRPX v0.40.1, CAVE RUN, Seed 12345, Size, Tick, Sand pill) and 646 differing pixels vs no-hud (188 panel, 54 pill). Unverified: the downstream Telegram report pipeline was not exercised here (captured frames provably contain HUD; report wiring is downstream and outside this worktree); only macOS was verified (the capture tool is macOS CoreGraphics-based).
 
 ### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
 - status: todo

@@ -1,43 +1,6 @@
 import Dispatch
 import Foundation
 
-public enum ResidentSimulationError: Error, Equatable {
-    case invalidChunkWidth(Int)
-    case invalidBatchSize(Int)
-    case positionOutOfBounds(CellPosition)
-    case commandTickNotInFuture
-    case tickOverflow
-}
-
-public struct ResidentSnapshot: Equatable, Sendable {
-    public let tick: UInt64
-    public let seed: UInt64
-    public let chunkWidth: Int
-    public let chunks: [ChunkSnapshot]
-
-    public func material(at position: CellPosition) throws -> Material {
-        guard ResidentSimulation.contains(position) else {
-            throw ResidentSimulationError.positionOutOfBounds(position)
-        }
-        let (chunk, index) = ResidentSimulation.locate(position, width: chunkWidth)
-        return chunks.first(where: { $0.position == chunk })?.cells[index] ?? .empty
-    }
-
-    public func thermalState(at position: CellPosition) throws -> ThermalCellState {
-        guard ResidentSimulation.contains(position) else {
-            throw ResidentSimulationError.positionOutOfBounds(position)
-        }
-        let (chunk, index) = ResidentSimulation.locate(position, width: chunkWidth)
-        return chunks.first(where: { $0.position == chunk })?.thermalStates[index] ?? .zero
-    }
-}
-
-public struct ResidentTickReport: Equatable, Sendable {
-    public let chunksConsidered: Int
-    public let chunksProcessed: Int
-    public let batchesProcessed: Int
-}
-
 /// A finite resident world with host-budgeted, parallel chunk updates.
 public struct ResidentSimulation {
     public static let xBounds = -32_000...31_999
@@ -192,11 +155,11 @@ public struct ResidentSimulation {
         left.y == right.y ? left.x < right.x : left.y < right.y
     }
 
-    fileprivate static func contains(_ position: CellPosition) -> Bool {
+    static func contains(_ position: CellPosition) -> Bool {
         xBounds.contains(position.x) && yBounds.contains(position.y)
     }
 
-    fileprivate static func locate(_ position: CellPosition, width: Int) -> (ChunkPosition, Int) {
+    static func locate(_ position: CellPosition, width: Int) -> (ChunkPosition, Int) {
         func split(_ value: Int) -> (Int, Int) {
             let quotient = value / width
             let remainder = value % width
@@ -288,7 +251,7 @@ public struct ResidentSimulation {
     }
 
     /// Applies explosions queued by material behaviors within this tick.
-    /// Bounded by maxChainDepth and maxBlastCellsPerTick (from ExplosionPrimitive).
+    /// Bounded by maxChainDepth and maxBlastCellsPerTick (from ExplosionConstants).
     private mutating func processResidentExplosions(
         tick: UInt64,
         pending: inout [ExplosionInput],
@@ -445,34 +408,34 @@ public struct ResidentSimulation {
         value = (value ^ (value >> 27)) &* 0x94d049bb133111eb
         return value ^ (value >> 31)
     }
-}
 
-private struct ResidentProposal: Sendable {
-    let source: CellPosition
-    let material: Material
-    let destinations: [CellPosition]
-    let direction: Int
-    let secondary: [CellPosition]
-}
-
-// Each worker publishes one result through the lock; the owner reads after all workers finish.
-private final class ProposalBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [[ResidentProposal]]
-
-    init(count: Int) {
-        values = Array(repeating: [], count: count)
+    private struct ResidentProposal: Sendable {
+        let source: CellPosition
+        let material: Material
+        let destinations: [CellPosition]
+        let direction: Int
+        let secondary: [CellPosition]
     }
 
-    func set(_ proposals: [ResidentProposal], at index: Int) {
-        lock.lock()
-        values[index] = proposals
-        lock.unlock()
-    }
+    // Each worker publishes one result through the lock; the owner reads after all workers finish.
+    private final class ProposalBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [[ResidentProposal]]
 
-    func all() -> [[ResidentProposal]] {
-        lock.lock()
-        defer { lock.unlock() }
-        return values
+        init(count: Int) {
+            values = Array(repeating: [], count: count)
+        }
+
+        func set(_ proposals: [ResidentProposal], at index: Int) {
+            lock.lock()
+            values[index] = proposals
+            lock.unlock()
+        }
+
+        func all() -> [[ResidentProposal]] {
+            lock.lock()
+            defer { lock.unlock() }
+            return values
+        }
     }
 }

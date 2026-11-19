@@ -3,50 +3,6 @@
 /// Stamping into a `Simulation` uses `enqueue` (the only public mutation API)
 /// in chunked batches so no giant intermediate command array is retained.
 
-public struct CaveWorldSize: Equatable, Sendable {
-    public let width: Int
-    public let height: Int
-
-    public init(width: Int, height: Int) {
-        // Keep the generated world comfortably inside the simulation's coordinate
-        // bounds and bound memory on the host.
-        self.width = max(8, min(width, 1024))
-        self.height = max(8, min(height, 1024))
-    }
-}
-
-public struct CaveWorldExtents: Equatable, Sendable {
-    public let minX: Int
-    public let maxX: Int
-    public let minY: Int
-    public let maxY: Int
-
-    public var width: Int { maxX - minX + 1 }
-    public var height: Int { maxY - minY + 1 }
-}
-
-public struct CaveWorld: Equatable, Sendable {
-    public let seed: UInt64
-    public let size: CaveWorldSize
-    public let extents: CaveWorldExtents
-    public let spawn: CellPosition
-    public let goal: CellPosition
-    /// Non-empty cells only; empty space is implicit.
-    public let cells: [CellPosition: Material]
-
-    public func material(at position: CellPosition) -> Material {
-        cells[position] ?? .empty
-    }
-
-    public var materialCounts: [Material: Int] {
-        var counts: [Material: Int] = [:]
-        for material in cells.values {
-            counts[material, default: 0] += 1
-        }
-        return counts
-    }
-}
-
 public struct CaveWorldGenerator: Sendable {
     public let seed: UInt64
     public let size: CaveWorldSize

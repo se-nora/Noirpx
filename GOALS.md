@@ -167,45 +167,49 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - No changes to the live app's HUD rendering or behavior.
 - result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
 
-### hud-snapshot-proof: Real-HUD screenshots in merge reports
-- status: dropped
+### hud-snapshot-proof: Render the real HUD for merge reports
+- status: todo
 - priority: 10
 - track: infra
 - depends: none
 - areas: hud,tests-infra
-- why: Merge reports only show the headless capture of the simulation with a
-  reduced HUD overlay, so HUD work is reported with halves that look the same.
-- result: Dropped before it started. The loop's notifier now launches the real
-  app (it boots straight into a seeded Cave Run), captures its window with
-  `screencapture`, and reports before/after HUD screenshots. That is the actual
-  HUD with no game-repository change, so an offscreen renderer would duplicate
-  it with less fidelity.
-
-### hud-window-fit: Open the macOS window large enough to show the whole HUD
-- status: todo
-- priority: 10
-- track: noita
-- depends: none
-- areas: hud
-- why: The macOS window opens at 900x450, while `HUDScrollViewport` caps the HUD
-  at the window height, so the lower half of the HUD (health, wand row, the
-  material bar, and the action buttons) is out of view until the player scrolls.
-  A first-time player does not see the unified material bar at all, and merge
-  reports that screenshot the real window show a clipped HUD.
+- why: Merge reports show the headless `CaptureComparison` overlay, which
+  reimplements a reduced HUD and cannot show `HUDControls`, the crafting panel,
+  or the real host layout. HUD work therefore arrives as before/after videos
+  whose halves look identical. Capturing the running app's window is not an
+  option for the unattended loop: macOS denies `screencapture` to the automation
+  host (no Screen Recording grant) and denies synthetic keystrokes, and both are
+  per-binary permissions that a Homebrew upgrade resets. Rendering the app's own
+  HUD view offscreen needs neither, and is deterministic.
 - scope: |
-  Give the `WindowGroup` a macOS default size that fits the whole HUD on a
-  1470x923 display (about 1100x900), keep the window freely resizable, and leave
-  the HUD layout, the scroll viewport, and the iOS presentation unchanged. Do
-  not move or restyle HUD elements.
+  Extract the HUD composition that is currently inline in
+  `AppleHost/HostView.swift` (the `HUDScrollViewport` + `VStack` block: version
+  and title lines, run readouts, `HUDControls`, paint/wand lines, crafting
+  panel, status lines) into a `HUDOverlay` view in `Sources/GamePresentation`
+  that takes the same values and closures, and have `HostView` mount it with no
+  visual or behavioural change. Add an executable target `HUDSnapshot`
+  (`SimulationCore` + `GamePresentation`) that builds a seeded Cave Run
+  fixture, mounts `HUDOverlay` in an offscreen `NSHostingView` on macOS, and
+  writes a PNG: `HUDSnapshot --ref <sha> --worktree <path> --out <png>
+  [--seed N] [--tick N] [--material M]`. Choose a canvas large enough that the
+  whole HUD is visible without scrolling, and print the size it used. No app
+  launch flag, no synthesized input, no accessibility or screen-recording
+  permission, no new dependency, no Metal device.
 - acceptance: |
-  - Launching the macOS app shows version, run readouts, health, levitation,
-    wand row, mana, the unified material bar, and Restart/New Run/Craft/Help
-    without scrolling at the default window size.
-  - Resizing the window smaller still lets the HUD scroll; nothing is clipped
-    permanently.
-  - iOS layout unchanged (build only, no device per AGENTS.md).
-  - Minor version bump, macOS Debug build, launch, and a window screenshot as
-    evidence.
+  - `swift build -c release --product HUDSnapshot` succeeds and
+    `HUDSnapshot --ref <sha> --worktree <wt> --out hud.png` writes a non-empty
+    PNG that is the real HUD: version line, seed/size/pos/tick/depth readouts,
+    health, levitation, wand row, mana, the unified material bar with Erase and
+    discovered swatches, and the paint/wand lines.
+  - The whole HUD fits the PNG without scrolling, so a scrolled-out control
+    cannot silently disappear from the proof.
+  - `HostView` renders `HUDOverlay`; no HUD composition is duplicated between
+    the host and the snapshot tool.
+  - Deterministic: two runs with the same ref, seed, and tick produce identical
+    PNGs.
+  - Focused test asserts a fixture reaches the requested tick and that
+    `HUDOverlay` renders to a non-empty image; existing HUD suites stay green.
+  - The live app keeps its current appearance (macOS build and launch).
 - result:
 
 ## Performance

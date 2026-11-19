@@ -566,7 +566,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     bound; benchmark shows steady tick time while descending.
 
 ### hud-material-discovery: HUD material discovery and scroll replaces material picker
-- status: todo
+- status: done
 - priority: 13
 - track: noita
 - depends: none
@@ -584,3 +584,4 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tapping/clicking a material in the bar sets it as the active draw material.
   - The old material picker and drawing selection list are removed.
   - Cave Run plays with the new HUD; no separate picker view remains (screenshot).
+- result: Merged in commit 79961de. All 450 tests pass (swift test --parallel -c release); macOS Debug xcodebuild build succeeds. Click test verified via synthesized mouse events on FocusRingView buttons.

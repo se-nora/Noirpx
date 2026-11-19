@@ -314,6 +314,19 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     (screenshot).
   - Character damage application is deferred to player-health (no health bar,
     no death outcome in this goal).
+- result: Explosion primitive merged in 484ae35: ExplosionPrimitive with radius
+  and hardness rules (rock resists, gunpowder hardness 5), chained gunpowder
+  blasts, resident-mode explosion drain, Simulation.lastExplosionDamage /
+  lastBlastFlash / pendingExplosions, blast flash excluded from the snapshot
+  digest, SaveCodec rulesVersion 5->6. ExplosionPrimitiveTests 5/5 pass on main
+  (radius and hardness, chain reaction, deterministic replay, chunk edge and
+  negative coordinates, damage events). Unverified: the 'paint fire next to
+  gunpowder and see a hole' screenshot was never captured, and snapshot
+  blastFlash is drawn by no renderer (`grep blastFlash Sources/GamePresentation
+  AppleHost` is empty), so the flash exists only as unconsumed state. The
+  damage event is also unconsumed: player-health merged later without applying
+  it, so explosions cannot hurt the character. Tracked by
+  explosion-impact-feedback.
 
 ### player-health: Health, material damage, and death in Cave Run
 - status: done
@@ -331,6 +344,14 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests for each damage source, burning status, extinguishing, fall
     damage thresholds, and deterministic replay.
   - HUD shows health and status; death shows the outcome banner (screenshot).
+- result: Health, damage, and death merged in 4676a35: 3 max HP with a HUD
+  health bar, damage over time from fire, lava, and acid gated by a protection
+  timer, fall damage by impact speed replacing the instant 'fell' outcome, and
+  a `died` outcome with restart. CaveRunTests 46/46 pass on main, including
+  health start, fire/lava/acid damage, fall-damage gating, health-zero death,
+  and restart restoring health. Unverified: no screenshot of the death banner;
+  `Simulation.lastExplosionDamage` from the explosions goal is never applied to
+  health (see explosion-impact-feedback), so explosions do not damage the player.
 
 ### levitation: Levitation with an energy meter
 - status: done
@@ -402,6 +423,37 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     count.
   - Projectiles remain presentation-only: no snapshot digest change, no new
     save fields.
+
+### explosion-impact-feedback: Apply explosion damage and draw the blast flash
+- status: todo
+- priority: 21
+- track: noita
+- depends: explosions, player-health
+- areas: sim-rules, player, renderer
+- why: The explosions goal records `Simulation.lastExplosionDamage` and
+  `lastBlastFlash`, and its own code comment says health application is deferred
+  to a later goal, but nothing consumes either one. player-health merged
+  afterwards without applying the event, so standing next to exploding gunpowder
+  costs no health, and the promised "visible blast flash" is drawn by no
+  renderer. Two finished goals therefore left a dangling handoff and a dead
+  presentation sidecar.
+- scope: Apply `Simulation.lastExplosionDamage` to character health exactly once
+  per event, scaled by distance from the blast center and routed through the
+  existing damage-protection timer so a chain reaction cannot stack multiple
+  hits in one tick. Draw `snapshot.blastFlash` in `FixturePixels.rasterize` as a
+  presentation-only overlay, reusing the single material color helper. Keep
+  blastFlash out of the snapshot digest and out of the save format.
+- acceptance:
+  - Core tests: damage scales with distance from the center, is skipped while
+    the protection timer is active, can reduce health to zero and produce the
+    `died` outcome, and replays deterministically.
+  - Presentation test: a snapshot carrying blast cells renders those cells in
+    the flash color and clips out-of-viewport cells.
+  - `swift test` and a macOS Debug xcodebuild both pass.
+  - A capture image shows the hole after igniting gunpowder in Cave Run, and a
+    second image shows character health dropping when the blast is adjacent.
+  - `lastExplosionDamage` stays the only cross-goal interface; no new save
+    fields, no digest version change.
 
 ### material-reactions: Data-driven material reactions
 - status: todo
@@ -579,6 +631,13 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     within each material's palette, and the clamped camera never shows cells
     outside the world when the world is larger than the viewport.
   - Before/after CaptureComparison frames of Cave Run.
+- result: Per-cell texture and world-bounded camera merged in c6fb33c: stable
+  4-entry palettes per material keyed by cell hash (static terrain does not
+  flicker, moving cells keep a consistent palette), tick-driven shimmer for
+  liquids and fire, and a camera clamped to world bounds. GamePresentationTests
+  cover per-position determinism, palette membership, and multi-entry texture
+  rather than one flat color per material. Unverified: no before/after
+  CaptureComparison frames are referenced in the delivery record.
 
 ### lighting-glow: Darkness and emissive glow
 - status: todo

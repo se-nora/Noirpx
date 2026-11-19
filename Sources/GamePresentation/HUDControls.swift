@@ -2,6 +2,28 @@
 import SimulationCore
 import SwiftUI
 
+/// Color used to render a material's swatch throughout the HUD palette bar.
+private func materialColor(_ m: SimulationCore.Material) -> Color {
+    switch m {
+    case .sand: return .yellow
+    case .water: return .blue
+    case .fire: return .orange
+    case .steam: return .white
+    case .lava: return .red
+    case .acid: return .green
+    case .blood: return .pink
+    case .gold: return .yellow
+    case .magicLiquid: return .purple
+    case .slime: return .green
+    case .ice: return .cyan
+    case .gunpowder: return .gray
+    case .oil: return .brown
+    case .pitch: return .black
+    case .solid: return .gray
+    case .empty: return .clear
+    }
+}
+
 /// Shared responsive actions and brush palette used by the Apple hosts.
 public struct HUDControls: View {
     private let selected: SimulationCore.Material
@@ -51,11 +73,6 @@ public struct HUDControls: View {
             .sorted { $0.rawValue < $1.rawValue }
     }
 
-    /// Total buttons in the palette row: erase + discovered materials.
-    private var paletteButtonCount: Int {
-        1 + selectableMaterials.count
-    }
-
     public var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             // Wand slot bar + mana
@@ -73,18 +90,21 @@ public struct HUDControls: View {
             if !discoveredMaterials.isEmpty {
                 DiscoveredIngredientsRow(discovered: discoveredMaterials)
             }
-            // Material palette: erase first, then discovered drawable materials
-            ForEach(0..<((paletteButtonCount + 2) / 3), id: \.self) { row in
-                let buttons = paletteButtons.dropFirst(row * 3).prefix(3)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
-                        ForEach(buttons, id: \.id) { materialButton($0) }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(buttons, id: \.id) { materialButton($0) }
+            // Material palette: two-row horizontal bar of discovered drawable materials + Erase
+            ScrollView(.horizontal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(paletteRows.indices, id: \.self) { rowIndex in
+                        let row = paletteRows[rowIndex]
+                        HStack(spacing: 6) {
+                            ForEach(row, id: \.id) { item in
+                                materialIconButton(item)
+                            }
+                        }
                     }
                 }
+                .padding(.horizontal, 2)
             }
+            .scrollIndicators(.automatic)
             // Spell crafting toggle
             if showSpellCraftingAllowed {
                 Button(showSpellCrafting ? "Hide Spells" : "Show Spells", action: onToggleSpellCrafting)
@@ -94,13 +114,13 @@ public struct HUDControls: View {
         }
     }
 
-    /// Palette buttons: erase first, then each discovered drawable material.
-    private var paletteButtons: [PaletteButton] {
-        var result: [PaletteButton] = [
-            PaletteButton(id: "erase", material: .empty, title: MaterialBrush.eraseTitle, keyEquivalent: nil)
+    /// Palette items: Erase first, then each discovered drawable material sorted by rawValue.
+    private var paletteItems: [PaletteItem] {
+        var result: [PaletteItem] = [
+            PaletteItem(id: "erase", material: .empty, title: MaterialBrush.eraseTitle, keyEquivalent: nil)
         ]
         result.append(contentsOf: selectableMaterials.map { mat in
-            PaletteButton(
+            PaletteItem(
                 id: "mat-\(mat.rawValue)",
                 material: mat,
                 title: MaterialBrush.title(for: mat),
@@ -108,6 +128,14 @@ public struct HUDControls: View {
             )
         })
         return result
+    }
+
+    /// Split palette items into up to two rows of up to eight items each.
+    private var paletteRows: [[PaletteItem]] {
+        let count = paletteItems.count
+        guard count > 8 else { return [paletteItems] }
+        let mid = (count + 1) / 2
+        return [Array(paletteItems[0..<mid]), Array(paletteItems[mid...])]
     }
 
     @ViewBuilder private var runButtons: some View {
@@ -121,15 +149,37 @@ public struct HUDControls: View {
     }
 
     @ViewBuilder
-    private func materialButton(_ button: PaletteButton) -> some View {
-        let isSelected = selected == button.material
-        let baseButton = Button(button.title) { select(button.material) }
-            .buttonStyle(.bordered)
-            .tint(isSelected ? .orange : .gray)
-            .accessibilityLabel("\(button.title) material")
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
+    private func materialIconButton(_ item: PaletteItem) -> some View {
+        let isSelected = selected == item.material
+        let swatchColor: Color = item.material == .empty ? .clear : materialColor(item.material)
 
-        if let keyEquiv = button.keyEquivalent {
+        let baseButton = Button(action: { select(item.material) }) {
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(swatchColor)
+                    .frame(width: 14, height: 14)
+                Text(item.title)
+                    .font(.system(.caption2, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(minWidth: 64, minHeight: 36)
+            .padding(.horizontal, 4)
+            .foregroundStyle(.white)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(swatchColor.opacity(isSelected ? 0.35 : 0.15))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? .orange : Color.gray.opacity(0.6), lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel("\(item.title) material")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+        if let keyEquiv = item.keyEquivalent {
             baseButton.keyboardShortcut(keyEquiv, modifiers: [])
         } else {
             baseButton
@@ -137,8 +187,8 @@ public struct HUDControls: View {
     }
 }
 
-/// Erase or material button in the palette.
-private struct PaletteButton {
+/// Erase or material entry in the palette bar.
+private struct PaletteItem {
     let id: String
     let material: SimulationCore.Material
     let title: String
@@ -166,27 +216,6 @@ private struct DiscoveredIngredientsRow: View {
             }
         }
         .frame(height: 28)
-    }
-
-    private func materialColor(_ m: SimulationCore.Material) -> Color {
-        switch m {
-        case .sand: return .yellow
-        case .water: return .blue
-        case .fire: return .orange
-        case .steam: return .white
-        case .lava: return .red
-        case .acid: return .green
-        case .blood: return .pink
-        case .gold: return .yellow
-        case .magicLiquid: return .purple
-        case .slime: return .green
-        case .ice: return .cyan
-        case .gunpowder: return .gray
-        case .oil: return .brown
-        case .pitch: return .black
-        case .solid: return .gray
-        case .empty: return .clear
-        }
     }
 }
 

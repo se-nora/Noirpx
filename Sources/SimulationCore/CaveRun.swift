@@ -67,7 +67,7 @@ public struct CaveRun {
     /// Advances one tick. Order: material tick → capture pre-advance grounded →
     /// character advance → protection-timer decrement → material damage → fall damage →
     /// fall-limit check. Terminal outcomes freeze further input and paint.
-    public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws {
+    public mutating func advance(horizontal: Int, jump: Bool, heldJump: Bool = false, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
 
         // 1. Material tick
@@ -79,7 +79,7 @@ public struct CaveRun {
         // 3. Character physics on the completed snapshot. FixtureCharacter.advance
         //    records lastLandingImpactVelocity on landing (loop collision or post-loop
         //    grounded transition).
-        try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
+        try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump, heldJump: heldJump)
 
         // 4. Decrement damage protection timer on playing ticks
         if damageProtectionTimer > 0 {

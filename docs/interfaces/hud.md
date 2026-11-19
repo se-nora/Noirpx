@@ -31,6 +31,15 @@ represents 1 HP (maxHealth = 3). Filled segments (❤️) show current health; e
 segments (♡) show missing health. The bar is hidden entirely when no run exists
 (`health: Int?` is `nil`).
 
+### Energy Meter (HUD)
+
+A 3-segment levitation energy meter is shown below the heart bar when a
+`CaveRun` exists. Uses a ceiling fill rule: 1..60 → 1 segment, 61..120 → 2,
+121..180 → 3 (maxEnergy = 180). Filled segments (⚡️) are cyan; empty segments
+(⚪️) are gray. The meter is hidden entirely when no run exists (`energy: Int?`
+is `nil`). `HUDControls.energySegments(energy:maxEnergy:)` computes the
+segment state; returns `nil` to hide.
+
 ## HUD Integration
 
 - `GameModel` exposes `wandController` publicly for HUD access.

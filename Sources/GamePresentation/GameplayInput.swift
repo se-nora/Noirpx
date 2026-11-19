@@ -18,10 +18,13 @@ public struct GameplayControls: Equatable {
 public struct GameplayInputResult: Equatable {
     public var horizontal: Int
     public var jump: Bool
+    /// Held jump state (current frame): true while the jump key/button is held down.
+    public var heldJump: Bool
 
-    public init(horizontal: Int, jump: Bool) {
+    public init(horizontal: Int, jump: Bool, heldJump: Bool = false) {
         self.horizontal = horizontal
         self.jump = jump
+        self.heldJump = heldJump
     }
 }
 
@@ -57,7 +60,10 @@ public struct GameplayInput {
 
     public mutating func consumeTick() -> GameplayInputResult {
         let held = (keyboard.right || touch.right ? 1 : 0) - (keyboard.left || touch.left ? 1 : 0)
-        let result = GameplayInputResult(horizontal: held == 0 ? accessibilityHorizontal : held, jump: pendingJump)
+        let heldJump = keyboard.jump || touch.jump
+        let result = GameplayInputResult(horizontal: held == 0 ? accessibilityHorizontal : held,
+                                         jump: pendingJump,
+                                         heldJump: heldJump)
         pendingJump = false
         accessibilityHorizontal = 0
         return result

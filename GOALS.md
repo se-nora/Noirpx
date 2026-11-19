@@ -168,48 +168,86 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
 
 ### hud-snapshot-proof: Render the real HUD for merge reports
-- status: todo
+- status: dropped
 - priority: 10
 - track: infra
 - depends: none
 - areas: hud,tests-infra
 - why: Merge reports show the headless `CaptureComparison` overlay, which
   reimplements a reduced HUD and cannot show `HUDControls`, the crafting panel,
-  or the real host layout. HUD work therefore arrives as before/after videos
-  whose halves look identical. Capturing the running app's window is not an
-  option for the unattended loop: macOS denies `screencapture` to the automation
-  host (no Screen Recording grant) and denies synthetic keystrokes, and both are
-  per-binary permissions that a Homebrew upgrade resets. Rendering the app's own
-  HUD view offscreen needs neither, and is deterministic.
+  or the real host layout.
+- scope: Was: extract the host HUD composition and render it offscreen with
+  `NSHostingView`.
+- acceptance: Was: an `HUDSnapshot` executable writing the real HUD to PNG.
+- result: Dropped before delivery. Building it would have added a second,
+  macOS-only HUD renderer (`NSHostingView`), which is the dependency the project
+  owner does not want. Replaced by `hud-display-list`, which renders the HUD
+  from a platform-independent display list and can therefore be exported
+  headlessly on any host with the same result.
+
+### hud-display-list: Draw the HUD from a platform-independent display list
+- status: todo
+- priority: 5
+- track: infra
+- depends: none
+- areas: hud,tests-infra
+- why: The HUD has two implementations that drift apart. The app draws SwiftUI
+  views (`HUDControls`, `WandSlotHUD`, `CraftingHUD`, inline lines in
+  `AppleHost/HostView.swift`); the headless capture draws a reduced HUD of its
+  own with CoreGraphics/CoreText (`Sources/GamePresentation/HeadlessHUD.swift`,
+  460 lines). Because the two layouts are written twice, headless output cannot
+  show the real HUD, merge reports cannot prove HUD changes, and nothing can
+  export a HUD image without the OS UI toolkit. The HUD should be data first:
+  one layout, rendered by whatever backend the host provides, so a headless
+  render is the same HUD rather than a lookalike.
 - scope: |
-  Extract the HUD composition that is currently inline in
-  `AppleHost/HostView.swift` (the `HUDScrollViewport` + `VStack` block: version
-  and title lines, run readouts, `HUDControls`, paint/wand lines, crafting
-  panel, status lines) into a `HUDOverlay` view in `Sources/GamePresentation`
-  that takes the same values and closures, and have `HostView` mount it with no
-  visual or behavioural change. Add an executable target `HUDSnapshot`
-  (`SimulationCore` + `GamePresentation`) that builds a seeded Cave Run
-  fixture, mounts `HUDOverlay` in an offscreen `NSHostingView` on macOS, and
-  writes a PNG: `HUDSnapshot --ref <sha> --worktree <path> --out <png>
-  [--seed N] [--tick N] [--material M]`. Choose a canvas large enough that the
-  whole HUD is visible without scrolling, and print the size it used. No app
-  launch flag, no synthesized input, no accessibility or screen-recording
-  permission, no new dependency, no Metal device.
+  Add a HUD display list in `Sources/GamePresentation`: a value type listing
+  filled/stroked rects, rounded rects, solid colour swatches, text runs,
+  frames, and clips, expressed with the project's own types (no SwiftUI,
+  AppKit, UIKit, CoreGraphics, CoreText, or Metal types in the model). Add one
+  layout function that turns HUD state into that list for a given canvas size:
+  version and title lines, run readouts (seed, size, position, tick, depth,
+  outcome), hearts, energy, wand slots and mana, the unified material bar with
+  Erase and discovered swatches plus selection, the action buttons, the spell
+  crafting toggle and panel, and the paint/wand/status lines. It covers every
+  HUD element the app currently draws.
+
+  Render the list with two backends. (1) A SwiftUI backend in
+  `Sources/GamePresentation` that `HostView` mounts, keeping the current live
+  appearance on macOS and iOS. (2) A CPU raster backend in pure Swift with a
+  built-in monospaced bitmap font, used for export and tests; it writes RGBA
+  and a PNG without a window server, a device, or an OS drawing API. Delete the
+  duplicate layout in `HeadlessHUD.swift` so `CaptureComparison` composites the
+  shared list instead of its private reduced HUD. Add an executable
+  `HUDRender` (`SimulationCore` + `GamePresentation`): `HUDRender --ref <sha>
+  --out <png> [--seed N] [--tick N] [--width W] [--height H] [--material M]
+  [--json <path>]`, which builds a seeded run fixture, advances to the tick,
+  renders the list, writes the PNG, and can dump the same list as JSON so
+  another tool or platform can reproduce it without linking the game.
 - acceptance: |
-  - `swift build -c release --product HUDSnapshot` succeeds and
-    `HUDSnapshot --ref <sha> --worktree <wt> --out hud.png` writes a non-empty
-    PNG that is the real HUD: version line, seed/size/pos/tick/depth readouts,
-    health, levitation, wand row, mana, the unified material bar with Erase and
-    discovered swatches, and the paint/wand lines.
-  - The whole HUD fits the PNG without scrolling, so a scrolled-out control
-    cannot silently disappear from the proof.
-  - `HostView` renders `HUDOverlay`; no HUD composition is duplicated between
-    the host and the snapshot tool.
-  - Deterministic: two runs with the same ref, seed, and tick produce identical
-    PNGs.
-  - Focused test asserts a fixture reaches the requested tick and that
-    `HUDOverlay` renders to a non-empty image; existing HUD suites stay green.
-  - The live app keeps its current appearance (macOS build and launch).
+  - `swift build -c release --product HUDRender` succeeds and
+    `HUDRender --ref <sha> --seed 42 --tick 300 --width 900 --height 450
+    --out /tmp/hud.png` writes a PNG showing every HUD component: version and
+    title lines, seed/size/position/tick/depth readouts, hearts, energy, wand
+    slots, mana, the material bar with Erase and discovered swatches, all
+    action buttons, the crafting toggle, and the paint/wand lines. The whole
+    HUD fits the image; nothing is clipped or scrolled out of view.
+  - Two runs with the same ref, seed, tick, and size produce byte-identical
+    PNGs, and the JSON dump is identical too.
+  - `--json <path>` writes a stable, documented display-list schema that
+    contains the same rectangle and text values the PNG was rasterized from.
+  - `CaptureComparison --hud` output is produced from the shared list: its
+    image contains the same components as `HUDRender` (no reduced variant
+    remains), and `HeadlessHUD`'s independent layout is gone.
+  - The live app's HUD is the SwiftUI backend over the same list; macOS and iOS
+    build, and the macOS app launches with the current appearance.
+  - The display-list, layout, and raster sources import no SwiftUI, AppKit,
+    UIKit, CoreGraphics, CoreText, or Metal (checked in review and by a test
+    that scans those files for such imports).
+  - Focused tests: a fixture reaches the requested tick; the list for a fixed
+    state contains every component kind; the raster is non-empty with HUD
+    pixels in the expected vertical bands; existing HUD and capture suites stay
+    green.
 - result:
 
 ## Performance

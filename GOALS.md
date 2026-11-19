@@ -28,6 +28,7 @@ indented by two spaces):
 | `scope` | What to build; the Product Owner may narrow it into a smaller first slice. |
 | `acceptance` | Observable criteria the PO and QA check. |
 | `result` | Added at delivery: merge summary and unverified dimensions. |
+| `reopened` | Reason a merged goal must run again (its merge landed broken). The scheduler ignores the existing merge commit and dispatches it. |
 
 Areas: `sim-engine` (Simulation tick loop, chunk storage, snapshots, resident
 mode), `sim-rules` (materials, behaviors, reactions, heat), `worldgen` (cave
@@ -348,6 +349,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 ### projectile-entities: Spells as simulated projectiles
 - status: todo
+- reopened: merge landed a non-compiling MetalRenderer; finish the overlay move and verify
 - priority: 18
 - track: noita
 - depends: host-split
@@ -364,7 +366,6 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: flight path, gravity, collision with solid vs liquid, lifetime
     expiry, deterministic replay, command budget.
   - Casting in Cave Run shows a moving projectile (screenshot sequence).
-- result: Deterministic projectile entities added (FixedPoint Q8, Bresenham segment collision, lifetimeTicks=maxRange*4, speed=budgetPerTick*256/3). ProjectileEntityTests: 9/9 pass. Full suite 492/492 pass, no regressions. Markdown simulation tick loop advances projectiles after materials before tick publish; impact applies RecipeRegistry.blueprintById effect via set(). MetalRenderer draws projectile overlay. WandRay/WandBudget/WandCastProgress/advanceCast/footprintCommands/rayCommands kept public. MARKETING_VERSION 0.38.0 -> 0.39.0. Digest stays v7 (world-only; projectiles presentation-only). Merged into main.
 
 ### material-reactions: Data-driven material reactions
 - status: todo

@@ -28,6 +28,7 @@ indented by two spaces):
 | `scope` | What to build; the Product Owner may narrow it into a smaller first slice. |
 | `acceptance` | Observable criteria the PO and QA check. |
 | `result` | Added at delivery: merge summary and unverified dimensions. |
+| `reopened` | Reason a merged goal must run again (its merge landed broken). The scheduler ignores the existing merge commit and dispatches it. |
 
 Areas: `sim-engine` (Simulation tick loop, chunk storage, snapshots, resident
 mode), `sim-rules` (materials, behaviors, reactions, heat), `worldgen` (cave
@@ -345,6 +346,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: energy drain and recharge rates, ceiling collision, no
     levitation at zero energy, deterministic replay.
   - Playable in Cave Run on macOS (screenshot of meter in use).
+- result: Levitation merged in 2df9107: held jump climbs while energy lasts (max 180 ticks, drain 1/tick, recharge 2/tick grounded, climb cap 1 quarter-cell/tick), wired GameplayInput.heldJump -> CaveRun.advance -> FixtureCharacter.advance, with a 3-segment cyan HUD meter from HUDControls.energySegments. Checks: LevitationTests + CaveRunLevitationIntegrationTests 11/11 pass; swift test --parallel 507/507 on main; macOS app builds and runs at the merge commit and shows the meter at full energy. Unverified: an on-screen frame of the meter draining mid-flight (synthetic keystrokes are blocked by macOS TCC); drain/recharge is covered by unit tests.
 
 ### projectile-entities: Spells as simulated projectiles
 - status: done
@@ -364,7 +366,41 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: flight path, gravity, collision with solid vs liquid, lifetime
     expiry, deterministic replay, command budget.
   - Casting in Cave Run shows a moving projectile (screenshot sequence).
-- result: Deterministic projectile entities added (FixedPoint Q8, Bresenham segment collision, lifetimeTicks=maxRange*4, speed=budgetPerTick*256/3). ProjectileEntityTests: 9/9 pass. Full suite 492/492 pass, no regressions. Markdown simulation tick loop advances projectiles after materials before tick publish; impact applies RecipeRegistry.blueprintById effect via set(). MetalRenderer draws projectile overlay. WandRay/WandBudget/WandCastProgress/advanceCast/footprintCommands/rayCommands kept public. MARKETING_VERSION 0.38.0 -> 0.39.0. Digest stays v7 (world-only; projectiles presentation-only). Merged into main.
+- result: Overlay drawing moved into `FixturePixels.rasterize` (the AppleHost
+  renderer no longer draws projectiles) and the overlay cell conversion fixed
+  (`projectile.position.cell()`). `scripts/checks.sh --full` passed: Swift tests
+  plus macOS Debug xcodebuild. No screenshot of a flying projectile captured.
+
+### projectile-overlay-proof: One projectile color source, overlay tests, and visual proof
+- status: todo
+- priority: 19
+- track: noita
+- depends: projectile-entities
+- areas: renderer, entities
+- why: The projectile-entities merge moved the overlay into
+  `FixturePixels.rasterize` but left two divergent material color tables
+  (`MetalRenderer.materialColor` is now dead code with different colors than
+  the overlay uses), shipped no test for the overlay at all, and did not meet
+  its own acceptance criterion of a screenshot sequence showing a moving
+  projectile.
+- scope: Keep one `Material -> UInt32` RGBA helper in GamePresentation and have
+  `FixturePixels.rasterize` use it; delete `MetalRenderer.materialColor` and any
+  other copy. Add GamePresentation tests for the overlay: an in-viewport
+  projectile tints its cell with the recipe's primary material color, an
+  out-of-viewport projectile is clipped and leaves the frame byte-identical,
+  and rasterizing the same snapshot twice yields identical pixels. Capture a
+  PNG (or two-frame sequence) of a projectile in flight and after impact.
+- acceptance:
+  - Exactly one `Material -> UInt32` color function exists in the repo, in
+    GamePresentation; AppleHost has no duplicate pixel palette.
+  - GamePresentationTests cover in-viewport tint, out-of-viewport clipping, and
+    deterministic re-rasterization; `swift test` and a macOS Debug xcodebuild
+    both pass.
+  - A capture image under `state/goals/` shows a projectile in flight and after
+    impact, confirmed by opening the image rather than by file diff or pixel
+    count.
+  - Projectiles remain presentation-only: no snapshot digest change, no new
+    save fields.
 
 ### material-reactions: Data-driven material reactions
 - status: todo

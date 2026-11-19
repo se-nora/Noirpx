@@ -270,7 +270,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     test at a known point returns the expected action; a scan test asserts the
     model, layout, and raster files import no SwiftUI, AppKit, UIKit,
     CoreGraphics, CoreText, or Metal.
-- result:
+- result: Added platform-independent game-UI display list in Sources/GamePresentation (DisplayList, DisplayListState, BitmapFont, DisplayListRaster, PNGWriter, HUDLayout, CraftingLayout, GuideLayout, StatsLayout), HUDRender CLI export (--ref --out --seed --tick --width --height --material --json), deleted HeadlessHUD.swift + HeadlessHUDTests.swift, rewired CaptureComparison --hud to the shared list; swift build green, swift test green, checks.sh --full and --ios green, macOS build+launch verified.
 
 ### simcore-file-layout: Group SimulationCore by domain and put one type per file
 - status: done

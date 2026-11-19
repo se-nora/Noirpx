@@ -259,6 +259,67 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     CoreGraphics, CoreText, or Metal.
 - result:
 
+### simcore-file-layout: Group SimulationCore by domain and put one type per file
+- status: todo
+- priority: 6
+- track: infra
+- depends: none
+- areas: sim-engine,sim-rules
+- why: `Sources/SimulationCore` is 38 files in one flat directory, and 19 of
+  them declare more than one top-level type: `MaterialBehavior.swift` alone
+  holds 23 types (the protocol, `MaterialAction`, and every material behavior
+  class), `ResidentSimulation.swift` holds 5, `WorldGeneration.swift` and
+  `ExplosionPrimitive.swift` hold 4 each. Nothing in the layout says which types
+  belong together, so every change starts with a search and a decision about
+  where code lives. Owner direction: group the core by domain and give every
+  type its own file.
+- scope: |
+  Reorganize `Sources/SimulationCore` into domain folders, one type per file,
+  without changing any behaviour, signature, access level, or public symbol.
+  Suggested grouping (adjust where the code says otherwise, and say why in the
+  result): `Materials/` (Material, MaterialBehavior, MaterialAction,
+  MaterialMovement, one file per material behavior class), `World/`
+  (SimulationGrid, ChunkPosition, ChunkRegion, ChunkSnapshot, ThermalCellState,
+  CaveWorld, CaveWorldSize, CaveWorldExtents, CaveWorldGenerator,
+  CaveSpawnTemplate), `Entities/` (ProjectileEntity, ProjectileBlueprint,
+  ProjectileSnapshot, FixtureCharacter, ChimeWarden, ExplosionInput,
+  ExplosionResult, ExplosionDamageEvent, BlastFlash), `Spells/` (Spell, Wand,
+  WandController, SpellFootprint and its cell types, CraftingGrid,
+  CraftingSlot, Recipe, RecipeRegistry, ManaPool, CastStartResult), `Session/`
+  (Simulation, ResidentSimulation and its snapshot/report/error/proposal types,
+  SimulationCommand, SimulationSnapshot, SimulationError, HeadlessFixture,
+  BeaconCourse, BeaconRun, CaveRun), `Persistence/` (SaveCodec, SaveError,
+  SaveField, SaveCountField), `Math/` (FixedPoint, CellPosition).
+
+  Rules for the split: every file declares exactly one top-level type, and the
+  file is named after that type; a type's extensions live in its own file;
+  helper types only used by one owner are nested inside it; a type that needs
+  `internal` access now was already `internal` or stays private to its file by
+  nesting. File moves use `git mv` so history follows the file. Add
+  `scripts/simcore-layout.sh` that fails when a file under
+  `Sources/SimulationCore` declares zero or more than one top-level type, or
+  when the declared type does not match the file name, and run it as a step in
+  `scripts/checks.sh` in every mode.
+- acceptance: |
+  - `scripts/simcore-layout.sh` exits 0 on the delivered tree, and every
+    `Sources/SimulationCore/**/*.swift` file declares exactly one top-level
+    type whose name equals the file's basename.
+  - Types are grouped in domain folders; no folder is a flat dump again, and
+    the result explains any grouping that differs from the proposal above.
+  - Public API is unchanged: no `public` declaration changes its name,
+    signature, or access level; the diff contains moves, `git mv` renames, and
+    file splits only, with no logic edits. `swift build` and
+    `swift test --parallel -c release` are green with the same test count as
+    before the change.
+  - `scripts/checks.sh --quick` runs the layout check and passes; a
+    deliberately broken sample (two types in one file) makes the script fail,
+    demonstrated in the result.
+  - Docs and comments that name a moved file path are updated
+    (`docs/interfaces/*`, `INTERFACES` references, code comments).
+  - macOS build succeeds (`scripts/checks.sh --full`); no version bump beyond a
+    patch, because nothing visible changes.
+- result:
+
 ## Performance
 
 ### test-suite-speed: Make the default test suite fast

@@ -185,69 +185,78 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   from a platform-independent display list and can therefore be exported
   headlessly on any host with the same result.
 
-### hud-display-list: Draw the HUD from a platform-independent display list
+### game-ui-display-list: Draw the whole game UI from a platform-independent display list
 - status: todo
 - priority: 5
 - track: infra
 - depends: none
-- areas: hud,tests-infra
-- why: The HUD has two implementations that drift apart. The app draws SwiftUI
-  views (`HUDControls`, `WandSlotHUD`, `CraftingHUD`, inline lines in
-  `AppleHost/HostView.swift`); the headless capture draws a reduced HUD of its
-  own with CoreGraphics/CoreText (`Sources/GamePresentation/HeadlessHUD.swift`,
-  460 lines). Because the two layouts are written twice, headless output cannot
-  show the real HUD, merge reports cannot prove HUD changes, and nothing can
-  export a HUD image without the OS UI toolkit. The HUD should be data first:
-  one layout, rendered by whatever backend the host provides, so a headless
-  render is the same HUD rather than a lookalike.
+- areas: hud,host,tests-infra
+- why: Every piece of in-game UI is SwiftUI: `HUDControls`, `WandSlotHUD`,
+  `CraftingHUD`, `HUDGuide`, `HUDScrollViewport`, and the HUD block in
+  `HostView`, with `DiagnosticsView` for stats. The headless capture has a
+  second, reduced implementation of the same UI in CoreGraphics
+  (`HeadlessHUD.swift`, 460 lines). So the game UI cannot be drawn without the
+  OS UI toolkit, cannot be exported, and cannot be shown in reports. Owner
+  direction: the running game must not present SwiftUI UI, and every component
+  must be renderable and exportable from one source of truth.
 - scope: |
-  Add a HUD display list in `Sources/GamePresentation`: a value type listing
-  filled/stroked rects, rounded rects, solid colour swatches, text runs,
-  frames, and clips, expressed with the project's own types (no SwiftUI,
-  AppKit, UIKit, CoreGraphics, CoreText, or Metal types in the model). Add one
-  layout function that turns HUD state into that list for a given canvas size:
-  version and title lines, run readouts (seed, size, position, tick, depth,
-  outcome), hearts, energy, wand slots and mana, the unified material bar with
-  Erase and discovered swatches plus selection, the action buttons, the spell
-  crafting toggle and panel, and the paint/wand/status lines. It covers every
-  HUD element the app currently draws.
+  Add a game-UI display list in `Sources/GamePresentation`: value types for
+  filled and stroked rects, rounded rects, colour swatches, bitmap-font text
+  runs, frames, clips, and hit regions that carry an action tag; the project's
+  own types only, with no SwiftUI, AppKit, UIKit, CoreGraphics, CoreText, or
+  Metal in the model. One layout function per surface builds the list from plain
+  state: the HUD panel (version and title lines, run readouts, hearts, energy,
+  wand slots, mana, the material bar with Erase and discovered swatches and
+  selection, the action buttons, crafting toggle, paint/wand/status lines), the
+  crafting panel, the help guide, and the stats overlay.
 
-  Render the list with two backends. (1) A SwiftUI backend in
-  `Sources/GamePresentation` that `HostView` mounts, keeping the current live
-  appearance on macOS and iOS. (2) A CPU raster backend in pure Swift with a
-  built-in monospaced bitmap font, used for export and tests; it writes RGBA
-  and a PNG without a window server, a device, or an OS drawing API. Delete the
-  duplicate layout in `HeadlessHUD.swift` so `CaptureComparison` composites the
-  shared list instead of its private reduced HUD. Add an executable
-  `HUDRender` (`SimulationCore` + `GamePresentation`): `HUDRender --ref <sha>
-  --out <png> [--seed N] [--tick N] [--width W] [--height H] [--material M]
-  [--json <path>]`, which builds a seeded run fixture, advances to the tick,
-  renders the list, writes the PNG, and can dump the same list as JSON so
-  another tool or platform can reproduce it without linking the game.
+  Rasterize the list in pure Swift with an original bitmap font into an RGBA
+  buffer and a PNG writer. The running app draws that buffer: a UI overlay
+  surface above the simulation, its own file and its own pipeline, refreshed
+  when UI state changes. Do not restructure `MetalRenderer`'s cell pipeline or
+  shaders. `HostView` stops composing SwiftUI UI views and stops mounting
+  `HUDControls`, `WandSlotHUD`, `CraftingHUD`, `HUDGuide`, `HUDScrollViewport`,
+  and `DiagnosticsView`; SwiftUI remains only as the app entry point, window,
+  and menu-bar scaffold in `NoirpxApp`. Pointer and touch input resolve against
+  the list's hit regions first (topmost tagged region wins) and run the same
+  `GameModel` action the old button called, with the overlay surface
+  click-through so unhandled events reach `InputMetalView` unchanged; material
+  keyboard shortcuts keep working.
+
+  Delete the duplicate layout in `HeadlessHUD.swift` so `CaptureComparison`
+  composites the shared list instead of its private reduced HUD. Keep
+  `HUDRender --ref <sha> --out <png> [--seed N] [--tick N] [--width W]
+  [--height H] [--material M] [--json <path>]` as the export path for the same
+  list. Add an app-side dump (flag or test harness) that writes the current UI
+  display list to PNG and JSON, so a report can show the running UI without an
+  OS screenshot permission.
+
+  This is a large slice. The PO may split it, but a delivered slice must not
+  leave two UI implementations behind and must not add a new SwiftUI surface.
 - acceptance: |
-  - `swift build -c release --product HUDRender` succeeds and
-    `HUDRender --ref <sha> --seed 42 --tick 300 --width 900 --height 450
-    --out /tmp/hud.png` writes a PNG showing every HUD component: version and
-    title lines, seed/size/position/tick/depth readouts, hearts, energy, wand
-    slots, mana, the material bar with Erase and discovered swatches, all
-    action buttons, the crafting toggle, and the paint/wand lines. The whole
-    HUD fits the image; nothing is clipped or scrolled out of view.
-  - Two runs with the same ref, seed, tick, and size produce byte-identical
-    PNGs, and the JSON dump is identical too.
-  - `--json <path>` writes a stable, documented display-list schema that
-    contains the same rectangle and text values the PNG was rasterized from.
-  - `CaptureComparison --hud` output is produced from the shared list: its
-    image contains the same components as `HUDRender` (no reduced variant
-    remains), and `HeadlessHUD`'s independent layout is gone.
-  - The live app's HUD is the SwiftUI backend over the same list; macOS and iOS
-    build, and the macOS app launches with the current appearance.
-  - The display-list, layout, and raster sources import no SwiftUI, AppKit,
-    UIKit, CoreGraphics, CoreText, or Metal (checked in review and by a test
-    that scans those files for such imports).
-  - Focused tests: a fixture reaches the requested tick; the list for a fixed
-    state contains every component kind; the raster is non-empty with HUD
-    pixels in the expected vertical bands; existing HUD and capture suites stay
-    green.
+  - The running macOS app draws the HUD, crafting panel, help guide, and stats
+    overlay from the shared display list. No SwiftUI view composes game UI;
+    `import SwiftUI` appears only in the app-entry and window files, and the
+    old HUD views are removed or reduced to list adapters.
+  - Clicking each control in the running app performs the action it performed
+    before: Restart, New Run, Stats, Help, the crafting toggle, and every
+    material swatch including Erase. Material keyboard shortcuts still select.
+  - The app-side dump writes a PNG and JSON of the current UI, and the PNG
+    matches what the window shows for the same state.
+  - `HUDRender --ref <sha> --seed 42 --tick 300 --width 900 --height 450 --out
+    hud.png` writes a PNG of the same list with every component present and
+    nothing clipped; `--json` dumps the identical list.
+  - Two runs with the same inputs produce byte-identical PNGs and JSON, and the
+    app dump is byte-identical to `HUDRender` output for the same state and
+    size.
+  - `CaptureComparison --hud` composites the shared list; `HeadlessHUD`'s
+    private layout is gone.
+  - macOS build and launch verified; the iOS target compiles.
+  - Tests: a fixed state's list contains every component kind and every action
+    tag; the raster is non-empty with UI pixels in the expected bands; a hit
+    test at a known point returns the expected action; a scan test asserts the
+    model, layout, and raster files import no SwiftUI, AppKit, UIKit,
+    CoreGraphics, CoreText, or Metal.
 - result:
 
 ## Performance

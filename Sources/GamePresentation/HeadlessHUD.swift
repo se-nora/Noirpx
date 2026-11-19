@@ -88,9 +88,9 @@ public struct HeadlessHUDState: Sendable {
 /// without a window or SwiftUI. Matches live app layout using `HostLayout`.
 public enum HeadlessHUD {
     private static let fontName = "Menlo"
-    private static let fontSize: CGFloat = 12
-    private static let lineHeight: CGFloat = 14
-    private static let panelCornerRadius: CGFloat = 8
+    private static let baseFontSize: CGFloat = 12
+    private static let baseLineHeight: CGFloat = 14
+    private static let basePanelCornerRadius: CGFloat = 8
     private static let panelOpacity: CGFloat = 0.75
     private static let white = CGColor(red: 1, green: 1, blue: 1, alpha: 1)
     private static let orange = CGColor(red: 1, green: 0.6, blue: 0, alpha: 1)
@@ -114,6 +114,12 @@ public enum HeadlessHUD {
     ) {
         guard width > 0, height > 0 else { return }
 
+        let fontSize = fontSize(forHeight: height)
+        let lineHeight = lineHeight(forFontSize: fontSize)
+        let panelCornerRadius = max(2, basePanelCornerRadius * fontSize / baseFontSize)
+        let outerPadding = outerPadding(forHeight: height)
+        let innerPadding = innerPadding(forHeight: height)
+
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue |
                          CGBitmapInfo.byteOrder32Little.rawValue
@@ -127,75 +133,125 @@ public enum HeadlessHUD {
             bitmapInfo: bitmapInfo
         ) else { return }
 
+        // Pixel-art capture: disable antialiasing/subpixel text so glyphs stay
+        // crisp and single-colored when upscaled with nearest-neighbor.
+        context.setShouldAntialias(false)
+        context.setAllowsAntialiasing(false)
+        context.setShouldSmoothFonts(false)
+        context.setShouldSubpixelPositionFonts(false)
+        context.setShouldSubpixelQuantizeFonts(false)
+
         // Clear to transparent (alpha=0)
         context.clear(CGRect(x: 0, y: 0, width: width, height: height))
 
-        // CGContext origin is bottom-left; flip vertically for top-left origin.
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
-
-        // Panel layout using HostLayout geometry.
+        // A CGBitmapContext stores row 0 at the top of the image but uses a
+        // bottom-left drawing origin. Draw in bottom-up coordinates (no CTM
+        // flip); flipping the CTM would render every glyph upside down.
+        let frameHeight = Double(height)
         let viewWidth = Double(width)
-        let panelX = HostLayout.outerPadding
-        let panelY = HostLayout.outerPadding
-        let panelWidth = HostLayout.hudWidth(viewWidth: viewWidth)
-        let contentWidth = HostLayout.hudContentWidth(viewWidth: viewWidth)
-        let contentX = panelX + HostLayout.outerPadding + HostLayout.innerPadding
-        let contentY = panelY + HostLayout.outerPadding + HostLayout.innerPadding
-        let maxPanelHeight = height - Int(panelY) * 2 // Leave room at bottom for material name
 
-        // Build text lines
-        let lines = buildLines(for: state, contentWidth: contentWidth)
+        // Panel width: the live app uses 45% of view width, but at small capture
+        // sizes that leaves too little room for monospaced text. Below 400pt the
+        // live app is in its compact layout; use the full width minus margins so
+        // the text is legible when the video is upscaled.
+        let panelWidth: Double
+        if viewWidth >= 400 {
+            panelWidth = HostLayout.hudWidth(viewWidth: viewWidth)
+        } else {
+            panelWidth = max(0, viewWidth - 2 * outerPadding)
+        }
+        let contentWidth = max(0, panelWidth - 2 * (outerPadding + innerPadding))
 
-        // Calculate panel height from lines
-        let lineSpacing: CGFloat = 2
-        let totalTextHeight = CGFloat(lines.count) * (fontSize + lineSpacing)
-        let panelHeight = min(CGFloat(maxPanelHeight), max(totalTextHeight + 2 * (HostLayout.outerPadding + HostLayout.innerPadding), 60))
+        let panelX = outerPadding
+        let panelTop = outerPadding
+        let contentX = panelX + outerPadding + innerPadding
+        let contentTop = panelTop + outerPadding + innerPadding
 
-        // Draw panel background (rounded rect)
+        // Reserve the bottom band for the material-name pill so the panel text
+        // never runs into it. The pill height matches drawMaterialName.
+        let pillHeight = Double(materialPillHeight(lineHeight: lineHeight))
+        let pillBottomMargin = Double(max(2, fontSize * 0.35))
+        let bottomReserved = pillHeight + pillBottomMargin
+
+        // Available panel height. The live app panel scrolls; in a single frame
+        // we show as many complete lines as fit and drop the rest.
+        let maxPanelHeight = max(0, frameHeight - 2 * panelTop - bottomReserved)
+        let contentInset = 2 * (outerPadding + innerPadding)
+        let allLines = buildLines(for: state, contentWidth: contentWidth)
+        let maxLines = max(1, Int(((maxPanelHeight - contentInset) / lineHeight).rounded(.down)))
+        let lines = Array(allLines.prefix(maxLines))
+        let panelHeight = min(CGFloat(maxPanelHeight),
+                              CGFloat(lines.count) * lineHeight + contentInset)
+
+        // Draw panel background (rounded rect) anchored to the top-left corner.
         let panelRect = CGRect(
             x: panelX,
-            y: panelY,
+            y: frameHeight - panelTop - Double(panelHeight),
             width: panelWidth,
-            height: panelHeight
+            height: Double(panelHeight)
         )
         context.setFillColor(panelBg)
         context.fill(panelRect, cornerRadius: panelCornerRadius)
 
-        // Draw text lines
-        var y = contentY
+        // Clip text to the panel so overflow (live app scrolls instead) never
+        // spills outside the panel or over the material pill.
+        context.saveGState()
+        context.clip(to: panelRect)
+
+        // Draw text lines top-to-bottom, converting each baseline to bottom-up.
+        let font = CTFontCreateWithName(fontName as CFString, fontSize, nil)
+        let ascent = Double(CTFontGetAscent(font))
+        var lineTop = Double(contentTop)
         for line in lines {
-            drawLine(line, atX: contentX, atY: y, in: context)
-            y += lineHeight
+            let baseline = frameHeight - lineTop - ascent
+            drawLine(line, atX: CGFloat(contentX), baseline: CGFloat(baseline), in: context, fontSize: fontSize, bold: line.bold)
+            lineTop += Double(lineHeight)
         }
+        context.restoreGState()
 
         // Draw bottom-center material name
         drawMaterialName(state.selectedMaterial, state.isCasting, width: width, height: height, context: context)
 
-        // Composite HUD layer onto destination pixels
+        // Composite HUD layer (premultiplied alpha) onto destination pixels:
+        // dst = src + dst * (1 - srcA), with src channels already premultiplied.
         guard let data = context.data else { return }
         let hudBytes = Data(bytes: data, count: width * height * 4)
-
-        // Source-over blend (straight alpha): dst = src + dst * (1 - srcA)
         for i in stride(from: 0, to: width * height * 4, by: 4) {
-            let sa = hudBytes[i + 3]
-            if sa == 0 { continue }
-            let saF = CGFloat(sa) / 255.0
-            let invSaF = 1.0 - saF
-            let sr = CGFloat(hudBytes[i]) * saF
-            let sg = CGFloat(hudBytes[i + 1]) * saF
-            let sb = CGFloat(hudBytes[i + 2]) * saF
-            let dr = CGFloat(pixels[i])
-            let dg = CGFloat(pixels[i + 1])
-            let db = CGFloat(pixels[i + 2])
-            let r = (sr + dr * invSaF).rounded()
-            let g = (sg + dg * invSaF).rounded()
-            let b = (sb + db * invSaF).rounded()
-            pixels[i]     = UInt8(min(max(r, 0), 255))
-            pixels[i + 1] = UInt8(min(max(g, 0), 255))
-            pixels[i + 2] = UInt8(min(max(b, 0), 255))
+            let a = Int(hudBytes[i + 3])
+            if a == 0 { continue }
+            let inv = 255 - a
+            pixels[i]     = UInt8(min(255, Int(hudBytes[i])     + Int(pixels[i])     * inv / 255))
+            pixels[i + 1] = UInt8(min(255, Int(hudBytes[i + 1]) + Int(pixels[i + 1]) * inv / 255))
+            pixels[i + 2] = UInt8(min(255, Int(hudBytes[i + 2]) + Int(pixels[i + 2]) * inv / 255))
             // Destination alpha remains 255 (opaque)
         }
+    }
+
+    /// Font size for a frame height. Capture frames are small (e.g. 200×113),
+    /// so the live app's 12pt caption would only fit a couple of lines. Scale
+    /// down to fit several full lines while staying legible after the video is
+    /// upscaled (200×113 → 360p is ~3.2× nearest-neighbor).
+    private static func fontSize(forHeight height: Int) -> CGFloat {
+        return min(baseFontSize, max(8, CGFloat(height) * 0.08))
+    }
+
+    private static func lineHeight(forFontSize size: CGFloat) -> CGFloat {
+        return (size * baseLineHeight / baseFontSize).rounded()
+    }
+
+    /// Outer panel margin, scaled to the frame so a small frame is not
+    /// consumed by the live app's 16pt window margin.
+    private static func outerPadding(forHeight height: Int) -> CGFloat {
+        return min(CGFloat(HostLayout.outerPadding), max(3, CGFloat(height) * 0.05))
+    }
+
+    private static func innerPadding(forHeight height: Int) -> CGFloat {
+        return min(CGFloat(HostLayout.innerPadding), max(2, CGFloat(height) * 0.035))
+    }
+
+    /// Height of the bottom material-name pill for the given font size.
+    private static func materialPillHeight(lineHeight: CGFloat) -> CGFloat {
+        return lineHeight + 12
     }
 
     private static func buildLines(
@@ -295,11 +351,13 @@ public enum HeadlessHUD {
     private static func drawLine(
         _ line: HUDLine,
         atX x: CGFloat,
-        atY y: CGFloat,
-        in context: CGContext
+        baseline y: CGFloat,
+        in context: CGContext,
+        fontSize: CGFloat,
+        bold: Bool
     ) {
         if line.parts.isEmpty {
-            let font = line.bold
+            let font = bold
                 ? CTFontCreateCopyWithSymbolicTraits(
                     CTFontCreateWithName(fontName as CFString, fontSize, nil),
                     fontSize, nil, .boldTrait, .boldTrait) ?? CTFontCreateWithName(fontName as CFString, fontSize, nil)
@@ -343,6 +401,7 @@ public enum HeadlessHUD {
         let name = material == .empty ? "Erase" : material.wandName
         let text = isCasting ? "\(name) (casting)" : name
 
+        let fontSize = fontSize(forHeight: height)
         let font = CTFontCreateWithName(fontName as CFString, fontSize, nil)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -352,23 +411,24 @@ public enum HeadlessHUD {
         let ctLine = CTLineCreateWithAttributedString(attributed)
         let textWidth = CTLineGetTypographicBounds(ctLine, nil, nil, nil)
 
-        let x = (CGFloat(width) - textWidth) / 2 - 10 // padding
-        let y: CGFloat = 16 // from bottom
+        let hPad: CGFloat = max(4, fontSize * 0.8)
+        let pillHeight = materialPillHeight(lineHeight: lineHeight(forFontSize: fontSize))
+        let bottomMargin: CGFloat = max(2, fontSize * 0.35)
+        let pillWidth = textWidth + 2 * hPad
+        // Center horizontally, sitting just above the bottom edge.
+        let pillX = (CGFloat(width) - pillWidth) / 2
+        let pillY = bottomMargin
 
-        // Draw background pill
-        let pillWidth = textWidth + 20
-        let pillHeight: CGFloat = 22
-        let pillRect = CGRect(
-            x: x - 10,
-            y: y - 4,
-            width: pillWidth,
-            height: pillHeight
-        )
         context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.7))
-        context.fill(pillRect, cornerRadius: 8)
+        let cornerRadius = max(3, 8 * fontSize / baseFontSize)
+        context.fill(CGRect(x: pillX, y: pillY, width: pillWidth, height: pillHeight),
+                     cornerRadius: cornerRadius)
 
-        // Draw text
-        context.textPosition = CGPoint(x: x, y: y + 2)
+        // Vertically center the text within the pill.
+        let ascent = CTFontGetAscent(font)
+        let descent = CTFontGetDescent(font)
+        let textY = pillY + (pillHeight - Double(ascent + descent)) / 2 + Double(descent)
+        context.textPosition = CGPoint(x: pillX + hPad, y: textY)
         CTLineDraw(ctLine, context)
     }
 }

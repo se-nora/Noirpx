@@ -346,6 +346,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: energy drain and recharge rates, ceiling collision, no
     levitation at zero energy, deterministic replay.
   - Playable in Cave Run on macOS (screenshot of meter in use).
+- result: Levitation merged in 2df9107: held jump climbs while energy lasts (max 180 ticks, drain 1/tick, recharge 2/tick grounded, climb cap 1 quarter-cell/tick), wired GameplayInput.heldJump -> CaveRun.advance -> FixtureCharacter.advance, with a 3-segment cyan HUD meter from HUDControls.energySegments. Checks: LevitationTests + CaveRunLevitationIntegrationTests 11/11 pass; swift test --parallel 507/507 on main; macOS app builds and runs at the merge commit and shows the meter at full energy. Unverified: an on-screen frame of the meter draining mid-flight (synthetic keystrokes are blocked by macOS TCC); drain/recharge is covered by unit tests.
 
 ### projectile-entities: Spells as simulated projectiles
 - status: done

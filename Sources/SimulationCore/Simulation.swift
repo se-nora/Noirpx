@@ -27,6 +27,10 @@ public struct Simulation {
     var lastExplosionDamage: ExplosionDamageEvent?
     /// Presentation-only blast flash cells from the completed tick; excluded from digest.
     var lastBlastFlash: BlastFlash = BlastFlash(cells: [])
+    /// Active projectiles in the simulation. Advanced after material/explosion pass each tick.
+    private var projectiles: [ProjectileEntity] = []
+    /// Monotonically increasing ID for new projectiles.
+    private var nextProjectileId: UInt64 = 1
 
     public init(seed: UInt64) {
         self.seed = seed
@@ -77,7 +81,7 @@ public struct Simulation {
         let published = chunks.keys.sorted(by: ordered).map {
             ChunkSnapshot(position: $0, cells: chunks[$0]!.cells, thermalStates: chunks[$0]!.thermalStates)
         }
-        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published, blastFlash: lastBlastFlash)
+        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published, blastFlash: lastBlastFlash, projectiles: projectiles.map { $0.snapshot() })
     }
 
     public mutating func enqueue(_ command: SimulationCommand) throws {
@@ -186,6 +190,9 @@ public struct Simulation {
         // Union blast-affected cells into moved to prevent double-update in this tick.
         moved.formUnion(explodedCells)
 
+        // PROJECTILE PASS: advance projectiles after explosions, before tick publish
+        advanceProjectiles(tick: nextTick, moved: &moved, activeChunks: activeChunks)
+
         tick = nextTick
     }
 
@@ -193,7 +200,7 @@ public struct Simulation {
         Self.coordinateBounds.contains(position.x) && Self.coordinateBounds.contains(position.y)
     }
 
-    func material(at position: CellPosition) -> Material {
+    public func material(at position: CellPosition) -> Material {
         let (chunk, index) = SimulationGrid.locate(position)
         return chunks[chunk]?.cells[index] ?? .empty
     }
@@ -242,6 +249,81 @@ public struct Simulation {
         }
         if chunks[chunk]!.occupiedCount == 0 {
             chunks.removeValue(forKey: chunk)
+        }
+    }
+
+    /// Spawns a new projectile from the given blueprint at the origin toward the target.
+    /// Returns the projectile ID if successful.
+    public mutating func spawnProjectile(blueprint: ProjectileBlueprint, origin: CellPosition, target: CellPosition) -> UInt64 {
+        let dx = target.x - origin.x
+        let dy = target.y - origin.y
+        let distance = max(abs(dx), abs(dy))
+        guard distance > 0 else { return 0 }
+
+        // Initial velocity direction normalized to Q8, scaled by speed
+        let speedQ8 = Int32(blueprint.speed)
+        let vx = Int32((Int64(dx) * Int64(speedQ8) + Int64(distance / 2)) / Int64(distance))
+        let vy = Int32((Int64(dy) * Int64(speedQ8) + Int64(distance / 2)) / Int64(distance))
+
+        let lifetime = UInt16(min(65535, blueprint.maxRange * 4))
+        let entity = ProjectileEntity(
+            id: nextProjectileId,
+            blueprintId: blueprint.id,
+            position: FixedPoint.fromCells(x: origin.x, y: origin.y),
+            velocity: FixedPoint(x: vx, y: vy),
+            gravityFactor: blueprint.gravityFactor,
+            maxSpeed: blueprint.speed,
+            lifetimeTicks: lifetime
+        )
+        nextProjectileId &+= 1
+        projectiles.append(entity)
+        return entity.id
+    }
+
+    /// Advances all projectiles for the current tick.
+    /// Collisions with blocking materials and world edges are detected via Bresenham.
+    /// On impact, the spell's footprint is applied via spell commands.
+    mutating func advanceProjectiles(tick: UInt64, moved: inout Set<CellPosition>, activeChunks: ChunkRegion?) {
+        guard !projectiles.isEmpty else { return }
+
+        // Material lookup closure
+        let materialAt: (CellPosition) -> Material = { pos in
+            self.material(at: pos)
+        }
+
+        // Bounds check closure
+        let canVisit: (CellPosition) -> Bool = { pos in
+            self.isInBounds(pos)
+        }
+
+        var impactedEntities: [(projectile: ProjectileEntity, impactCell: CellPosition)] = []
+        var stillActive: [ProjectileEntity] = []
+        stillActive.reserveCapacity(projectiles.count)
+
+        for var entity in projectiles {
+            if let impactCell = entity.advance(canVisit: canVisit, materialAt: materialAt) {
+                // Entity impacted a blocking cell or world edge
+                impactedEntities.append((entity, impactCell))
+            } else if entity.lifetimeTicks > 0 && !entity.hasImpacted {
+                stillActive.append(entity)
+            }
+            // If lifetimeTicks == 0 and not impacted, it expires silently (no footprint)
+        }
+
+        projectiles = stillActive
+
+        // Apply footprints for impacted projectiles immediately as spell effects.
+        // Footprints modify the world directly (not via the command budget), so they
+        // always take precedence over user paint commands for the impact tick.
+        // Out-of-bounds impact cells (world edge) produce no footprint.
+        for (entity, impactCell) in impactedEntities {
+            guard let blueprint = RecipeRegistry.blueprintById[entity.blueprintId] else { continue }
+            guard self.isInBounds(impactCell) else { continue }
+            let characterBody: Set<CellPosition> = [] // Simulation doesn't know character; CaveRun will handle body rejection
+            let resolved = blueprint.footprint.resolve(impact: impactCell, characterBody: characterBody)
+            for cell in resolved where self.isInBounds(cell.cell) {
+                set(cell.material, at: cell.cell)
+            }
         }
     }
 

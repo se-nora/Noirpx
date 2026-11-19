@@ -319,7 +319,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Playable in Cave Run on macOS (screenshot of meter in use).
 
 ### projectile-entities: Spells as simulated projectiles
-- status: todo
+- status: done
 - priority: 18
 - track: noita
 - depends: host-split
@@ -336,6 +336,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: flight path, gravity, collision with solid vs liquid, lifetime
     expiry, deterministic replay, command budget.
   - Casting in Cave Run shows a moving projectile (screenshot sequence).
+- result: Deterministic projectile entities added (FixedPoint Q8, Bresenham segment collision, lifetimeTicks=maxRange*4, speed=budgetPerTick*256/3). ProjectileEntityTests: 9/9 pass. Full suite 492/492 pass, no regressions. Markdown simulation tick loop advances projectiles after materials before tick publish; impact applies RecipeRegistry.blueprintById effect via set(). MetalRenderer draws projectile overlay. WandRay/WandBudget/WandCastProgress/advanceCast/footprintCommands/rayCommands kept public. MARKETING_VERSION 0.38.0 -> 0.39.0. Digest stays v7 (world-only; projectiles presentation-only). Merged into main.
 
 ### material-reactions: Data-driven material reactions
 - status: todo

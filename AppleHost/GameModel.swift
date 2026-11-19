@@ -24,8 +24,6 @@ final class GameModel: ObservableObject {
     func setHover(_ position: CellPosition?) {
         hoverCell = position
     }
-    private var castProgress: WandCastProgress?
-    private var castMaterial: SimulationCore.Material = .sand
 
     /// Materials the player has encountered (discovered). Persists across runs within a session.
     @Published private(set) var materialDiscovery = MaterialDiscovery()
@@ -197,15 +195,25 @@ final class GameModel: ObservableObject {
     }
 
     func startCasting() {
-        guard caveRun?.outcome == .playing, errorMessage == nil else { return }
+        guard var run = caveRun, run.outcome == .playing, errorMessage == nil else { return }
 
         // Gate cast start on WandController.tryStartCast()
         let result = wandController.tryStartCast()
         switch result {
         case .started:
             isCasting = true
-            castMaterial = selectedMaterial
-            castProgress = nil
+            // Spawn the projectile immediately on cast start
+            if let aim = castAim, let activeSpell = wandController.wand.activeSpell {
+                let blueprint = activeSpell.blueprint
+                let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
+                                          y: run.character.position.y + FixtureCharacter.height / 2)
+                do {
+                    try run.castSpell(blueprint: blueprint, origin: origin, toward: aim)
+                    caveRun = run
+                } catch {
+                    errorMessage = "Could not cast spell: \(error.localizedDescription)"
+                }
+            }
         case .noActiveSpell, .onCooldown, .insufficientMana:
             // Show HUD feedback via errorMessage
             errorMessage = castStartErrorMessage(result)
@@ -220,7 +228,6 @@ final class GameModel: ObservableObject {
             wandController.cancelCast()
         }
         isCasting = false
-        castProgress = nil
     }
 
     private func castStartErrorMessage(_ result: CastStartResult) -> String {
@@ -295,42 +302,6 @@ final class GameModel: ObservableObject {
 
                 // Tick wand controller (cooldowns + mana regen)
                 wandController.tick()
-
-                // Handle spell casting from wand
-                if isCasting, let aim = castAim, let activeSpell = wandController.wand.activeSpell {
-                    let blueprint = activeSpell.blueprint
-                    let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
-                                              y: run.character.position.y + FixtureCharacter.height / 2)
-                    let ray = WandRay.cells(for: blueprint, from: origin, toward: aim)
-
-                    if castProgress == nil || castProgress?.cells != ray {
-                        castProgress = makeCastProgress(for: blueprint, ray: ray)
-                    }
-
-                    if let p = castProgress {
-                        let result = advanceCast(blueprint: blueprint, progress: p, simulation: run.simulation, characterBody: run.character.bodyCells)
-                        castProgress = result.progress
-
-                        // Enqueue ray commands (primary + trail)
-                        let rayCmds = rayCommands(blueprint: blueprint, batch: result.batch, nextTick: run.simulation.snapshot.tick + 1)
-                        for cmd in rayCmds {
-                            try run.enqueueSpellCommand(cmd)
-                        }
-
-                        // Check for impact
-                        if result.isComplete, let impact = result.impactCell {
-                            // Enqueue footprint commands
-                            let footprintCmds = footprintCommands(blueprint: blueprint, impact: impact, characterBody: run.character.bodyCells, nextTick: run.simulation.snapshot.tick + 1)
-                            for cmd in footprintCmds {
-                                try run.enqueueSpellCommand(cmd)
-                            }
-                            isCasting = false
-                            castProgress = nil
-                        }
-                    }
-                } else {
-                    castProgress = nil
-                }
 
                 // Held material brush: paint once per tick at the held cursor cell.
                 for (cell, material) in heldInput.paintThisTick(material: selectedMaterial) {

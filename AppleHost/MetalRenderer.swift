@@ -144,26 +144,4 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         return image.sample(nearestSampler, in.uv);
     }
     """
-
-    /// Returns an opaque ARGB color for the given material.
-    private func materialColor(_ material: Material) -> UInt32 {
-        switch material {
-        case .empty:    return 0x00000000
-        case .solid:    return 0xff808080
-        case .sand:     return 0xfff4d03f
-        case .water:    return 0xff3498db
-        case .fire:     return 0xffe74c3c
-        case .pitch:    return 0xff2c2c2c
-        case .oil:      return 0xff4a4a4a
-        case .steam:    return 0xffbdc3c7
-        case .lava:     return 0xffe67e22
-        case .acid:     return 0xff2ecc71
-        case .blood:    return 0xffc0392b
-        case .slime:    return 0xff8e44ad
-        case .ice:      return 0xffaed6f1
-        case .gunpowder:return 0xff4a4a4a
-        case .gold:     return 0xfff1c40f
-        case .magicLiquid: return 0xff9b59b6
-        }
-    }
 }

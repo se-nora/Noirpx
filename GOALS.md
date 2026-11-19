@@ -548,7 +548,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   plus macOS Debug xcodebuild. No screenshot of a flying projectile captured.
 
 ### projectile-overlay-proof: One projectile color source, overlay tests, and visual proof
-- status: todo
+- status: done
 - priority: 19
 - track: noita
 - depends: projectile-entities
@@ -577,6 +577,12 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     count.
   - Projectiles remain presentation-only: no snapshot digest change, no new
     save fields.
+- result: Single `FixturePixels.materialColor(_:)` helper in GamePresentation
+  (overlay values canonical) used by `FixturePixels.rasterize` projectile pass;
+  `MetalRenderer.materialColor` deleted; 4 overlay tests added (in-viewport
+  tint, out-of-viewport clipping, deterministic re-raster, digest exclusion);
+  all 94 GamePresentationTests pass; macOS Debug xcodebuild succeeds; visual
+  proof PNGs captured under state/goals/; MARKETING_VERSION bumped 0.41.0 -> 0.43.0.
 
 ### explosion-impact-feedback: Apply explosion damage and draw the blast flash
 - status: todo

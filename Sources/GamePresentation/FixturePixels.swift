@@ -113,6 +113,29 @@ public enum FixturePixels {
         return h
     }
 
+    /// Single authoritative Material -> UInt32 RGBA palette for the projectile overlay.
+    /// Source of truth for all projectile tint colors; AppleHost has no duplicate palette.
+    public static func materialColor(_ material: Material) -> UInt32 {
+        switch material {
+        case .empty:    return 0xffffffff
+        case .solid:    return 0xff808080
+        case .sand:     return 0xfff4d03f
+        case .water:    return 0xff3498db
+        case .fire:     return 0xffe74c3c
+        case .pitch:    return 0xff2c2c2c
+        case .oil:      return 0xff438c9b
+        case .steam:    return 0xffe8e8ff
+        case .lava:     return 0xff3344ff
+        case .acid:     return 0xff33cc55
+        case .blood:    return 0xff332288
+        case .slime:    return 0xff55dd88
+        case .ice:      return 0xffeeddaa
+        case .gunpowder: return 0xff555555
+        case .gold:     return 0xff33ccff
+        case .magicLiquid: return 0xffcc3399
+        }
+    }
+
     /// Counts chunks with at least one nonempty cell in the camera.
     public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport,
                                  character: FixtureCharacter? = nil, frame: UInt64 = 0)
@@ -224,25 +247,7 @@ public enum FixturePixels {
             let y = height / 2 - 1 - cell.y + viewport.center.y
             guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
             let material = RecipeRegistry.blueprintById[projectile.blueprintId]?.primaryMaterial ?? .empty
-            let color: UInt32
-            switch material {
-            case .empty:    color = 0xffffffff
-            case .solid:    color = 0xff808080
-            case .sand:     color = 0xfff4d03f
-            case .water:    color = 0xff3498db
-            case .fire:     color = 0xffe74c3c
-            case .pitch:    color = 0xff2c2c2c
-            case .oil:      color = 0xff438c9b
-            case .steam:    color = 0xffe8e8ff
-            case .lava:     color = 0xff3344ff
-            case .acid:     color = 0xff33cc55
-            case .blood:    color = 0xff332288
-            case .slime:    color = 0xff55dd88
-            case .ice:      color = 0xffeeddaa
-            case .gunpowder: color = 0xff555555
-            case .gold:     color = 0xff33ccff
-            case .magicLiquid: color = 0xffcc3399
-            }
+            let color = materialColor(material)
             pixels[y * width + x] = color.littleEndian
         }
 

@@ -1,5 +1,6 @@
 #if os(iOS)
 import MetalKit
+import GamePresentation
 import SimulationCore
 import SwiftUI
 import UIKit

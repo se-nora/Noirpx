@@ -4,9 +4,6 @@
 /// Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--out <path>] [--info]
 
 import Foundation
-import CoreGraphics
-import ImageIO
-import UniformTypeIdentifiers
 import SimulationCore
 import GamePresentation
 
@@ -86,14 +83,24 @@ func runGit(_ args: [String], at path: String) throws -> String {
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 }
 
-/// Maps a `BeaconRun` outcome onto the headless HUD's outcome enum.
-func hudOutcome(_ outcome: BeaconRun.Outcome) -> HeadlessHUDState.Outcome {
+/// Maps a `BeaconRun` outcome onto the display list outcome enum.
+func displayOutcome(_ outcome: BeaconRun.Outcome) -> DisplayOutcome {
     switch outcome {
     case .playing: return .playing
     case .won: return .won
     case .fell: return .fell
     case .exhausted: return .exhausted
     }
+}
+
+/// Maps a `ChimeWarden` to `DisplayWarden`.
+func displayWarden(_ warden: ChimeWarden) -> DisplayWarden {
+    DisplayWarden(
+        alive: warden.alive,
+        shield: warden.shield,
+        burning: warden.burning,
+        lastHazardName: warden.lastHazard?.rawValue
+    )
 }
 
 // MARK: - BeaconRun Capture
@@ -133,20 +140,42 @@ struct BeaconCapture {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: character)
         guard hudEnabled else { return pixels }
         var hudPixels = pixels
-        let state = HeadlessHUDState(
+        guard let run = challenge else { return hudPixels }
+        let collectedBeacons = run.collected.filter { $0 }.count
+        let state = DisplayListState(
             version: version,
-            worldType: .beacon,
+            worldKind: .beacon,
             seed: seed,
             worldWidth: viewport.columns,
             worldHeight: viewport.rows,
             position: character.position,
             tick: simulation.snapshot.tick,
-            outcome: hudOutcome(challenge?.outcome ?? .playing),
+            depth: nil,
+            outcome: displayOutcome(run.outcome),
+            health: nil,
+            maxHealth: nil,
+            energy: nil,
+            maxEnergy: nil,
+            collectedBeacons: collectedBeacons,
+            warden: displayWarden(run.warden),
             selectedMaterial: .sand,
             isCasting: false,
-            renderedChunks: renderedChunks
+            discoveredMaterials: [],
+            wand: Wand(),
+            manaPool: ManaPool(),
+            showCraftingGrid: false,
+            craftingAllowed: false,
+            craftingGrid: CraftingGrid(),
+            framesPerSecond: nil,
+            renderedChunks: renderedChunks,
+            errorMessage: nil,
+            hoveredMaterialName: nil,
+            hudVisible: true,
+            controls: .keyboard,
+            overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        HeadlessHUD.composite(onto: &hudPixels, width: viewport.columns, height: viewport.rows, state: state)
+        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
+        DisplayListRaster.composite(onto: &hudPixels, list)
         return hudPixels
     }
 
@@ -214,20 +243,40 @@ struct CaveCapture {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: nil, frame: frame)
         guard hudEnabled else { return pixels }
         var hudPixels = pixels
-        let state = HeadlessHUDState(
+        let state = DisplayListState(
             version: version,
-            worldType: .cave,
+            worldKind: .cave,
             seed: seed,
-            worldWidth: 256,
-            worldHeight: 128,
+            worldWidth: viewport.columns,
+            worldHeight: viewport.rows,
             position: nil,
             tick: simulation.snapshot.tick,
+            depth: nil,
             outcome: .playing,
+            health: nil,
+            maxHealth: nil,
+            energy: nil,
+            maxEnergy: nil,
+            collectedBeacons: 0,
+            warden: nil,
             selectedMaterial: .sand,
             isCasting: false,
-            renderedChunks: renderedChunks
+            discoveredMaterials: [],
+            wand: Wand(),
+            manaPool: ManaPool(),
+            showCraftingGrid: false,
+            craftingAllowed: false,
+            craftingGrid: CraftingGrid(),
+            framesPerSecond: nil,
+            renderedChunks: renderedChunks,
+            errorMessage: nil,
+            hoveredMaterialName: nil,
+            hudVisible: true,
+            controls: .keyboard,
+            overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        HeadlessHUD.composite(onto: &hudPixels, width: viewport.columns, height: viewport.rows, state: state)
+        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
+        DisplayListRaster.composite(onto: &hudPixels, list)
         return hudPixels
     }
 
@@ -258,44 +307,6 @@ func writeFramesToStdout(_ frames: [[UInt8]]) {
     }
 }
 
-/// Writes one opaque RGBA frame (top-down, row-major, alpha ignored) as a PNG.
-func writePNG(_ pixels: [UInt8], width: Int, height: Int, to path: String) throws {
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    // Captured frames are fully opaque; skip the (always 255) alpha byte. The
-    // captured buffer is RGBA in memory order, which maps to byteOrder32Big.
-    let bitmapInfo = CGBitmapInfo(
-        rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-    )
-    guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-          let image = CGImage(
-              width: width,
-              height: height,
-              bitsPerComponent: 8,
-              bitsPerPixel: 32,
-              bytesPerRow: width * 4,
-              space: colorSpace,
-              bitmapInfo: bitmapInfo,
-              provider: provider,
-              decode: nil,
-              shouldInterpolate: false,
-              intent: .defaultIntent
-          ),
-          let destination = CGImageDestinationCreateWithURL(
-              URL(fileURLWithPath: path) as CFURL,
-              UTType.png.identifier as CFString,
-              1,
-              nil
-          ) else {
-        throw NSError(domain: "capture", code: 2,
-                      userInfo: [NSLocalizedDescriptionKey: "Failed to create PNG at \(path)"])
-    }
-    CGImageDestinationAddImage(destination, image, nil)
-    guard CGImageDestinationFinalize(destination) else {
-        throw NSError(domain: "capture", code: 3,
-                      userInfo: [NSLocalizedDescriptionKey: "Failed to finalize PNG at \(path)"])
-    }
-}
-
 /// Emits captured frames. With `--out`, writes the first frame as a PNG for a
 /// visual HUD spot-check; otherwise streams raw RGBA frames to stdout for ffmpeg.
 func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, outPath: String?) throws {
@@ -304,7 +315,7 @@ func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, outPath: String?) 
             throw NSError(domain: "capture", code: 4,
                           userInfo: [NSLocalizedDescriptionKey: "No frames captured"])
         }
-        try writePNG(first, width: width, height: height, to: outPath)
+        try PNGWriter.write(first, width: width, height: height, to: outPath)
     } else {
         writeFramesToStdout(frames)
     }

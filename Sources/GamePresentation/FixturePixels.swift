@@ -216,6 +216,36 @@ public enum FixturePixels {
                 pixels[mark.index] = color.littleEndian
             }
         }
+
+        // Draw projectiles on top of everything (single pixel tinted by primary material).
+        for projectile in snapshot.projectiles {
+            let cell = projectile.cell
+            let x = cell.x - viewport.center.x + width / 2
+            let y = height / 2 - 1 - cell.y + viewport.center.y
+            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+            let material = RecipeRegistry.blueprintById[projectile.blueprintId]?.primaryMaterial ?? .empty
+            let color: UInt32
+            switch material {
+            case .empty:    color = 0xffffffff
+            case .solid:    color = 0xff808080
+            case .sand:     color = 0xfff4d03f
+            case .water:    color = 0xff3498db
+            case .fire:     color = 0xffe74c3c
+            case .pitch:    color = 0xff2c2c2c
+            case .oil:      color = 0xff438c9b
+            case .steam:    color = 0xffe8e8ff
+            case .lava:     color = 0xff3344ff
+            case .acid:     color = 0xff33cc55
+            case .blood:    color = 0xff332288
+            case .slime:    color = 0xff55dd88
+            case .ice:      color = 0xffeeddaa
+            case .gunpowder: color = 0xff555555
+            case .gold:     color = 0xff33ccff
+            case .magicLiquid: color = 0xffcc3399
+            }
+            pixels[y * width + x] = color.littleEndian
+        }
+
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)
     }
 

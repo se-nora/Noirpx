@@ -347,7 +347,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Playable in Cave Run on macOS (screenshot of meter in use).
 
 ### projectile-entities: Spells as simulated projectiles
-- status: done
+- status: todo
 - priority: 18
 - track: noita
 - depends: host-split

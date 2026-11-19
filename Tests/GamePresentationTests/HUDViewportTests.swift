@@ -43,7 +43,8 @@ final class HUDViewportTests: XCTestCase {
 
             // Find all scroll views in the hierarchy
             let allScrollViews = descendants(view).compactMap { $0 as? NSScrollView }
-            XCTAssertGreaterThanOrEqual(allScrollViews.count, 2, "Expected vertical HUD scroll + horizontal palette scroll")
+            // Exactly two scroll views: vertical HUD scroll + horizontal palette scroll
+            XCTAssertEqual(allScrollViews.count, 2, "Expected vertical HUD scroll + horizontal palette scroll")
 
             // Find all FocusRingView buttons in the entire hierarchy
             let buttons = descendants(view).filter {

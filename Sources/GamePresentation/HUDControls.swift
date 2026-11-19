@@ -142,10 +142,6 @@ public struct HUDControls: View {
                 HStack { infoButtons }
                 VStack(alignment: .leading) { infoButtons }
             }
-            // Discovered ingredient indicators (spell crafting)
-            if !discoveredMaterials.isEmpty {
-                DiscoveredIngredientsRow(discovered: discoveredMaterials)
-            }
             // Material palette: two-row horizontal bar of discovered drawable materials + Erase
             ScrollView(.horizontal) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -249,30 +245,6 @@ private struct PaletteItem {
     let material: SimulationCore.Material
     let title: String
     let keyEquivalent: KeyEquivalent?
-}
-
-/// Horizontal row of discovered ingredient chips for spell crafting.
-private struct DiscoveredIngredientsRow: View {
-    let discovered: Set<SimulationCore.Material>
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 4) {
-                ForEach(discovered.sorted { $0.rawValue < $1.rawValue }, id: \.rawValue) { mat in
-                    Text(mat.wandName)
-                        .font(.system(.caption2, design: .monospaced))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(materialColor(mat).opacity(0.3), in: Capsule())
-                        .foregroundStyle(.white)
-                        .overlay(
-                            Capsule().stroke(materialColor(mat), lineWidth: 1)
-                        )
-                }
-            }
-        }
-        .frame(height: 28)
-    }
 }
 
 #endif

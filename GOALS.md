@@ -28,6 +28,7 @@ indented by two spaces):
 | `scope` | What to build; the Product Owner may narrow it into a smaller first slice. |
 | `acceptance` | Observable criteria the PO and QA check. |
 | `result` | Added at delivery: merge summary and unverified dimensions. |
+| `reopened` | Reason a merged goal must run again (its merge landed broken). The scheduler ignores the existing merge commit and dispatches it. |
 
 Areas: `sim-engine` (Simulation tick loop, chunk storage, snapshots, resident
 mode), `sim-rules` (materials, behaviors, reactions, heat), `worldgen` (cave
@@ -348,6 +349,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 ### projectile-entities: Spells as simulated projectiles
 - status: todo
+- reopened: merge landed a non-compiling MetalRenderer; finish the overlay move and verify
 - priority: 18
 - track: noita
 - depends: host-split

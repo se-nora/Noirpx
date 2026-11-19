@@ -2,7 +2,7 @@
 
 ## Cave world generation
 
-`CaveWorldGenerator` (in `Sources/SimulationCore/WorldGeneration.swift`) produces a
+`CaveWorldGenerator` (in `Sources/SimulationCore/World/CaveWorldGenerator.swift`) produces a
 larger multi-material grid deterministically from a seed and a bounded world size.
 It places all 16 materials. Terrain is layered solid carved by 4-octave value noise,
 with flood-fill connectivity repair carving L-shaped tunnels (deterministic). Sand

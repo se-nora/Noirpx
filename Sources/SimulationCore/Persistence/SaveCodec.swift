@@ -648,38 +648,38 @@ public struct SaveCodec: Sendable {
 
         return run
     }
-}
 
-// MARK: - Encoder helpers
+    // MARK: - Encoder
 
-private final class Encoder {
-    var bytes: [UInt8] = []
+    private final class Encoder {
+        var bytes: [UInt8] = []
 
-    func writeU8(_ value: UInt8) {
-        bytes.append(value)
-    }
-
-    func writeU16(_ value: UInt16) {
-        bytes.append(UInt8(truncatingIfNeeded: value))
-        bytes.append(UInt8(truncatingIfNeeded: value >> 8))
-    }
-
-    func writeU32(_ value: UInt32) {
-        bytes.append(UInt8(truncatingIfNeeded: value))
-        bytes.append(UInt8(truncatingIfNeeded: value >> 8))
-        bytes.append(UInt8(truncatingIfNeeded: value >> 16))
-        bytes.append(UInt8(truncatingIfNeeded: value >> 24))
-    }
-
-    func writeU64(_ value: UInt64) {
-        for shift in stride(from: 0, to: 64, by: 8) {
-            bytes.append(UInt8(truncatingIfNeeded: value >> shift))
+        func writeU8(_ value: UInt8) {
+            bytes.append(value)
         }
-    }
 
-    func writeI32(_ value: Int32) {
-        let u32 = UInt32(bitPattern: value)
-        writeU32(u32)
+        func writeU16(_ value: UInt16) {
+            bytes.append(UInt8(truncatingIfNeeded: value))
+            bytes.append(UInt8(truncatingIfNeeded: value >> 8))
+        }
+
+        func writeU32(_ value: UInt32) {
+            bytes.append(UInt8(truncatingIfNeeded: value))
+            bytes.append(UInt8(truncatingIfNeeded: value >> 8))
+            bytes.append(UInt8(truncatingIfNeeded: value >> 16))
+            bytes.append(UInt8(truncatingIfNeeded: value >> 24))
+        }
+
+        func writeU64(_ value: UInt64) {
+            for shift in stride(from: 0, to: 64, by: 8) {
+                bytes.append(UInt8(truncatingIfNeeded: value >> shift))
+            }
+        }
+
+        func writeI32(_ value: Int32) {
+            let u32 = UInt32(bitPattern: value)
+            writeU32(u32)
+        }
     }
 }
 

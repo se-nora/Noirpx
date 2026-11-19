@@ -6,6 +6,8 @@ public struct SimulationSnapshot: Equatable, Sendable {
     public let chunks: [ChunkSnapshot]
     /// Presentation-only blast flash cells from the completed tick. Excluded from digest.
     public let blastFlash: BlastFlash
+    /// Presentation-only projectiles from the completed tick. Excluded from digest.
+    public let projectiles: [ProjectileSnapshot]
 
     public static let digestVersion: UInt64 = 7
 

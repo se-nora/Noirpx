@@ -3,6 +3,11 @@ import SimulationCore
 
 final class DeterministicReplayTests: XCTestCase {
 
+    /// Digest (v7) covers world state only (chunks, RNG state, tick).
+    /// Projectiles and other presentation-only state live in the snapshot but
+    /// are excluded from the digest, so replay tests with empty projectile
+    /// lists produce identical digests across runs.
+
     func testSameSeedProducesSameSnapshots() {
         var sim1 = Simulation(seed: 42)
         var sim2 = Simulation(seed: 42)

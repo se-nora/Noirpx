@@ -176,6 +176,24 @@ public struct CaveRun {
         try simulation.enqueue(cmd)
     }
 
+    /// Casts a spell projectile from origin toward target.
+    /// - Parameters:
+    ///   - blueprint: The projectile blueprint to cast.
+    ///   - origin: The starting cell position (typically character center).
+    ///   - toward: The target cell position (aim point).
+    public mutating func castSpell(blueprint: ProjectileBlueprint, origin: CellPosition, toward: CellPosition) {
+        _ = simulation.spawnProjectile(blueprint: blueprint, origin: origin, target: toward)
+    }
+
+    /// Casts a spell projectile from the character position toward the target cell.
+    /// Spawns a ProjectileEntity in the simulation; the tick loop handles movement and impact.
+    public mutating func castSpell(blueprint: ProjectileBlueprint, target: CellPosition) throws {
+        guard outcome == .playing else { return }
+        let origin = CellPosition(x: character.position.x + FixtureCharacter.width / 2,
+                                  y: character.position.y + FixtureCharacter.height / 2)
+        _ = simulation.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
+    }
+
     /// Test-only restoring initializer for mutation/replay tests.
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
          outcome: Outcome, simulation: Simulation, fallLimit: Int) {

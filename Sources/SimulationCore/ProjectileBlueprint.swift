@@ -2,7 +2,7 @@
 public struct ProjectileBlueprint: Equatable, Sendable {
     public let id: String                    // stable key, matches recipe id
     public let name: String                  // display name
-    public let primaryMaterial: Material     // material placed along the wand ray
+    public let primaryMaterial: Material     // material placed on impact footprint
     public let secondaryMaterial: Material?  // optional trailing material (e.g. steam after fire)
     public let maxRange: Int                 // cells along ray (1…32)
     public let budgetPerTick: Int            // cells placed per simulation tick (1…8)
@@ -10,6 +10,8 @@ public struct ProjectileBlueprint: Equatable, Sendable {
     public let manaCost: UInt8               // 0…255 mana points (0 = free)
     public let flags: Flags                  // behavior modifiers
     public let footprint: SpellFootprint     // deterministic impact footprint
+    public let gravityFactor: GravityFactor  // Q8 gravity per tick² (0 = none)
+    public let speed: ProjectileSpeed        // Q8 cells per tick (256 = 1.0)
 
     public init(id: String,
                 name: String,
@@ -20,7 +22,9 @@ public struct ProjectileBlueprint: Equatable, Sendable {
                 cooldownTicks: UInt16 = 0,
                 manaCost: UInt8 = 0,
                 flags: Flags = [],
-                footprint: SpellFootprint) {
+                footprint: SpellFootprint,
+                gravityFactor: GravityFactor = 0,
+                speed: ProjectileSpeed = 0) {
         precondition(maxRange >= 1 && maxRange <= 32, "maxRange must be 1…32")
         precondition(budgetPerTick >= 1 && budgetPerTick <= 8, "budgetPerTick must be 1…8")
         precondition(cooldownTicks <= UInt16.max, "cooldownTicks must fit in UInt16")
@@ -38,6 +42,8 @@ public struct ProjectileBlueprint: Equatable, Sendable {
         self.manaCost = manaCost
         self.flags = flags
         self.footprint = footprint
+        self.gravityFactor = gravityFactor
+        self.speed = speed
     }
 
     public struct Flags: OptionSet, Sendable {

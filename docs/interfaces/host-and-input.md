@@ -79,3 +79,20 @@ Blocking material paint inside the character body is rejected by `CaveRun.paint`
 - **Determinism:** held state is part of tick-indexed input. Same seed + same
   sequence of (tick, held, cell) pairs reproduces identical snapshot digests.
   No wall-clock timers are used; paint rate is bounded to one cell per tick.
+
+#### World-bounded camera (this increment, v0.38.0)
+
+- **Bounds source:** `GameModel` derives `FixtureViewport.CellRange` from the
+  active `CaveRun.world.extents` and publishes it as `worldBounds` (cleared if
+  no world is active or the viewport cannot be constructed).
+- **Clamping:** `FixtureViewport(..., worldBounds:)` clamps the camera center so
+  the visible cell rectangle stays inside those bounds. When the world is
+  smaller than the viewport on an axis, the center is pinned to that axis's
+  world midpoint instead of clamping to a truncated edge.
+- **Shared by input:** `InputMetalView` receives the same `worldBounds` (and the
+  renderer coordinator updates it on every SwiftUI update), so mouse/touch
+  mapping and rasterization use the same clamped viewport. Input outside the
+  visible rectangle returns `nil`; resolved cells stay inside the world.
+- **Frame source:** `MetalRenderer` passes `snapshot.tick` as the shimmer
+  `frame:` argument, so one snapshot always rasterizes to the same pixels
+  regardless of display callback rate.

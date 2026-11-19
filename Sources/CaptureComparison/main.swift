@@ -113,8 +113,10 @@ struct BeaconCapture {
         self.challenge = run
         self.character = run.character
         let cameraCenter = CellPosition(x: character.position.x + FixtureCharacter.width / 2, y: character.position.y + FixtureCharacter.height / 2)
+        // BeaconRun floor spans x: -40...160; vertical playable range y: -20...20 (fall limit -20).
+        let worldBounds = FixtureViewport.CellRange(x: -40...160, y: -20...20)
         guard let vp = FixtureViewport(drawableWidth: Double(width), drawableHeight: Double(height),
-                                        center: cameraCenter, longEdgeCells: 200) else {
+                                        center: cameraCenter, longEdgeCells: 200, worldBounds: worldBounds) else {
             throw NSError(domain: "capture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create viewport"])
         }
         self.viewport = vp
@@ -183,33 +185,35 @@ struct CaveCapture {
         self.version = version
         self.hudEnabled = hudEnabled
 
-        // Create base simulation and stamp cave world
+        // Create base simulation and stamp cave world (256×128 centered at origin, matching CaveRun)
         var simulation = Simulation(seed: seed)
-        let generator = CaveWorldGenerator(seed: seed, width: 128, height: 64)
+        let generator = CaveWorldGenerator(seed: seed, width: 256, height: 128)
         try generator.stamp(into: &simulation, tick: 1)
 
-        // Get spawn position for camera center
+        // Get spawn position for camera center and world extents for clamping
         let caveWorld = generator.generate()
         let cameraCenter = caveWorld.spawn
+        // CaveRun 256×128 centered at origin: x ∈ [-128, 127], y ∈ [-64, 63]
+        let worldBounds = FixtureViewport.CellRange(x: -128...127, y: -64...63)
 
         guard let vp = FixtureViewport(drawableWidth: Double(width), drawableHeight: Double(height),
-                                        center: cameraCenter, longEdgeCells: 200) else {
+                                        center: cameraCenter, longEdgeCells: 200, worldBounds: worldBounds) else {
             throw NSError(domain: "capture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create viewport"])
         }
         self.viewport = vp
         self.simulation = simulation
     }
 
-    mutating func captureFrame() -> [UInt8] {
-        let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: nil)
+    mutating func captureFrame(frame: UInt64 = 0) -> [UInt8] {
+        let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: nil, frame: frame)
         guard hudEnabled else { return pixels }
         var hudPixels = pixels
         let state = HeadlessHUDState(
             version: version,
             worldType: .cave,
             seed: seed,
-            worldWidth: 128,
-            worldHeight: 64,
+            worldWidth: 256,
+            worldHeight: 128,
             position: nil,
             tick: simulation.snapshot.tick,
             outcome: .playing,
@@ -229,8 +233,8 @@ struct CaveCapture {
     mutating func runAuto(ticks: Int) throws -> [[UInt8]] {
         var frames: [[UInt8]] = []
         frames.reserveCapacity(ticks)
-        for _ in 0..<ticks {
-            frames.append(captureFrame())
+        for tick in 0..<ticks {
+            frames.append(captureFrame(frame: UInt64(tick)))
             try advanceTick()
         }
         return frames

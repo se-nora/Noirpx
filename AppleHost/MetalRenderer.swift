@@ -18,14 +18,17 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private var frameCount = 0
     var snapshot: SimulationSnapshot
     var character: FixtureCharacter
+    var worldBounds: FixtureViewport.CellRange? = nil
 
     init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
          onFPS: @escaping (Double) -> Void,
          onRenderedChunks: @escaping (Int) -> Void,
-         onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void) {
+         onError: @escaping (String) -> Void, onViewport: @escaping (FixtureViewport) -> Void,
+         worldBounds: FixtureViewport.CellRange? = nil) {
         self.device = device
         self.snapshot = snapshot
         self.character = character
+        self.worldBounds = worldBounds
         self.onFPS = onFPS
         self.onRenderedChunks = onRenderedChunks
         self.onError = onError
@@ -52,7 +55,8 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
                                              drawableHeight: Double(view.drawableSize.height),
-                                             center: character.cameraCenter, longEdgeCells: 200) else { return }
+                                             center: character.cameraCenter, longEdgeCells: 200,
+                                             worldBounds: worldBounds) else { return }
         if lastDrawableSize != view.drawableSize {
             lastDrawableSize = view.drawableSize
             DispatchQueue.main.async { [onViewport] in onViewport(viewport) }
@@ -70,7 +74,10 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
             report("Could not create Metal frame resources.")
             return
         }
-        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character)
+        // Drive shimmer from the simulation tick so the same snapshot always
+        // rasterizes to the same pixels, independent of display callback count.
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
+                                            frame: snapshot.tick)
         frame.pixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,

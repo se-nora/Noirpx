@@ -37,3 +37,9 @@ save format, or cross-device determinism certification.
 Resident snapshots have no digest; their equality includes thermal data but
 their deadline-dependent scheduling still precludes a replay guarantee.
 There is no save migration.
+
+Presentation-only rasterization (`FixturePixels.rasterize` / `rgba`) accepts an
+optional `frame:` counter for shimmer. The host passes `snapshot.tick`, not a
+display frame count, so the same snapshot and viewport always produce identical
+pixels and shimmer advances only when the simulation advances. This does not
+affect the digest or snapshot equality.

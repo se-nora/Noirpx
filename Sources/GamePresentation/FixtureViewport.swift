@@ -12,26 +12,86 @@ public struct FixtureViewport {
     public let rows: Int
     public let center: CellPosition
 
+    /// World bounds in cell coordinates, used for camera clamping.
+    /// When provided, the viewport center is clamped so the visible cell rectangle
+    /// stays fully inside these bounds. If the world is smaller than the viewport,
+    /// the center is clamped to the world center.
+    public struct CellRange: Equatable, Sendable {
+        public let x: ClosedRange<Int>
+        public let y: ClosedRange<Int>
+        public init(x: ClosedRange<Int>, y: ClosedRange<Int>) { self.x = x; self.y = y }
+        public func contains(_ p: CellPosition) -> Bool { x.contains(p.x) && y.contains(p.y) }
+    }
+
     public init?(drawableWidth: Double, drawableHeight: Double,
                  center: CellPosition = CellPosition(x: 0, y: 0),
-                 longEdgeCells: Int = Self.longEdgeCells) {
+                 longEdgeCells: Int = Self.longEdgeCells,
+                 worldBounds: CellRange? = nil) {
         guard drawableWidth.isFinite, drawableHeight.isFinite,
               drawableWidth > 0, drawableHeight > 0,
-              (1...Self.longEdgeCells).contains(longEdgeCells),
-              Simulation.coordinateBounds.contains(center.x),
-              Simulation.coordinateBounds.contains(center.y) else { return nil }
-        self.center = center
+              (1...Self.longEdgeCells).contains(longEdgeCells) else { return nil }
+
         let longEdge = max(drawableWidth, drawableHeight)
         let shortEdgeCells = max(1, Int((min(drawableWidth, drawableHeight) / longEdge
                                          * Double(longEdgeCells)).rounded()))
-        columns = drawableWidth >= drawableHeight ? longEdgeCells : shortEdgeCells
-        rows = drawableHeight >= drawableWidth ? longEdgeCells : shortEdgeCells
+        let columns = drawableWidth >= drawableHeight ? longEdgeCells : shortEdgeCells
+        let rows = drawableHeight >= drawableWidth ? longEdgeCells : shortEdgeCells
         let scale = min(drawableWidth / Double(columns), drawableHeight / Double(rows))
-        width = Double(columns) * scale
-        height = Double(rows) * scale
+        let width = Double(columns) * scale
+        let height = Double(rows) * scale
         guard width > 0, height > 0 else { return nil }
-        x = (drawableWidth - width) / 2
-        y = (drawableHeight - height) / 2
+        let x = (drawableWidth - width) / 2
+        let y = (drawableHeight - height) / 2
+
+        // Clamp center to worldBounds if provided
+        let finalCenter: CellPosition
+        if let bounds = worldBounds {
+            let halfW = columns / 2
+            let halfH = rows - rows / 2
+            // Visible x range: [center.x - columns/2, center.x + columns - 1 - columns/2]
+            // Must satisfy: bounds.x.lowerBound ≤ minVisibleX and maxVisibleX ≤ bounds.x.upperBound
+            // → center.x ∈ [bounds.x.lowerBound + columns/2, bounds.x.upperBound - (columns - 1 - columns/2)]
+            let maxVisibleOffsetX = columns - 1 - columns / 2
+            let minCenterX = bounds.x.lowerBound + halfW
+            let maxCenterX = bounds.x.upperBound - maxVisibleOffsetX
+            // Visible y range: [center.y - halfH, center.y + rows/2 - 1]
+            // Must satisfy: bounds.y.lowerBound ≤ minVisibleY and maxVisibleY ≤ bounds.y.upperBound
+            // → center.y ∈ [bounds.y.lowerBound + halfH, bounds.y.upperBound - (rows/2) + 1]
+            let minCenterY = bounds.y.lowerBound + halfH
+            let maxCenterY = bounds.y.upperBound - (rows / 2) + 1
+
+            let clampedX: Int
+            let clampedY: Int
+            if minCenterX <= maxCenterX {
+                clampedX = min(max(center.x, minCenterX), maxCenterX)
+            } else {
+                // World smaller than viewport: center on world center (avoid truncation bias for negative ranges)
+                clampedX = bounds.x.lowerBound + (bounds.x.upperBound - bounds.x.lowerBound) / 2
+            }
+            if minCenterY <= maxCenterY {
+                clampedY = min(max(center.y, minCenterY), maxCenterY)
+            } else {
+                // World smaller than viewport: center on world center (avoid truncation bias for negative ranges)
+                clampedY = bounds.y.lowerBound + (bounds.y.upperBound - bounds.y.lowerBound) / 2
+            }
+
+            // Final guard: clamped center must be within simulation coordinate bounds
+            guard Simulation.coordinateBounds.contains(clampedX),
+                  Simulation.coordinateBounds.contains(clampedY) else { return nil }
+            finalCenter = CellPosition(x: clampedX, y: clampedY)
+        } else {
+            guard Simulation.coordinateBounds.contains(center.x),
+                  Simulation.coordinateBounds.contains(center.y) else { return nil }
+            finalCenter = center
+        }
+
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.columns = columns
+        self.rows = rows
+        self.center = finalCenter
     }
 
     public func cell(atX pointX: Double, y pointY: Double) -> CellPosition? {

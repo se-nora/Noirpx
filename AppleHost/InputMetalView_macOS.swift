@@ -22,6 +22,7 @@ final class InputMetalView: MTKView {
     var onCycleMaterial: ((Bool) -> Void)?
     var onToggleHUD: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
+    var worldBounds: FixtureViewport.CellRange? = nil
     var lastCell: CellPosition?
     private var keys: Set<UInt16> = []
     private var keyMonitor: ScopedRegistration?
@@ -201,6 +202,7 @@ extension MetalSurface: NSViewRepresentable {
         view.onCycleMaterial = onCycleMaterial
         view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
+        view.worldBounds = worldBounds
         configure(view, coordinator: context.coordinator)
         return view
     }
@@ -208,6 +210,7 @@ extension MetalSurface: NSViewRepresentable {
     func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.worldBounds = worldBounds
         view.onPaint = onPaint
         view.onAim = onAim
         view.onHover = onHover
@@ -224,6 +227,7 @@ extension MetalSurface: NSViewRepresentable {
         view.onCycleMaterial = onCycleMaterial
         view.onToggleHUD = onToggleHUD
         view.cameraCenter = character.cameraCenter
+        view.worldBounds = worldBounds
     }
 }
 #endif

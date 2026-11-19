@@ -57,6 +57,20 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Telegram video reports show HUD in cave/beacon captures.
   - No regression in live app HUD rendering.
 
+### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
+- status: todo
+- priority: 6
+- track: noita
+- depends: capture-hud-fix
+- areas: hud
+- why: The hud-material-discovery goal was supposed to replace the material picker with a single HUD bar showing discovered materials that also serves as the drawing selection tool. However, there still appear to be two separate material lists in the HUD — one for discovered materials and another for drawing selection. This duplicates state, confuses the player, and wastes screen space.
+- scope: Audit the HUD code (HostView, FocusRingView, MaterialPillView, any picker/list views) to find both material lists. Consolidate into exactly one list: the discovered-materials bar (horizontal scrolling, max 2 rows) that also functions as the drawing selection tool (tap/click to set active draw material). Remove any remaining separate picker, dropdown, or drawing-material list. Ensure the unified bar is the only place the player selects materials for drawing.
+- acceptance:
+  - Search `AppleHost/` for `MaterialPicker`, `drawingMaterial`, `materialList`, `MaterialBar`, `MaterialPill`, `picker` — only the unified discovered-materials bar remains.
+  - The single bar shows discovered materials (erase + discovered ∩ drawable sorted by rawValue), scrolls horizontally when more than fits, and tapping an item sets it as the active draw material.
+  - No other view allows material selection for drawing.
+  - Cave Run plays with the unified bar; no orphan picker/list view remains (screenshot).
+
 ### checks-warm-builds: Reuse build products in the check script
 - status: done
 - priority: 5

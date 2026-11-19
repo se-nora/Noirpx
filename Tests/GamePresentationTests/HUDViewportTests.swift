@@ -120,13 +120,14 @@ final class HUDViewportTests: XCTestCase {
         let view = NSHostingView(rootView: HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
                                                         select: { selected = $0 },
                                                         discoveredMaterials: Set([.sand, .water, .fire, .lava]),
-                                                        wand: WandControllerState(),
-                                                        manaPool: ManaPool(),
-                                                        onCycleWandSlot: {},
-                                                        health: 3,
-                                                        maxHealth: 3,
+                                                        onToggleSpellCrafting: {},
                                                         showSpellCrafting: false,
-                                                        showSpellCraftingAllowed: false))
+                                                        showSpellCraftingAllowed: false,
+                                                        wand: Wand(),
+                                                        manaPool: ManaPool(),
+                                                        onCycleWandSlot: { _ in },
+                                                        health: 3,
+                                                        maxHealth: 3))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 200)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
                               backing: .buffered, defer: false)
@@ -151,8 +152,9 @@ final class HUDViewportTests: XCTestCase {
         XCTAssertEqual(buttons.count, 4 + 1 + 4)
 
         // Find the horizontal palette scroll view (the one with multiple rows of buttons)
-        let paletteScroll = try XCTUnwrap(allScrollViews.first { scroll in
-            let docButtons = descendants(scroll.documentView!).filter {
+        let paletteScroll = try XCTUnwrap(allScrollViews.first { (scroll: NSScrollView) in
+            guard let docView = scroll.documentView else { return false }
+            let docButtons = descendants(docView).filter {
                 String(describing: type(of: $0)).contains("FocusRingView")
             }
             return docButtons.count >= 5 // palette has erase + 4 materials = 5 buttons minimum

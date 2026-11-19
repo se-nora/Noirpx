@@ -286,7 +286,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     no death outcome in this goal).
 
 ### player-health: Health, material damage, and death in Cave Run
-- status: todo
+- status: done
 - priority: 16
 - track: noita
 - depends: host-split

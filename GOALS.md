@@ -495,7 +495,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tests: capacity, collect, pour, spill determinism; screenshot.
 
 ### pixel-look: Per-cell texture and a world-bounded camera
-- status: todo
+- status: done
 - priority: 14
 - track: noita
 - depends: none

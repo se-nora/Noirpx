@@ -17,6 +17,7 @@ let package = Package(
         .executableTarget(name: "CaptureComparison", dependencies: ["SimulationCore", "GamePresentation"]),
         .executableTarget(name: "TestAnimationRenderer", dependencies: ["SimulationCore", "GamePresentation"]),
         .executableTarget(name: "SimBenchmark", dependencies: ["SimulationCore", "GamePresentation"]),
+        .executableTarget(name: "CaptureProjectile", dependencies: ["SimulationCore", "GamePresentation"]),
         .testTarget(name: "SimulationCoreTests", dependencies: ["SimulationCore", "SimBenchmark"]),
         .testTarget(name: "GamePresentationTests", dependencies: ["GamePresentation", "SimulationCore"])
     ]

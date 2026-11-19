@@ -24,7 +24,8 @@ final class HUDViewportTests: XCTestCase {
                     ForEach(0..<6) { i in Text("Status \(i)") }
                     HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
                                 select: { selected = $0 },
-                                discoveredMaterials: Set(MaterialBrush.drawable))
+                                discoveredMaterials: Set(MaterialBrush.drawable),
+                                health: nil, maxHealth: nil)
                 }
                 .font(.system(.caption, design: .monospaced))
             })

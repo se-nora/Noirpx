@@ -18,8 +18,8 @@ public struct HUDControls: View {
     private let wand: Wand
     private let manaPool: ManaPool
     private let onCycleWandSlot: (Int) -> Void
-    private let health: Int
-    private let maxHealth: Int
+    private let health: Int?
+    private let maxHealth: Int?
 
     public init(selected: SimulationCore.Material, restart: @escaping () -> Void, newRun: @escaping () -> Void,
                 diagnostics: @escaping () -> Void, help: @escaping () -> Void,
@@ -31,8 +31,8 @@ public struct HUDControls: View {
                 wand: Wand = Wand(),
                 manaPool: ManaPool = ManaPool(),
                 onCycleWandSlot: @escaping (Int) -> Void = { _ in },
-                health: Int = 3,
-                maxHealth: Int = 3) {
+                health: Int?,
+                maxHealth: Int?) {
         self.selected = selected
         self.restart = restart
         self.newRun = newRun
@@ -62,14 +62,25 @@ public struct HUDControls: View {
         1 + selectableMaterials.count
     }
 
+    /// Computes the 3-segment heart bar state. Returns `nil` when no run exists
+    /// (hiding the bar entirely). Each `Bool` is `true` for a filled segment.
+    public static func healthSegments(health: Int?, maxHealth: Int?) -> [Bool]? {
+        guard let health else { return nil }
+        let segments = maxHealth ?? 3
+        let filled = min(max(health, 0), segments)
+        return (0..<segments).map { $0 < filled }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            // Health bar
-            HStack(spacing: 2) {
-                ForEach(0..<maxHealth, id: \.self) { index in
-                    Text(index < health ? "❤️" : "♡")
-                        .font(.system(size: 16))
-                        .foregroundStyle(index < health ? Color.red : Color.gray.opacity(0.4))
+            // Health bar (3 segments; hidden when no run)
+            if let segments = HUDControls.healthSegments(health: health, maxHealth: maxHealth) {
+                HStack(spacing: 2) {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { index, filled in
+                        Text(filled ? "❤️" : "♡")
+                            .font(.system(size: 16))
+                            .foregroundStyle(filled ? Color.red : Color.gray.opacity(0.4))
+                    }
                 }
             }
             // Wand slot bar + mana

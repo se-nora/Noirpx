@@ -67,7 +67,9 @@ final class CraftingGatingTests: XCTestCase {
             showSpellCraftingAllowed: true,
             wand: Wand(),
             manaPool: ManaPool(),
-            onCycleWandSlot: { _ in }
+            onCycleWandSlot: { _ in },
+            health: nil,
+            maxHealth: nil
         ))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
@@ -111,7 +113,9 @@ final class CraftingGatingTests: XCTestCase {
             showSpellCraftingAllowed: false,
             wand: Wand(),
             manaPool: ManaPool(),
-            onCycleWandSlot: { _ in }
+            onCycleWandSlot: { _ in },
+            health: nil,
+            maxHealth: nil
         ))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],

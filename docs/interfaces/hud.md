@@ -23,7 +23,13 @@ and refresh the renderer. The sequence is local, with no seed entry or save.
 - **Outcome UI (HUD):**
   - `.playing`: "Descend the shaft. Reach the bottom."
   - `.died`: Red bold "You died!"
-  - `.died`: Orange bold "You died! Try again!"
+
+### Heart Bar (HUD)
+
+A 3-segment heart bar is shown in the HUD when a `CaveRun` exists. Each segment
+represents 1 HP (maxHealth = 3). Filled segments (❤️) show current health; empty
+segments (♡) show missing health. The bar is hidden entirely when no run exists
+(`health: Int?` is `nil`).
 
 ## HUD Integration
 

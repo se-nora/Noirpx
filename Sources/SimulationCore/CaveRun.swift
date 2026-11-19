@@ -1,5 +1,6 @@
 /// A seeded, replayable cave session. All game state advances on completed material ticks.
-/// Open-ended descent; the only failure is falling too far below spawn.
+/// Open-ended descent; the run ends when health reaches 0 (material or fall damage)
+/// or when the character falls below the fall limit. Health starts at 3 (maxHealth).
 public struct CaveRun {
     public enum Outcome: Equatable, Sendable {
         case playing
@@ -63,8 +64,9 @@ public struct CaveRun {
         self.fallLimit = world.spawn.y - termination.descent - 4
     }
 
-    /// Advances one tick. Order: material tick → character advance → damage checks → outcome checks.
-    /// Terminal outcomes freeze further input and paint.
+    /// Advances one tick. Order: material tick → capture pre-advance grounded →
+    /// character advance → protection-timer decrement → material damage → fall damage →
+    /// fall-limit check. Terminal outcomes freeze further input and paint.
     public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
 
@@ -74,7 +76,9 @@ public struct CaveRun {
         // 2. Capture pre-advance grounded state for fall-damage transition detection
         let wasGrounded = character.grounded
 
-        // 3. Character physics on completed material tick (sets lastLandingImpactVelocity on landing)
+        // 3. Character physics on the completed snapshot. FixtureCharacter.advance
+        //    records lastLandingImpactVelocity on landing (loop collision or post-loop
+        //    grounded transition).
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
 
         // 4. Decrement damage protection timer on playing ticks
@@ -95,13 +99,10 @@ public struct CaveRun {
             }
         }
 
-        // 6. Fall damage (airborne → grounded transition while falling)
-        if !wasGrounded && character.grounded {
-            let impactSpeed = character.lastLandingImpactVelocity
-            var fallDamage = 0
-            if impactSpeed >= 12 { fallDamage = 3 }
-            else if impactSpeed > 10 { fallDamage = 2 }
-            else if impactSpeed > 8 { fallDamage = 1 }
+        // 6. Fall damage (airborne → grounded transition while falling). Gated on the
+        //    protection timer so one tick cannot stack material and fall damage.
+        if damageProtectionTimer == 0 && !wasGrounded && character.grounded {
+            let fallDamage = CaveRun.fallDamage(impactSpeed: character.lastLandingImpactVelocity)
             if fallDamage > 0 {
                 health = max(health - fallDamage, 0)
                 damageProtectionTimer = 30
@@ -119,7 +120,20 @@ public struct CaveRun {
         }
     }
 
+    /// Fall damage for an impact speed (absolute vertical velocity at landing).
+    /// 0...8 → 0, 9...10 → 1, 11 → 2, ≥12 → 3. Pure so the tiers are unit-testable.
+    static func fallDamage(impactSpeed: Int) -> Int {
+        if impactSpeed >= 12 { return 3 }
+        if impactSpeed > 10 { return 2 }
+        if impactSpeed > 8 { return 1 }
+        return 0
+    }
+
     /// Checks if character body overlaps any hazardous material (fire, lava, acid) at its current position.
+    ///
+    /// Player damage is uniformly 1 for fire, lava, and acid. This deliberately differs
+    /// from `ChimeWarden.Hazard`, where lava/acid cost 2 shield and hazards can ignite;
+    /// the two models are not unified. Player damage is 1 per tick for fire/lava/acid.
     static func touchesHazard(_ position: CellPosition,
                               materialAt: (CellPosition) -> Material) -> Bool {
         for y in position.y..<(position.y + FixtureCharacter.height) {

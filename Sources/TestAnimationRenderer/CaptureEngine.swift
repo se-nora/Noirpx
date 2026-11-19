@@ -184,6 +184,8 @@ public struct CaptureEngine {
                 health: run.health
             )
         } else if let run = caveRun {
+            // Cave Run has a single terminal state. The capture policy speaks BeaconRun
+            // outcomes, so any non-playing Cave Run outcome maps to `.exhausted` by design.
             let beaconOutcome: BeaconRun.Outcome? = run.outcome == .playing ? nil : .exhausted
             return AutoPolicy.ScenarioState(
                 tick: Int(run.simulation.snapshot.tick),

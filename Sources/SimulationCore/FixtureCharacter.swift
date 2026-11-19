@@ -6,7 +6,7 @@ public struct FixtureCharacter: Equatable, Sendable {
 
     public private(set) var position: CellPosition
     public private(set) var grounded = false
-    public private(set) var verticalVelocity = 0
+    internal var verticalVelocity = 0
     public private(set) var lastLandingImpactVelocity = 0
     internal var verticalRemainder = 0
 
@@ -39,11 +39,12 @@ public struct FixtureCharacter: Equatable, Sendable {
     }
 
     /// Internal restoring initializer for save decoding.
-    init(position: CellPosition, grounded: Bool, verticalVelocity: Int, verticalRemainder: Int) {
+    init(position: CellPosition, grounded: Bool, verticalVelocity: Int, verticalRemainder: Int, lastLandingImpactVelocity: Int = 0) {
         self.position = position
         self.grounded = grounded
         self.verticalVelocity = verticalVelocity
         self.verticalRemainder = verticalRemainder
+        self.lastLandingImpactVelocity = lastLandingImpactVelocity
     }
 
     /// Advances after the material tick. Jump is a one-tick press, not a held state.
@@ -57,9 +58,9 @@ public struct FixtureCharacter: Equatable, Sendable {
             }
         }
 
-        grounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
+        let wasGrounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
+        grounded = wasGrounded
         if grounded && verticalVelocity <= 0 {
-            lastLandingImpactVelocity = abs(verticalVelocity)
             verticalVelocity = 0
             verticalRemainder = 0
         }
@@ -72,10 +73,15 @@ public struct FixtureCharacter: Equatable, Sendable {
         verticalRemainder += verticalVelocity
         let steps = verticalRemainder / 4
         verticalRemainder %= 4
+        var didCaptureLanding = false
         if steps != 0 {
             let direction = steps.signum()
             for _ in 0..<abs(steps) {
                 if try blocked(dx: 0, dy: direction, snapshot: snapshot) {
+                    if direction < 0 {
+                        lastLandingImpactVelocity = abs(verticalVelocity)
+                        didCaptureLanding = true
+                    }
                     verticalVelocity = 0
                     verticalRemainder = 0
                     grounded = direction < 0
@@ -85,6 +91,9 @@ public struct FixtureCharacter: Equatable, Sendable {
             }
         }
         grounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
+        if grounded && !wasGrounded && !didCaptureLanding {
+            lastLandingImpactVelocity = abs(verticalVelocity)
+        }
     }
 
     public func contains(_ cell: CellPosition) -> Bool {

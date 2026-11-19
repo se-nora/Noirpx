@@ -348,8 +348,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Playable in Cave Run on macOS (screenshot of meter in use).
 
 ### projectile-entities: Spells as simulated projectiles
-- status: todo
-- reopened: merge landed a non-compiling MetalRenderer; finish the overlay move and verify
+- status: done
 - priority: 18
 - track: noita
 - depends: host-split
@@ -366,7 +365,10 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests: flight path, gravity, collision with solid vs liquid, lifetime
     expiry, deterministic replay, command budget.
   - Casting in Cave Run shows a moving projectile (screenshot sequence).
-
+- result: Overlay drawing moved into `FixturePixels.rasterize` (the AppleHost
+  renderer no longer draws projectiles) and the overlay cell conversion fixed
+  (`projectile.position.cell()`). `scripts/checks.sh --full` passed: Swift tests
+  plus macOS Debug xcodebuild. No screenshot of a flying projectile captured.
 ### material-reactions: Data-driven material reactions
 - status: todo
 - priority: 22

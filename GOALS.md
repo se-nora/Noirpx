@@ -595,7 +595,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   `MetalRenderer.materialColor` deleted; 4 overlay tests added (in-viewport
   tint, out-of-viewport clipping, deterministic re-raster, digest exclusion);
   all 94 GamePresentationTests pass; macOS Debug xcodebuild succeeds; visual
-  proof PNGs captured under state/goals/; MARKETING_VERSION bumped 0.41.0 -> 0.43.0.
+  proof PNGs captured under state/goals/; MARKETING_VERSION bumped 0.41.0 -> 0.43.0; CaptureProjectile executable added for reproducible visual proof.
 
 ### explosion-impact-feedback: Apply explosion damage and draw the blast flash
 - status: todo

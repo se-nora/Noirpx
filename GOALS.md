@@ -263,7 +263,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Noita-like gameplay
 
 ### explosions: Terrain-destroying explosions
-- status: todo
+- status: done
 - priority: 15
 - track: noita
 - depends: none

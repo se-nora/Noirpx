@@ -42,6 +42,8 @@ public struct HUDControls: View {
     private let onCycleWandSlot: (Int) -> Void
     private let health: Int?
     private let maxHealth: Int?
+    private let energy: Int?
+    private let maxEnergy: Int?
 
     public init(selected: SimulationCore.Material, restart: @escaping () -> Void, newRun: @escaping () -> Void,
                 diagnostics: @escaping () -> Void, help: @escaping () -> Void,
@@ -54,7 +56,9 @@ public struct HUDControls: View {
                 manaPool: ManaPool = ManaPool(),
                 onCycleWandSlot: @escaping (Int) -> Void = { _ in },
                 health: Int?,
-                maxHealth: Int?) {
+                maxHealth: Int?,
+                energy: Int? = nil,
+                maxEnergy: Int? = nil) {
         self.selected = selected
         self.restart = restart
         self.newRun = newRun
@@ -70,6 +74,8 @@ public struct HUDControls: View {
         self.onCycleWandSlot = onCycleWandSlot
         self.health = health
         self.maxHealth = maxHealth
+        self.energy = energy
+        self.maxEnergy = maxEnergy
     }
 
     /// Discovered drawable materials, sorted by Material.rawValue for stable order.
@@ -93,6 +99,16 @@ public struct HUDControls: View {
         return (0..<segments).map { $0 < filled }
     }
 
+    /// Energy meter segments using a ceiling fill rule so every nonzero
+    /// energy shows at least one segment: 1..60 → 1, 61..120 → 2, 121..180 → 3.
+    /// Returns nil when energy is nil (no active run).
+    public static func energySegments(energy: Int?, maxEnergy: Int?) -> [Bool]? {
+        guard let energy, let maxEnergy, maxEnergy > 0 else { return nil }
+        let segments = 3
+        let filled = min(max((energy * segments + maxEnergy - 1) / maxEnergy, 0), segments)
+        return (0..<segments).map { $0 < filled }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             // Health bar (3 segments; hidden when no run)
@@ -102,6 +118,16 @@ public struct HUDControls: View {
                         Text(filled ? "❤️" : "♡")
                             .font(.system(size: 16))
                             .foregroundStyle(filled ? Color.red : Color.gray.opacity(0.4))
+                    }
+                }
+            }
+            // Energy bar (3 segments, cyan; hidden when no run / no energy data)
+            if let segments = HUDControls.energySegments(energy: energy, maxEnergy: maxEnergy) {
+                HStack(spacing: 2) {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { index, filled in
+                        Text(filled ? "⚡️" : "⚪️")
+                            .font(.system(size: 16))
+                            .foregroundStyle(filled ? Color.cyan : Color.gray.opacity(0.4))
                     }
                 }
             }

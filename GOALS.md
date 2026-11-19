@@ -303,7 +303,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - HUD shows health and status; death shows the outcome banner (screenshot).
 
 ### levitation: Levitation with an energy meter
-- status: todo
+- status: done
 - priority: 17
 - track: noita
 - depends: host-split

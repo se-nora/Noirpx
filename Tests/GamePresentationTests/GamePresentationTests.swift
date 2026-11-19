@@ -136,8 +136,8 @@ final class GamePresentationTests: XCTestCase {
         
         // Jump edge detection
         input.setKeyboard(.init(left: false, right: false, jump: true))
-        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: true))
-        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: false))
+        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: true, heldJump: true))
+        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: false, heldJump: true))
         
         // Clear keyboard jump state
         input.setKeyboard(.init())
@@ -152,8 +152,8 @@ final class GamePresentationTests: XCTestCase {
         input.setTouch(.right, pressed: false)
         
         input.setTouch(.jump, pressed: true)
-        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: true))
-        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: false))
+        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: true, heldJump: true))
+        XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: false, heldJump: true))
         input.setTouch(.jump, pressed: false)
         
         // Accessibility activate
@@ -169,6 +169,55 @@ final class GamePresentationTests: XCTestCase {
         input.setKeyboard(.init(left: true, jump: true))
         input.reset()
         XCTAssertEqual(input.consumeTick(), GameplayInputResult(horizontal: 0, jump: false))
+    }
+
+    func testGameplayInputHeldJump() {
+        var input = GameplayInput()
+        
+        // Keyboard held jump: rising edge produces jump=true + heldJump=true
+        input.setKeyboard(.init(left: false, right: false, jump: true))
+        var result = input.consumeTick()
+        XCTAssertEqual(result.horizontal, 0)
+        XCTAssertEqual(result.jump, true, "Rising edge → one-shot jump")
+        XCTAssertEqual(result.heldJump, true, "While held → heldJump=true")
+        
+        // Subsequent ticks while held: no rising edge, heldJump=true
+        result = input.consumeTick()
+        XCTAssertEqual(result.horizontal, 0)
+        XCTAssertEqual(result.jump, false, "No rising edge on subsequent ticks")
+        XCTAssertEqual(result.heldJump, true, "Still held → heldJump=true")
+        
+        // Release: no jump, heldJump=false
+        input.setKeyboard(.init())
+        result = input.consumeTick()
+        XCTAssertEqual(result.horizontal, 0)
+        XCTAssertEqual(result.jump, false)
+        XCTAssertEqual(result.heldJump, false, "Released → heldJump=false")
+        
+        // Touch held jump
+        input.setTouch(.jump, pressed: true)
+        result = input.consumeTick()
+        XCTAssertEqual(result.jump, true)
+        XCTAssertEqual(result.heldJump, true)
+        
+        result = input.consumeTick()
+        XCTAssertEqual(result.jump, false)
+        XCTAssertEqual(result.heldJump, true)
+        
+        input.setTouch(.jump, pressed: false)
+        result = input.consumeTick()
+        XCTAssertEqual(result.jump, false)
+        XCTAssertEqual(result.heldJump, false)
+        
+        // Accessibility activate: sets pending jump (rising edge) but NOT held state
+        input.activate(.jump)
+        result = input.consumeTick()
+        XCTAssertEqual(result.jump, true)
+        XCTAssertEqual(result.heldJump, false, "Accessibility is one-shot, no hold")
+        
+        result = input.consumeTick()
+        XCTAssertEqual(result.jump, false)
+        XCTAssertEqual(result.heldJump, false)
     }
 
     func testFollowingViewportMapsAndRendersShiftedWorld() throws {

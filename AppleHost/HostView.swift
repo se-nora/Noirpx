@@ -100,7 +100,9 @@ struct HostView: View {
                             manaPool: model.wandController.manaPool,
                             onCycleWandSlot: { direction in model.cycleWandSlot(direction) },
                             health: model.caveRun?.health,
-                            maxHealth: model.caveRun?.maxHealth)
+                            maxHealth: model.caveRun?.maxHealth,
+                            energy: model.caveRun?.character.levitationEnergy,
+                            maxEnergy: FixtureCharacter.maxLevitationEnergy)
                 Text("Paint: drag; keys 1–9, 0 (discovered materials)")
                 Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
                 // Spell crafting HUD (only presented in safe zones)

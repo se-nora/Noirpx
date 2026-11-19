@@ -96,3 +96,19 @@ Blocking material paint inside the character body is rejected by `CaveRun.paint`
 - **Frame source:** `MetalRenderer` passes `snapshot.tick` as the shimmer
   `frame:` argument, so one snapshot always rasterizes to the same pixels
   regardless of display callback rate.
+
+#### Held-jump input for levitation (this increment, v0.39.0)
+
+- **`GameplayInputResult.heldJump`**: new field (default `false` for backward
+  compatibility). `GameplayInput.consumeTick()` returns
+  `heldJump: keyboard.jump || touch.jump` (current held state, not rising edge).
+- **macOS**: `GameplayControls.jump = true` while any of W/Space/Up is held
+  (NSEvent keyDown/keyUp). Already sets `jump=true` continuously.
+- **iOS**: DragGesture on Jump button sets `pressed: true` on `onChanged`,
+  `false` on `onEnded` — produces held state.
+- **Accessibility**: `activate(.jump)` sets one-shot `jump` but NOT `heldJump`
+  (out of scope for accessibility levitation).
+- **Determinism**: `heldJump` is part of tick-indexed input. Same seed + same
+  sequence of (tick, heldJump) pairs reproduces identical state. Old replays
+  without `heldJump` replay with `heldJump=false` (no levitation), which is
+  correct — levitation is a new mechanic.

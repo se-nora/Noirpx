@@ -1,9 +1,12 @@
 /// CaptureComparison - Headless video frame capture for Noirpx simulation.
 /// Outputs raw RGBA frames to stdout for ffmpeg consumption.
 ///
-/// Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--info]
+/// Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--out <path>] [--info]
 
 import Foundation
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 import SimulationCore
 import GamePresentation
 
@@ -22,6 +25,7 @@ struct Args {
     let worktreePath: String
     let worldType: WorldType
     let hudEnabled: Bool
+    let outPath: String?
 }
 
 struct ParsedArgs {
@@ -41,6 +45,7 @@ func parseArgs() -> ParsedArgs? {
     var worldType: WorldType = .beacon
     var hudEnabled = false
     var showInfo = false
+    var outPath: String?
 
     var i = args.startIndex
     while i < args.endIndex {
@@ -56,12 +61,13 @@ func parseArgs() -> ParsedArgs? {
         case "--world-type": i += 1; worldType = WorldType(rawValue: args[i]) ?? .beacon
         case "--hud": hudEnabled = true
         case "--info": showInfo = true
+        case "--out": i += 1; outPath = args[i]
         default: break
         }
         i += 1
     }
     guard let ref else { return nil }
-    return ParsedArgs(args: Args(ref: ref, seed: seed, ticks: ticks, fps: fps, width: width, height: height, worktreePath: worktreePath, worldType: worldType, hudEnabled: hudEnabled), showInfo: showInfo)
+    return ParsedArgs(args: Args(ref: ref, seed: seed, ticks: ticks, fps: fps, width: width, height: height, worktreePath: worktreePath, worldType: worldType, hudEnabled: hudEnabled, outPath: outPath), showInfo: showInfo)
 }
 
 func runGit(_ args: [String], at path: String) throws -> String {
@@ -252,10 +258,62 @@ func writeFramesToStdout(_ frames: [[UInt8]]) {
     }
 }
 
+/// Writes one opaque RGBA frame (top-down, row-major, alpha ignored) as a PNG.
+func writePNG(_ pixels: [UInt8], width: Int, height: Int, to path: String) throws {
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    // Captured frames are fully opaque; skip the (always 255) alpha byte. The
+    // captured buffer is RGBA in memory order, which maps to byteOrder32Big.
+    let bitmapInfo = CGBitmapInfo(
+        rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+    )
+    guard let provider = CGDataProvider(data: Data(pixels) as CFData),
+          let image = CGImage(
+              width: width,
+              height: height,
+              bitsPerComponent: 8,
+              bitsPerPixel: 32,
+              bytesPerRow: width * 4,
+              space: colorSpace,
+              bitmapInfo: bitmapInfo,
+              provider: provider,
+              decode: nil,
+              shouldInterpolate: false,
+              intent: .defaultIntent
+          ),
+          let destination = CGImageDestinationCreateWithURL(
+              URL(fileURLWithPath: path) as CFURL,
+              UTType.png.identifier as CFString,
+              1,
+              nil
+          ) else {
+        throw NSError(domain: "capture", code: 2,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to create PNG at \(path)"])
+    }
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else {
+        throw NSError(domain: "capture", code: 3,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to finalize PNG at \(path)"])
+    }
+}
+
+/// Emits captured frames. With `--out`, writes the first frame as a PNG for a
+/// visual HUD spot-check; otherwise streams raw RGBA frames to stdout for ffmpeg.
+func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, outPath: String?) throws {
+    if let outPath {
+        guard let first = frames.first else {
+            throw NSError(domain: "capture", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "No frames captured"])
+        }
+        try writePNG(first, width: width, height: height, to: outPath)
+    } else {
+        writeFramesToStdout(frames)
+    }
+}
+
 func printUsage() {
     let stderr = FileHandle.standardError
     let msg = """
-Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--info]
+Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--out <path>] [--info]
   --ref           Git ref to checkout (branch, tag, commit)
   --seed          Simulation seed (default: 42)
   --ticks         Ticks to simulate (default: 300)
@@ -265,6 +323,7 @@ Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <in
   --worktree      Path to git worktree (default: current directory)
   --world-type    World type: beacon or cave (default: beacon)
   --hud           Composite the headless HUD overlay onto captured frames (default: off)
+  --out           Write the first captured frame as a PNG to <path> instead of raw RGBA to stdout
   --info          Print viewport info and exit
 """
     stderr.write(msg.data(using: .utf8)!)
@@ -313,7 +372,7 @@ func main() throws {
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        writeFramesToStdout(frames)
+        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
 
     case .cave:
         let capture = try CaveCapture(width: args.width, height: args.height, seed: args.seed,
@@ -326,7 +385,7 @@ func main() throws {
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        writeFramesToStdout(frames)
+        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
     }
 }
 

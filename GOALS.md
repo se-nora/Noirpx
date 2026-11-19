@@ -52,7 +52,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - why: The headless CaptureComparison tool should composite the HUD onto captured frames (via --hud flag, implemented in capture-hud), but HUD is still not visible in the generated comparison videos/telegram reports. Root cause investigation needed: verify HeadlessHUD compositing works end-to-end, check frame buffer orientation/blending, ensure --hud flag is actually used in the comparison pipeline.
 - scope: Debug why HUD pixels are absent in output frames despite --hud flag existing. Fix the compositing pipeline (Metal/CoreGraphics offscreen pass). Add a visual verification step: generate a test capture with --hud for a known seed, open the PNG, and visually confirm HUD elements (health, depth, seed, material bar, diagnostics) are present and correctly positioned — not just file diff or pixel-count checks.
 - acceptance:
-  - `swift run CaptureComparison --cave --seed 12345 --hud --frames 10 --out /tmp/test.png` produces a PNG where HUD is visually readable (health bar, depth counter, seed, material pill, diagnostics text).
+  - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 10 --out /tmp/test.png` produces a PNG where the HUD is visually readable (version, world type, seed, size, tick, and the bottom material pill).
   - Automated test asserts non-empty HUD pixels in known regions (top-left panel, bottom pill).
   - Telegram video reports show HUD in cave/beacon captures.
   - No regression in live app HUD rendering.

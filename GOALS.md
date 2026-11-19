@@ -43,6 +43,34 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 ## Infrastructure
 
+### capture-hud-fix: Investigate and fix HUD missing in CaptureComparison videos
+- status: todo
+- priority: 4
+- track: infra
+- depends: none
+- areas: renderer, hud, tests-infra
+- why: The headless CaptureComparison tool should composite the HUD onto captured frames (via --hud flag, implemented in capture-hud), but HUD is still not visible in the generated comparison videos/telegram reports. Root cause investigation needed: verify HeadlessHUD compositing works end-to-end, check frame buffer orientation/blending, ensure --hud flag is actually used in the comparison pipeline.
+- scope: Debug why HUD pixels are absent in output frames despite --hud flag existing. Fix the compositing pipeline (Metal/CoreGraphics offscreen pass). Add a visual verification step: generate a test capture with --hud for a known seed, open the PNG, and visually confirm HUD elements (health, depth, seed, material bar, diagnostics) are present and correctly positioned — not just file diff or pixel-count checks.
+- acceptance:
+  - `swift run CaptureComparison --cave --seed 12345 --hud --frames 10 --out /tmp/test.png` produces a PNG where HUD is visually readable (health bar, depth counter, seed, material pill, diagnostics text).
+  - Automated test asserts non-empty HUD pixels in known regions (top-left panel, bottom pill).
+  - Telegram video reports show HUD in cave/beacon captures.
+  - No regression in live app HUD rendering.
+
+### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
+- status: todo
+- priority: 6
+- track: noita
+- depends: capture-hud-fix
+- areas: hud
+- why: The hud-material-discovery goal was supposed to replace the material picker with a single HUD bar showing discovered materials that also serves as the drawing selection tool. However, there still appear to be two separate material lists in the HUD — one for discovered materials and another for drawing selection. This duplicates state, confuses the player, and wastes screen space.
+- scope: Audit the HUD code (HostView, FocusRingView, MaterialPillView, any picker/list views) to find both material lists. Consolidate into exactly one list: the discovered-materials bar (horizontal scrolling, max 2 rows) that also functions as the drawing selection tool (tap/click to set active draw material). Remove any remaining separate picker, dropdown, or drawing-material list. Ensure the unified bar is the only place the player selects materials for drawing.
+- acceptance:
+  - Search `AppleHost/` for `MaterialPicker`, `drawingMaterial`, `materialList`, `MaterialBar`, `MaterialPill`, `picker` — only the unified discovered-materials bar remains.
+  - The single bar shows discovered materials (erase + discovered ∩ drawable sorted by rawValue), scrolls horizontally when more than fits, and tapping an item sets it as the active draw material.
+  - No other view allows material selection for drawing.
+  - Cave Run plays with the unified bar; no orphan picker/list view remains (screenshot).
+
 ### checks-warm-builds: Reuse build products in the check script
 - status: done
 - priority: 5
@@ -303,7 +331,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - HUD shows health and status; death shows the outcome banner (screenshot).
 
 ### levitation: Levitation with an energy meter
-- status: todo
+- status: done
 - priority: 17
 - track: noita
 - depends: host-split

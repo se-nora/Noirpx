@@ -316,7 +316,7 @@ final class GameModel: ObservableObject {
                 }
 
                 let controls = input.consumeTick()
-                try run.advance(horizontal: controls.horizontal, jump: controls.jump, activeChunks: activeChunks)
+                try run.advance(horizontal: controls.horizontal, jump: controls.jump, heldJump: controls.heldJump, activeChunks: activeChunks)
                 caveRun = run
                 updateActiveChunks()
                 snapshot = run.simulation.snapshot

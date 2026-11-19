@@ -219,7 +219,7 @@ public enum FixturePixels {
 
         // Draw projectiles on top of everything (single pixel tinted by primary material).
         for projectile in snapshot.projectiles {
-            let cell = projectile.cell
+            let cell = projectile.position.cell()
             let x = cell.x - viewport.center.x + width / 2
             let y = height / 2 - 1 - cell.y + viewport.center.y
             guard (0..<width).contains(x), (0..<height).contains(y) else { continue }

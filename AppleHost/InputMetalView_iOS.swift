@@ -85,6 +85,7 @@ extension MetalSurface: UIViewRepresentable {
     func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.worldBounds = worldBounds
         view.onPaint = onPaint
         view.onAim = onAim
         view.onHover = onHover

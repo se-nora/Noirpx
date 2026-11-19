@@ -58,9 +58,8 @@ public enum FixturePixels {
         0xffcc3399, 0xffd444a4, 0xffc22e90, 0xffcb3a9c
     ]
 
-    /// Palette pointers indexed by Material.rawValue (0..15).
-    /// For materials with a single palette, both pointers reference the same array.
-    /// For pitch/oil, cold and burning are separate; the hot loop selects the correct one.
+    /// Palette arrays indexed by Material.rawValue (0..15).
+    /// Pitch/oil use their cold palette here and switch to the burning palette in the hot loop.
     private static let palettePointers: [[UInt32]?] = [
         nil, // 0: empty
         solidPalette,
@@ -144,10 +143,12 @@ public enum FixturePixels {
                 let y = height / 2 - 1 - worldY + viewport.center.y
                 guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
                 chunkVisible = true
-                let isBurning = chunk.thermalStates[index].isBurning
+                // Only pitch/oil consult the thermal state for color; skip the read otherwise.
+                let isPitchOrOil = material == .pitch || material == .oil
+                let isBurning = isPitchOrOil ? chunk.thermalStates[index].isBurning : false
                 let baseIdx = Int(paletteHash(worldX, worldY, material) & 3)
                 let shimmers = isShimmerMaterial[Int(material.rawValue)]
-                    || (isBurning && (material == .pitch || material == .oil))
+                    || (isBurning && isPitchOrOil)
                 let shimmerOffset: Int = shimmers && frame % shimmerPeriod < shimmerHalf ? 1 : 0
                 // For pitch/oil burning, use burning palette; shimmer also applies to burning pitch/oil.
                 let paletteIdx = (baseIdx + shimmerOffset) & 3
@@ -161,7 +162,8 @@ public enum FixturePixels {
                     color = isBurning ? oilBurningPalette[paletteIdx] : oilColdPalette[paletteIdx]
                 default:
                     // All other materials use their single palette (shimmer materials included).
-                    color = palettePointers[Int(material.rawValue)]![paletteIdx]
+                    guard let palette = palettePointers[Int(material.rawValue)] else { continue }
+                    color = palette[paletteIdx]
                 }
                 pixels[y * width + x] = color.littleEndian
                 if let character {

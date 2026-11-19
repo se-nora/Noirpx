@@ -388,7 +388,7 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertTrue(Self.isSolidPaletteColor(pixel1))
         XCTAssertTrue(Self.isSolidPaletteColor(pixel2))
 
-        // Moving a cell changes its color (hash follows position)
+        // Moving a cell changes its screen position; hash follows world position.
         var sim2 = Simulation(seed: 0)
         try sim2.enqueue(.init(tick: 1, position: .init(x: 0, y: 0), material: .solid))
         try sim2.advance(activeChunks: ChunkRegion(x: 1000...1000, y: 1000...1000))
@@ -401,12 +401,42 @@ final class GamePresentationTests: XCTestCase {
 
         let originX = 0 - viewport.center.x + viewport.columns / 2
         let originY = viewport.rows / 2 - 1 - 0 + viewport.center.y
+        let movedX = 1 - viewport.center.x + viewport.columns / 2
+        let movedY = viewport.rows / 2 - 1 - 0 + viewport.center.y
         let colorAtOrigin = Array(frameAtOrigin.pixels[(originY * viewport.columns + originX) * 4 ..< (originY * viewport.columns + originX) * 4 + 4])
-        let colorAtX1 = Array(frameAtX1.pixels[(originY * viewport.columns + originX) * 4 ..< (originY * viewport.columns + originX) * 4 + 4])
-        // Different positions (even same viewport pixel) can have different colors
-        // because hash uses world position. But they're both in palette.
+        let colorAtMoved = Array(frameAtX1.pixels[(movedY * viewport.columns + movedX) * 4 ..< (movedY * viewport.columns + movedX) * 4 + 4])
+        // Both positions should render solid in the solid palette.
         XCTAssertTrue(Self.isSolidPaletteColor(colorAtOrigin))
-        XCTAssertTrue(Self.isSolidPaletteColor(colorAtX1))
+        XCTAssertTrue(Self.isSolidPaletteColor(colorAtMoved))
+        // The vacated origin in sim3 is background.
+        let colorAtVacatedOrigin = Array(frameAtX1.pixels[(originY * viewport.columns + originX) * 4 ..< (originY * viewport.columns + originX) * 4 + 4])
+        XCTAssertTrue(Self.isBackgroundColor(colorAtVacatedOrigin))
+    }
+
+    func testPerCellColorVariety() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        var simulation = Simulation(seed: 0)
+        // A solid block should use several palette entries, not one flat color.
+        for x in -8...7 {
+            for y in -8...7 {
+                try simulation.enqueue(.init(tick: 1, position: .init(x: x, y: y), material: .solid))
+            }
+        }
+        try simulation.advance(activeChunks: ChunkRegion(x: 1000...1000, y: 1000...1000))
+        let frame = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport)
+
+        var distinct = Set<[UInt8]>()
+        for y in -8...7 {
+            for x in -8...7 {
+                let px = x - viewport.center.x + viewport.columns / 2
+                let py = viewport.rows / 2 - 1 - y + viewport.center.y
+                let offset = (py * viewport.columns + px) * 4
+                let pixel = Array(frame.pixels[offset..<offset + 4])
+                XCTAssertTrue(Self.isSolidPaletteColor(pixel), "Solid cell \(x),\(y) used non-palette color \(pixel)")
+                distinct.insert(pixel)
+            }
+        }
+        XCTAssertGreaterThan(distinct.count, 1, "Per-cell texture must vary solid cells across the palette")
     }
 
     func testPaletteBounds() throws {
@@ -414,7 +444,7 @@ final class GamePresentationTests: XCTestCase {
         var simulation = Simulation(seed: 0)
 
         // Test all materials at various positions
-        let materials: [(Material, (x: Int, y: Int), ([[UInt8]]) -> Bool)] = [
+        let materials: [(Material, (x: Int, y: Int), ([UInt8]) -> Bool)] = [
             (.solid, (-5, -5), Self.isSolidPaletteColor),
             (.sand, (-4, -5), Self.isSandPaletteColor),
             (.water, (-3, -5), Self.isWaterPaletteColor),
@@ -459,7 +489,7 @@ final class GamePresentationTests: XCTestCase {
         var simulation = Simulation(seed: 0)
 
         // Place one of each shimmer material and non-shimmer material
-        let shimmerMaterials: [(Material, (x: Int, y: Int), ([[UInt8]]) -> Bool)] = [
+        let shimmerMaterials: [(Material, (x: Int, y: Int), ([UInt8]) -> Bool)] = [
             (.water, (0, 0), Self.isWaterPaletteColor),
             (.fire, (1, 0), Self.isFirePaletteColor),
             (.steam, (2, 0), Self.isSteamPaletteColor),
@@ -469,7 +499,7 @@ final class GamePresentationTests: XCTestCase {
             (.slime, (6, 0), Self.isSlimePaletteColor),
             (.magicLiquid, (7, 0), Self.isMagicLiquidPaletteColor),
         ]
-        let nonShimmerMaterials: [(Material, (x: Int, y: Int), ([[UInt8]]) -> Bool)] = [
+        let nonShimmerMaterials: [(Material, (x: Int, y: Int), ([UInt8]) -> Bool)] = [
             (.solid, (8, 0), Self.isSolidPaletteColor),
             (.sand, (9, 0), Self.isSandPaletteColor),
             (.pitch, (10, 0), Self.isPitchColdPaletteColor), // cold pitch
@@ -557,73 +587,71 @@ final class GamePresentationTests: XCTestCase {
     }
 
     func testCameraClampingAtWorldEdges() throws {
-        // CaveRun world: 128x64 centered at origin → x: -64..63, y: -32..31
-        // Drawable 640x360 with longEdgeCells=200 → columns=200, rows=112
-        let worldBounds = FixtureViewport.CellRange(x: -64...63, y: -32...31)
+        // Large world (512x512 centered at origin) so the 200x113 viewport fits inside.
+        let worldBounds = FixtureViewport.CellRange(x: -256...255, y: -256...255)
         let drawableWidth = 640.0
         let drawableHeight = 360.0
         let longEdgeCells = 200
 
-        // Center at (-200, -100) - far outside world bounds on negative side
-        let centerNegative = CellPosition(x: -200, y: -100)
-        let viewportNeg = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
-                                                         center: centerNegative, longEdgeCells: longEdgeCells,
-                                                         worldBounds: worldBounds))
-        // Visible x range should be clamped to world bounds
-        let halfW = viewportNeg.columns / 2
-        let halfH = viewportNeg.rows - viewportNeg.rows / 2
-        let minVisibleX = viewportNeg.center.x - halfW
-        let maxVisibleX = viewportNeg.center.x + halfW - 1
-        let minVisibleY = viewportNeg.center.y - halfH
-        let maxVisibleY = viewportNeg.center.y + viewportNeg.rows / 2 - 1
-        XCTAssertTrue(worldBounds.x.contains(minVisibleX), "Left edge should be inside world bounds")
-        XCTAssertTrue(worldBounds.x.contains(maxVisibleX), "Right edge should be inside world bounds")
-        XCTAssertTrue(worldBounds.y.contains(minVisibleY), "Bottom edge should be inside world bounds")
-        XCTAssertTrue(worldBounds.y.contains(maxVisibleY), "Top edge should be inside world bounds")
+        func visibleRect(_ vp: FixtureViewport) -> FixtureViewport.CellRange {
+            let halfW = vp.columns / 2
+            let halfH = vp.rows - vp.rows / 2
+            let minX = vp.center.x - halfW
+            let maxX = vp.center.x + (vp.columns - 1 - halfW)
+            let minY = vp.center.y - halfH
+            let maxY = vp.center.y + (vp.rows / 2 - 1)
+            return FixtureViewport.CellRange(x: minX...maxX, y: minY...maxY)
+        }
 
-        // Center at (200, 100) - far outside world bounds on positive side
-        let centerPositive = CellPosition(x: 200, y: 100)
-        let viewportPos = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
-                                                         center: centerPositive, longEdgeCells: longEdgeCells,
-                                                         worldBounds: worldBounds))
-        let minVisibleX2 = viewportPos.center.x - halfW
-        let maxVisibleX2 = viewportPos.center.x + halfW - 1
-        let minVisibleY2 = viewportPos.center.y - halfH
-        let maxVisibleY2 = viewportPos.center.y + viewportPos.rows / 2 - 1
-        XCTAssertTrue(worldBounds.x.contains(minVisibleX2))
-        XCTAssertTrue(worldBounds.x.contains(maxVisibleX2))
-        XCTAssertTrue(worldBounds.y.contains(minVisibleY2))
-        XCTAssertTrue(worldBounds.y.contains(maxVisibleY2))
+        for candidate in [CellPosition(x: -10_000, y: -10_000),
+                          CellPosition(x: 10_000, y: 10_000),
+                          CellPosition(x: -200, y: -100),
+                          CellPosition(x: 200, y: 100)] {
+            let vp = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                   center: candidate, longEdgeCells: longEdgeCells,
+                                                   worldBounds: worldBounds))
+            let rect = visibleRect(vp)
+            XCTAssertTrue(worldBounds.x.contains(rect.x.lowerBound) && worldBounds.x.contains(rect.x.upperBound),
+                          "Visible x \(rect.x) must stay inside world \(worldBounds.x) for center \(candidate)")
+            XCTAssertTrue(worldBounds.y.contains(rect.y.lowerBound) && worldBounds.y.contains(rect.y.upperBound),
+                          "Visible y \(rect.y) must stay inside world \(worldBounds.y) for center \(candidate)")
+        }
 
-        // World smaller than viewport: 50x30 world, viewport 200x112
+        // World smaller than viewport: center clamps to world center (integer midpoint).
         let smallWorld = FixtureViewport.CellRange(x: -25...24, y: -15...14)
-        let smallCenter = CellPosition(x: 100, y: 100) // far outside
-        let viewportSmall = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
-                                                           center: smallCenter, longEdgeCells: longEdgeCells,
-                                                           worldBounds: smallWorld))
-        // Should clamp to world center (0, 0)
-        XCTAssertEqual(viewportSmall.center.x, 0)
-        XCTAssertEqual(viewportSmall.center.y, 0)
+        let vpSmall = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                    center: CellPosition(x: 10_000, y: 10_000),
+                                                    longEdgeCells: longEdgeCells, worldBounds: smallWorld))
+        XCTAssertEqual(vpSmall.center.x, -25 + (24 - (-25)) / 2)
+        XCTAssertEqual(vpSmall.center.y, -15 + (14 - (-15)) / 2)
 
-        // cell(atX:y:) maps correctly after clamping
-        let testCell = viewportNeg.cell(atX: viewportNeg.x + viewportNeg.width / 2, y: viewportNeg.y + viewportNeg.height / 2)
-        XCTAssertNotNil(testCell)
-        XCTAssertTrue(worldBounds.contains(testCell!))
+        // cell(atX:y:) maps correctly after clamping.
+        let vp = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                               center: CellPosition(x: -200, y: -100), longEdgeCells: longEdgeCells,
+                                               worldBounds: worldBounds))
+        let centerCell = vp.cell(atX: vp.x + vp.width / 2, y: vp.y + vp.height / 2)
+        XCTAssertNotNil(centerCell)
+        XCTAssertEqual(centerCell?.x, vp.center.x)
+        // Drawable center maps to the cell just above the viewport center row (integer row indexing).
+        XCTAssertEqual(centerCell?.y, vp.center.y - 1)
 
-        // Rasterize sweep: all produced cells should satisfy worldBounds.contains
+        // Rasterize sweep with a filled world: all non-background pixels must map inside worldBounds.
         var simulation = Simulation(seed: 0)
-        try simulation.enqueue(.init(tick: 1, position: .init(x: 0, y: 0), material: .solid))
+        // Fill a region covering the clamped viewport's visible area.
+        for x in -150...149 {
+            for y in -100...99 {
+                try simulation.enqueue(.init(tick: 1, position: .init(x: x, y: y), material: .solid))
+            }
+        }
         try simulation.advance(activeChunks: ChunkRegion(x: 1000...1000, y: 1000...1000))
-        let frame = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewportNeg)
-        // Every non-background pixel corresponds to a cell in world bounds
-        for y in 0..<viewportNeg.rows {
-            for x in 0..<viewportNeg.columns {
-                let offset = (y * viewportNeg.columns + x) * 4
+        let frame = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: vp)
+        for y in 0..<vp.rows {
+            for x in 0..<vp.columns {
+                let offset = (y * vp.columns + x) * 4
                 let pixel = Array(frame.pixels[offset..<offset + 4])
                 if !Self.isBackgroundColor(pixel) {
-                    // Convert pixel back to world cell
-                    let worldX = x - viewportNeg.columns / 2 + viewportNeg.center.x
-                    let worldY = viewportNeg.rows / 2 - 1 - y + viewportNeg.center.y
+                    let worldX = x - vp.columns / 2 + vp.center.x
+                    let worldY = vp.rows / 2 - 1 - y + vp.center.y
                     let cell = CellPosition(x: worldX, y: worldY)
                     XCTAssertTrue(worldBounds.contains(cell), "Rendered cell \(cell) should be in world bounds")
                 }
@@ -631,44 +659,64 @@ final class GamePresentationTests: XCTestCase {
         }
     }
 
-    func testInputRenderViewportAgreementAtWorldEdges() throws {
-        // When viewport is clamped by worldBounds, InputMetalView.cell(atX:y:) and
-        // FixturePixels.rasterize should map the same drawable point to the same world cell.
-        let worldBounds = FixtureViewport.CellRange(x: -64...63, y: -32...31)
+    func testCameraClampingAtCaveRunWorldSize() throws {
+        // CaveRun's default world is 256x128 centered at origin.
+        let worldBounds = FixtureViewport.CellRange(x: -128...127, y: -64...63)
         let drawableWidth = 640.0
         let drawableHeight = 360.0
         let longEdgeCells = 200
 
-        // Center far outside world bounds so clamping occurs
-        let characterCenter = CellPosition(x: -200, y: -100)
-        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
-                                                      center: characterCenter, longEdgeCells: longEdgeCells,
-                                                      worldBounds: worldBounds))
-
-        // Test several points across the drawable
-        let testPoints = [
-            (viewport.x, viewport.y),                          // top-left
-            (viewport.x + viewport.width / 2, viewport.y),     // top-center
-            (viewport.x + viewport.width, viewport.y),         // top-right
-            (viewport.x, viewport.y + viewport.height / 2),    // middle-left
-            (viewport.x + viewport.width / 2, viewport.y + viewport.height / 2), // center
-            (viewport.x + viewport.width, viewport.y + viewport.height / 2),     // middle-right
-            (viewport.x, viewport.y + viewport.height),        // bottom-left
-            (viewport.x + viewport.width / 2, viewport.y + viewport.height),     // bottom-center
-            (viewport.x + viewport.width, viewport.y + viewport.height),         // bottom-right
-        ]
-
-        for (pointX, pointY) in testPoints {
-            // Renderer's viewport maps point to cell
-            let rendererCell = viewport.cell(atX: pointX, y: pointY)
-
-            // InputMetalView uses FixtureViewport with same params - should match
-            let inputViewport = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
-                                                               center: characterCenter, longEdgeCells: longEdgeCells,
-                                                               worldBounds: worldBounds))
-            let inputCell = inputViewport.cell(atX: pointX, y: pointY)
-
-            XCTAssertEqual(rendererCell, inputCell, "Renderer and Input viewport mapping must agree at \(pointX), \(pointY)")
+        func visibleRect(_ vp: FixtureViewport) -> FixtureViewport.CellRange {
+            let halfW = vp.columns / 2
+            let halfH = vp.rows - vp.rows / 2
+            return FixtureViewport.CellRange(
+                x: (vp.center.x - halfW)...(vp.center.x + vp.columns - 1 - halfW),
+                y: (vp.center.y - halfH)...(vp.center.y + vp.rows / 2 - 1))
         }
+
+        for candidate in [CellPosition(x: -10_000, y: -10_000),
+                          CellPosition(x: 10_000, y: 10_000),
+                          CellPosition(x: -128, y: -64),
+                          CellPosition(x: 127, y: 63)] {
+            let vp = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                   center: candidate, longEdgeCells: longEdgeCells,
+                                                   worldBounds: worldBounds))
+            let rect = visibleRect(vp)
+            XCTAssertTrue(worldBounds.x.contains(rect.x.lowerBound) && worldBounds.x.contains(rect.x.upperBound),
+                          "Visible x \(rect.x) must stay inside \(worldBounds.x) for center \(candidate)")
+            XCTAssertTrue(worldBounds.y.contains(rect.y.lowerBound) && worldBounds.y.contains(rect.y.upperBound),
+                          "Visible y \(rect.y) must stay inside \(worldBounds.y) for center \(candidate)")
+        }
+
+        // Camera pushed past the left edge must show the world's first column, not beyond it.
+        let left = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                 center: CellPosition(x: -10_000, y: 0),
+                                                 longEdgeCells: longEdgeCells, worldBounds: worldBounds))
+        XCTAssertEqual(left.center.x - left.columns / 2, worldBounds.x.lowerBound)
+    }
+
+    func testInputMappingStaysInsideCaveWorldAtEdges() throws {
+        // When the camera clamps to a 256x128 CaveRun world, input mapping must
+        // never resolve outside the world and must still reach the world edge.
+        let worldBounds = FixtureViewport.CellRange(x: -128...127, y: -64...63)
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 640, drawableHeight: 360,
+                                                     center: CellPosition(x: -10_000, y: -10_000),
+                                                     longEdgeCells: 200, worldBounds: worldBounds))
+
+        for row in 0..<viewport.rows {
+            for column in 0..<viewport.columns {
+                let pointX = viewport.x + (Double(column) + 0.5) * viewport.width / Double(viewport.columns)
+                let pointY = viewport.y + (Double(row) + 0.5) * viewport.height / Double(viewport.rows)
+                let cell = try XCTUnwrap(viewport.cell(atX: pointX, y: pointY))
+                XCTAssertTrue(worldBounds.contains(cell), "Input mapped \(cell) outside \(worldBounds)")
+            }
+        }
+
+        // Clamped camera: the leftmost column and bottom row are the world's min edges.
+        let leftmost = try XCTUnwrap(viewport.cell(atX: viewport.x + 0.5, y: viewport.y + viewport.height / 2))
+        let bottom = try XCTUnwrap(viewport.cell(atX: viewport.x + viewport.width / 2,
+                                                 y: viewport.y + viewport.height - 0.5))
+        XCTAssertEqual(leftmost.x, worldBounds.x.lowerBound)
+        XCTAssertEqual(bottom.y, worldBounds.y.lowerBound)
     }
 }

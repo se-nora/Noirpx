@@ -113,8 +113,8 @@ struct BeaconCapture {
         self.challenge = run
         self.character = run.character
         let cameraCenter = CellPosition(x: character.position.x + FixtureCharacter.width / 2, y: character.position.y + FixtureCharacter.height / 2)
-        // BeaconRun world is ~128×64 around origin; clamp camera to it so edges are never empty.
-        let worldBounds = FixtureViewport.CellRange(x: -64...63, y: -32...31)
+        // BeaconRun floor spans x: -40...160; vertical playable range y: -20...20 (fall limit -20).
+        let worldBounds = FixtureViewport.CellRange(x: -40...160, y: -20...20)
         guard let vp = FixtureViewport(drawableWidth: Double(width), drawableHeight: Double(height),
                                         center: cameraCenter, longEdgeCells: 200, worldBounds: worldBounds) else {
             throw NSError(domain: "capture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create viewport"])

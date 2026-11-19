@@ -151,7 +151,7 @@ final class HeadlessHUDTests: XCTestCase {
 
         var withHud = raster
         let state = HeadlessHUDState(
-            version: "0.40.0",
+            version: "0.40.1",
             worldType: .cave,
             seed: 12345,
             worldWidth: 64,

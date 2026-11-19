@@ -273,12 +273,16 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   power): removes cells by material hardness (rock resists more than sand),
   converts some cells to fire and hot gas, heats flammables, and damages the
   character by distance. Burning or heated gunpowder explodes, chaining.
-  Visible blast flash as presentation-only state.
+  Visible blast flash as presentation-only state. Character damage application
+  is deferred to the player-health goal; this goal only records the damage
+  event (lastExplosionDamage).
 - acceptance:
   - Tests: radius and hardness rules, chain reaction, deterministic replay,
-    chunk-edge and negative-coordinate blasts.
+    chunk-edge and negative-coordinate blasts, and damage-event recording.
   - In Cave Run, painting fire next to painted gunpowder visibly blasts a hole
     (screenshot).
+  - Character damage application is deferred to player-health (no health bar,
+    no death outcome in this goal).
 
 ### player-health: Health, material damage, and death in Cave Run
 - status: todo

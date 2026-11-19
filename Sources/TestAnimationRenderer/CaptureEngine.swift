@@ -17,6 +17,7 @@ public struct CaptureEngine {
     private var character: FixtureCharacter?
     private var beaconRun: BeaconRun?
     private var caveRun: CaveRun?
+    private var worldBounds: FixtureViewport.CellRange? = nil
 
     public init(scenario: Scenario, ticks: Int, width: Int, height: Int, fps: Int, outputDirectory: URL, format: VideoEncoder.OutputFormat) throws {
         self.scenario = scenario
@@ -53,20 +54,23 @@ public struct CaptureEngine {
             self.viewport = vp
 
         } else if scenario.autoPolicy == .caveRun {
-            // CaveRun scenario
-            let generator = CaveWorldGenerator(seed: scenario.seed, width: 128, height: 64)
+            // CaveRun scenario (256×128 centered at origin, matching CaveRun)
+            let generator = CaveWorldGenerator(seed: scenario.seed, width: 256, height: 128)
             let world = generator.generate()
             var simulation = Simulation(seed: scenario.seed)
             try generator.stamp(into: &simulation, tick: 1)
             try simulation.advance()
 
-            self.caveRun = try CaveRun(seed: scenario.seed, width: 128, height: 64)
+            self.caveRun = try CaveRun(seed: scenario.seed, width: 256, height: 128)
             self.character = self.caveRun?.character
             self.simulation = simulation
 
+            // World bounds: CaveRun 256×128 centered at origin: x ∈ [-128, 127], y ∈ [-64, 63]
+            self.worldBounds = FixtureViewport.CellRange(x: -128...127, y: -64...63)
+
             let cameraCenter = world.spawn
             guard let vp = FixtureViewport(drawableWidth: Double(width), drawableHeight: Double(height),
-                                            center: cameraCenter, longEdgeCells: scenario.longEdgeCells) else {
+                                            center: cameraCenter, longEdgeCells: scenario.longEdgeCells, worldBounds: worldBounds) else {
                 throw NSError(domain: "CaptureEngine", code: 1,
                              userInfo: [NSLocalizedDescriptionKey: "Failed to create viewport"])
             }
@@ -102,7 +106,7 @@ public struct CaptureEngine {
 
         for tick in 0..<ticks {
             // Capture frame
-            let pixels = captureFrame()
+            let pixels = captureFrame(frame: UInt64(tick))
             let frameURL = FrameWriter.frameURL(directory: outputDirectory, index: tick)
             try FrameWriter.writePNG(pixels: pixels, width: viewport.columns, height: viewport.rows, to: frameURL)
             frameCount += 1
@@ -119,11 +123,12 @@ public struct CaptureEngine {
         return frameCount
     }
 
-    private mutating func captureFrame() -> [UInt8] {
+    private mutating func captureFrame(frame: UInt64) -> [UInt8] {
         let (pixels, _) = FixturePixels.rasterize(
             snapshot: simulation.snapshot,
             viewport: viewport,
-            character: character
+            character: character,
+            frame: frame
         )
         return pixels
     }
@@ -165,10 +170,9 @@ public struct CaptureEngine {
                 y: run.character.position.y + FixtureCharacter.height / 2
             )
             if let newVP = FixtureViewport(drawableWidth: Double(width), drawableHeight: Double(height),
-                                           center: cameraCenter, longEdgeCells: scenario.longEdgeCells) {
+                                           center: cameraCenter, longEdgeCells: scenario.longEdgeCells, worldBounds: self.worldBounds) {
                 self.viewport = newVP
             }
-
         } else {
             // Generic simulation
             try simulation.advance(activeChunks: activeChunks)

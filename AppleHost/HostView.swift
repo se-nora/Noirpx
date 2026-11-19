@@ -25,6 +25,7 @@ struct HostView: View {
                     device: device,
                     snapshot: snapshot,
                     character: model.caveRun?.character ?? FixtureCharacter(),
+                    worldBounds: model.worldBounds,
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },
                     onError: { model.errorMessage = $0 },

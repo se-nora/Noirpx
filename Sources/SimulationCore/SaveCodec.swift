@@ -2,7 +2,7 @@
 public struct SaveCodec: Sendable {
     public static let headerByteCount = 24
     public static let formatVersion: UInt16 = 1
-    public static let rulesVersion: UInt16 = 5
+    public static let rulesVersion: UInt16 = 6
     public static let digestVersion = UInt16(SimulationSnapshot.digestVersion)
 
     /// Not saved (intentionally excluded from save payload):

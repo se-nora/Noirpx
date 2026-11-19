@@ -73,7 +73,8 @@ final class HUDVisibilityTests: XCTestCase {
         XCTAssertTrue(box.isHUDVisible)
         let (view, window) = host(box)
 
-        XCTAssertEqual(hudScrollViews(in: view).count, 1, "HUD scroll viewport should be present when visible")
+        // HUD scroll viewport (vertical) + material palette (horizontal)
+        XCTAssertEqual(hudScrollViews(in: view).count, 2, "HUD scroll viewport + palette should be present when visible")
         XCTAssertGreaterThan(hudButtons(in: view).count, 0, "HUD controls should be present when visible")
         window.close()
     }
@@ -91,7 +92,7 @@ final class HUDVisibilityTests: XCTestCase {
     func testHUDToggleFlipsBothDirections() throws {
         let box = VisibilityBox()
         let (view, window) = host(box)
-        XCTAssertEqual(hudScrollViews(in: view).count, 1)
+        XCTAssertEqual(hudScrollViews(in: view).count, 2)
         XCTAssertGreaterThan(hudButtons(in: view).count, 0)
 
         box.isHUDVisible = false
@@ -101,7 +102,7 @@ final class HUDVisibilityTests: XCTestCase {
 
         box.isHUDVisible = true
         settle(view)
-        XCTAssertEqual(hudScrollViews(in: view).count, 1, "HUD should be visible after toggle back on")
+        XCTAssertEqual(hudScrollViews(in: view).count, 2, "HUD should be visible after toggle back on")
         XCTAssertGreaterThan(hudButtons(in: view).count, 0)
         window.close()
     }

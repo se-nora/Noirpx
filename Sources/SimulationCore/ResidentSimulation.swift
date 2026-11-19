@@ -103,6 +103,7 @@ public struct ResidentSimulation {
             return left == right ? Self.chunkOrder($0, $1) : left < right
         }
         var moved: Set<CellPosition> = []
+        var pendingExplosions: [ExplosionInput] = []
         var index = 0
         var batchesProcessed = 0
         while index < candidates.count && shouldStartBatch() {
@@ -156,10 +157,23 @@ public struct ResidentSimulation {
                     set(material(at: position), at: position, thermal: state)
                 }
                 moved.formUnion(action.moved)
+                pendingExplosions.append(contentsOf: action.explosions)
             }
             index = end
             batchesProcessed += 1
         }
+
+        // Apply explosions queued by material behaviors this tick (e.g. gunpowder
+        // ignition), bounded by maxChainDepth. Anything beyond the depth cap is
+        // dropped; nothing is carried between ticks.
+        if !pendingExplosions.isEmpty {
+            var explodedCells: Set<CellPosition> = []
+            var blastCellCount = 0
+            processResidentExplosions(tick: nextTick, pending: &pendingExplosions,
+                                      explodedCells: &explodedCells, blastCellCount: &blastCellCount)
+            moved.formUnion(explodedCells)
+        }
+
         tick = nextTick
         return ResidentTickReport(
             chunksConsidered: candidates.count,
@@ -256,6 +270,142 @@ public struct ResidentSimulation {
         }
         if chunks[chunk] == nil {
             active.remove(chunk)
+        }
+    }
+
+    // Deterministic hash roll for blast conversions, mirroring Simulation.
+    private func blastRoll(at position: CellPosition, tick: UInt64, salt: UInt64) -> UInt64 {
+        var value = UInt64(bitPattern: Int64(position.x))
+        value = value &* 0x9e3779b97f4a7c15 &+ UInt64(bitPattern: Int64(position.y))
+        value = value &* 0x9e3779b97f4a7c15 &+ tick
+        value = value &* 0x9e3779b97f4a7c15 &+ salt
+        value ^= value >> 30
+        value = value &* 0xbf58476d1ce4e5b9
+        value ^= value >> 27
+        value = value &* 0x94d049bb133111eb
+        value ^= value >> 31
+        return value
+    }
+
+    /// Applies explosions queued by material behaviors within this tick.
+    /// Bounded by maxChainDepth and maxBlastCellsPerTick (from ExplosionPrimitive).
+    private mutating func processResidentExplosions(
+        tick: UInt64,
+        pending: inout [ExplosionInput],
+        explodedCells: inout Set<CellPosition>,
+        blastCellCount: inout Int
+    ) {
+        var depth = 0
+
+        while !pending.isEmpty && depth < maxChainDepth {
+            let input = pending.removeFirst()
+            applyResidentExplosion(input: input, tick: tick, pending: &pending,
+                                   explodedCells: &explodedCells, blastCellCount: &blastCellCount)
+            depth += 1
+        }
+    }
+
+    private mutating func applyResidentExplosion(
+        input: ExplosionInput,
+        tick: UInt64,
+        pending: inout [ExplosionInput],
+        explodedCells: inout Set<CellPosition>,
+        blastCellCount: inout Int
+    ) {
+        let center = input.center
+        let radius = input.radius
+        let power = input.power
+
+        // Origin flash is handled by presentation; here we only process destruction.
+        // Global y-then-x iteration over the blast bounding box.
+        for dy in -radius...radius {
+            for dx in -radius...radius {
+                let distance = max(abs(dx), abs(dy))
+                guard distance <= radius else { continue }
+
+                let pos = CellPosition(x: center.x + dx, y: center.y + dy)
+                guard Self.contains(pos) else { continue }
+                guard explodedCells.insert(pos).inserted else { continue }
+                guard blastCellCount < maxBlastCellsPerTick else { continue }
+
+                let cellMaterial = material(at: pos)
+                guard cellMaterial != .empty else { continue }
+
+                let hardness = MaterialBehavior.forMaterial(cellMaterial).hardness
+                guard hardness > 0 else { continue }
+
+                let destroyChance = max(0, min(100, power - hardness))
+                guard destroyChance > 0 else { continue }
+
+                let roll = Int(blastRoll(at: pos, tick: tick, salt: 0x517cc1b727220a95) % 100)
+                guard roll < destroyChance else { continue }
+
+                // Determine conversion: fire or steam based on material.
+                let conversionRoll = Int(blastRoll(at: pos, tick: tick, salt: 0x9a2e8b4f7c3d1a6e) % 100)
+                let becomesFire: Bool
+                let becomesSteam: Bool
+                switch cellMaterial {
+                case .pitch, .oil, .blood, .slime, .gunpowder, .sand, .magicLiquid:
+                    becomesFire = conversionRoll < 30
+                    becomesSteam = false
+                case .water, .ice, .acid:
+                    becomesFire = false
+                    becomesSteam = conversionRoll < 40
+                case .lava:
+                    becomesFire = conversionRoll < 20
+                    becomesSteam = conversionRoll < 40
+                case .solid, .gold:
+                    becomesFire = conversionRoll < 10
+                    becomesSteam = false
+                default:
+                    becomesFire = false
+                    becomesSteam = false
+                }
+
+                let newMaterial: Material
+                if becomesFire {
+                    newMaterial = .fire
+                } else if becomesSteam {
+                    newMaterial = .steam
+                } else {
+                    newMaterial = .empty
+                }
+
+                let newThermal: ThermalCellState
+                if newMaterial == .fire {
+                    newThermal = ThermalCellState(heat: 300, isBurning: true)
+                } else if newMaterial == .steam {
+                    newThermal = ThermalCellState(heat: 200)
+                } else {
+                    newThermal = .zero
+                }
+                set(newMaterial, at: pos, thermal: newThermal)
+                blastCellCount += 1
+
+                // Gunpowder chains: enqueue a chained explosion at this cell.
+                if cellMaterial == .gunpowder && pending.count < maxChainDepth {
+                    pending.append(ExplosionInput(center: pos, radius: 3, power: 100))
+                }
+
+                // Heat flammable neighbors (8-connected).
+                let neighbors8 = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+                for (ndx, ndy) in neighbors8 {
+                    let npos = CellPosition(x: pos.x + ndx, y: pos.y + ndy)
+                    guard Self.contains(npos) else { continue }
+                    let nmat = material(at: npos)
+                    let behavior = MaterialBehavior.forMaterial(nmat)
+                    if let threshold = behavior.ignitionThreshold, threshold > 0 {
+                        let distFromCenter = max(abs(npos.x - center.x), abs(npos.y - center.y))
+                        let falloff = max(1, radius + 1 - distFromCenter)
+                        let heatAmount = UInt16(min(Int(UInt16.max), max(0, (power / 2) * falloff)))
+                        let currentThermal = thermalUnchecked(at: npos)
+                        let heatedThermal = behavior.heated(currentThermal, amount: heatAmount)
+                        if heatedThermal != currentThermal {
+                            set(nmat, at: npos, thermal: heatedThermal)
+                        }
+                    }
+                }
+            }
         }
     }
 

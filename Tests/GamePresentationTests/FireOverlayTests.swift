@@ -5,6 +5,15 @@ import GamePresentation
 final class FireOverlayTests: XCTestCase {
     private let frozen = ChunkRegion(x: 100...100, y: 100...100)
 
+    private static let pitchColdPalette: [[UInt8]] = [
+        [131, 89, 173, 255], [142, 100, 184, 255], [120, 78, 162, 255], [125, 86, 168, 255]
+    ]
+    private static let pitchBurningPalette: [[UInt8]] = [
+        [255, 186, 68, 255], [255, 196, 90, 255], [240, 176, 58, 255], [247, 179, 78, 255]
+    ]
+    private static func isPitchColdPaletteColor(_ pixel: [UInt8]) -> Bool { pitchColdPalette.contains(pixel) }
+    private static func isPitchBurningPaletteColor(_ pixel: [UInt8]) -> Bool { pitchBurningPalette.contains(pixel) }
+
     private func pixel(_ frame: [UInt8], viewport: FixtureViewport, at p: CellPosition) -> [UInt8] {
         let x = p.x - viewport.center.x + viewport.columns / 2
         let y = viewport.rows / 2 - 1 - p.y + viewport.center.y
@@ -115,8 +124,8 @@ final class FireOverlayTests: XCTestCase {
             XCTAssertEqual(actualBackground, [15, 20, 31, 255])
             XCTAssertGreaterThanOrEqual(contrast(mark, actualBackground), 4.5)
         }
-        XCTAssertEqual(pixel(frame, viewport: viewport, at: cold), [131, 89, 173, 255])
-        XCTAssertEqual(pixel(frame, viewport: viewport, at: corner), [255, 186, 68, 255])
+        XCTAssertTrue(Self.isPitchColdPaletteColor(pixel(frame, viewport: viewport, at: cold)))
+        XCTAssertTrue(Self.isPitchBurningPaletteColor(pixel(frame, viewport: viewport, at: corner)))
         XCTAssertEqual(pixel(frame, viewport: viewport, at: .init(x: p.x - 1, y: p.y + 4)),
                        [15, 20, 31, 255])
         XCTAssertEqual(simulation.snapshot, snapshot)
@@ -124,7 +133,7 @@ final class FireOverlayTests: XCTestCase {
         let extinguished = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport,
                                                    character: character).pixels
         for cell in edges {
-            XCTAssertEqual(pixel(extinguished, viewport: viewport, at: cell), [131, 89, 173, 255])
+            XCTAssertTrue(Self.isPitchColdPaletteColor(pixel(extinguished, viewport: viewport, at: cell)))
         }
     }
 

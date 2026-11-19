@@ -107,7 +107,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Restructured 1,532-line INTERFACES.md into 11 subsystem files under docs/interfaces/ + 36-line index; all 55 H2+ headings preserved with 4 retitles per spec; stale blocks removed (save "not implemented", spell status, coding-stage sections); directional refs rewritten to cross-file links; known defects preserved; no version bump (docs-only)
 
 ### capture-hud: Include HUD overlay in CaptureComparison videos
-- status: todo
+- status: done
 - priority: 9
 - track: infra
 - depends: none
@@ -134,6 +134,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - A new test (or updated capture-comparison test) verifies HUD pixels are
     non-empty in a known region for a fixed seed.
   - No changes to the live app's HUD rendering or behavior.
+- result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
 
 ## Performance
 
@@ -262,7 +263,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Noita-like gameplay
 
 ### explosions: Terrain-destroying explosions
-- status: todo
+- status: done
 - priority: 15
 - track: noita
 - depends: none
@@ -273,12 +274,16 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   power): removes cells by material hardness (rock resists more than sand),
   converts some cells to fire and hot gas, heats flammables, and damages the
   character by distance. Burning or heated gunpowder explodes, chaining.
-  Visible blast flash as presentation-only state.
+  Visible blast flash as presentation-only state. Character damage application
+  is deferred to the player-health goal; this goal only records the damage
+  event (lastExplosionDamage).
 - acceptance:
   - Tests: radius and hardness rules, chain reaction, deterministic replay,
-    chunk-edge and negative-coordinate blasts.
+    chunk-edge and negative-coordinate blasts, and damage-event recording.
   - In Cave Run, painting fire next to painted gunpowder visibly blasts a hole
     (screenshot).
+  - Character damage application is deferred to player-health (no health bar,
+    no death outcome in this goal).
 
 ### player-health: Health, material damage, and death in Cave Run
 - status: todo
@@ -566,7 +571,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     bound; benchmark shows steady tick time while descending.
 
 ### hud-material-discovery: HUD material discovery and scroll replaces material picker
-- status: todo
+- status: done
 - priority: 13
 - track: noita
 - depends: none
@@ -584,3 +589,4 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tapping/clicking a material in the bar sets it as the active draw material.
   - The old material picker and drawing selection list are removed.
   - Cave Run plays with the new HUD; no separate picker view remains (screenshot).
+- result: Merged in commit 79961de. All 450 tests pass (swift test --parallel -c release); macOS Debug xcodebuild build succeeds. Click test verified via synthesized mouse events on FocusRingView buttons.

@@ -695,6 +695,53 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(left.center.x - left.columns / 2, worldBounds.x.lowerBound)
     }
 
+    func testCameraClampingOddLongEdgeCells() throws {
+        // For odd `columns`, maxVisibleX = center.x + columns - 1 - columns/2, not halfW - 1.
+        // Use a world LARGER than the viewport so clamping constrains visible rect to world bounds.
+        // 509 columns at 640px -> ~1.26 px/cell. Make world 1024x512 to be larger than viewport.
+        let worldBounds = FixtureViewport.CellRange(x: -512...511, y: -256...255)
+        let drawableWidth = 640.0
+        let drawableHeight = 360.0
+        let longEdgeCells = 509 // FixtureViewport.longEdgeCells default; odd
+
+        func visibleRect(_ vp: FixtureViewport) -> FixtureViewport.CellRange {
+            let halfW = vp.columns / 2
+            let halfH = vp.rows - vp.rows / 2
+            return FixtureViewport.CellRange(
+                x: (vp.center.x - halfW)...(vp.center.x + vp.columns - 1 - halfW),
+                y: (vp.center.y - halfH)...(vp.center.y + vp.rows / 2 - 1))
+        }
+
+        // Odd columns: columns=509, rows=shortEdgeCells; world larger so clamping applies.
+        for candidate in [CellPosition(x: -10_000, y: -10_000),
+                          CellPosition(x: 10_000, y: 10_000),
+                          CellPosition(x: -512, y: -256),
+                          CellPosition(x: 511, y: 255)] {
+            let vp = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                   center: candidate, longEdgeCells: longEdgeCells,
+                                                   worldBounds: worldBounds))
+            let rect = visibleRect(vp)
+            XCTAssertTrue(worldBounds.x.contains(rect.x.lowerBound) && worldBounds.x.contains(rect.x.upperBound),
+                          "Visible x \(rect.x) must stay inside \(worldBounds.x) for odd columns \(vp.columns) center \(candidate)")
+            XCTAssertTrue(worldBounds.y.contains(rect.y.lowerBound) && worldBounds.y.contains(rect.y.upperBound),
+                          "Visible y \(rect.y) must stay inside \(worldBounds.y) for odd columns \(vp.columns) center \(candidate)")
+        }
+
+        // Left edge clamps to world minimum.
+        let left = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                 center: CellPosition(x: -10_000, y: 0),
+                                                 longEdgeCells: longEdgeCells, worldBounds: worldBounds))
+        XCTAssertEqual(left.center.x - left.columns / 2, worldBounds.x.lowerBound)
+
+        // Right edge clamps to world maximum: visible max X == upper bound.
+        let right = try XCTUnwrap(FixtureViewport(drawableWidth: drawableWidth, drawableHeight: drawableHeight,
+                                                  center: CellPosition(x: 10_000, y: 0),
+                                                  longEdgeCells: longEdgeCells, worldBounds: worldBounds))
+        let halfW = right.columns / 2
+        XCTAssertEqual(right.center.x + right.columns - 1 - halfW, worldBounds.x.upperBound,
+                       "Odd-column visible max X should pin to world upper bound")
+    }
+
     func testInputMappingStaysInsideCaveWorldAtEdges() throws {
         // When the camera clamps to a 256x128 CaveRun world, input mapping must
         // never resolve outside the world and must still reach the world edge.

@@ -78,9 +78,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         // rasterizes to the same pixels, independent of display callback count.
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
                                             frame: snapshot.tick)
-        // Draw projectile overlay on top of rasterized frame.
         var mutablePixels = frame.pixels
-        drawProjectiles(on: &mutablePixels, viewport: viewport, projectiles: snapshot.projectiles)
         mutablePixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,
@@ -145,26 +143,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         constexpr sampler nearestSampler(filter::nearest, address::clamp_to_edge);
         return image.sample(nearestSampler, in.uv);
     }
-    /// Draws projectile dots on top of the rasterized pixel buffer.
-    /// Projectiles are drawn as 1-pixel points tinted by their primary material.
-    private func drawProjectiles(on pixels: inout [UInt8], viewport: FixtureViewport,
-                                  projectiles: [ProjectileSnapshot]) {
-        guard !projectiles.isEmpty else { return }
-        let width = viewport.columns
-        let height = viewport.rows
-        let centerX = viewport.center.x
-        let centerY = viewport.center.y
-
-        for projectile in projectiles {
-            let cell = projectile.position // already a CellPosition
-            let x = cell.x - centerX + width / 2
-            let y = height / 2 - 1 - cell.y + centerY
-            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
-            let color = materialColor(projectile.primaryMaterial)
-            // Draw a single pixel point
-            pixels[y * width + x] = color.littleEndian
-        }
-    }
+    """
 
     /// Returns an opaque ARGB color for the given material.
     private func materialColor(_ material: Material) -> UInt32 {

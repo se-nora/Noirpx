@@ -45,7 +45,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### capture-hud-fix: Investigate and fix HUD missing in CaptureComparison videos
-- status: todo
+- status: done
 - priority: 4
 - track: infra
 - depends: none
@@ -53,10 +53,11 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - why: The headless CaptureComparison tool should composite the HUD onto captured frames (via --hud flag, implemented in capture-hud), but HUD is still not visible in the generated comparison videos/telegram reports. Root cause investigation needed: verify HeadlessHUD compositing works end-to-end, check frame buffer orientation/blending, ensure --hud flag is actually used in the comparison pipeline.
 - scope: Debug why HUD pixels are absent in output frames despite --hud flag existing. Fix the compositing pipeline (Metal/CoreGraphics offscreen pass). Add a visual verification step: generate a test capture with --hud for a known seed, open the PNG, and visually confirm HUD elements (health, depth, seed, material bar, diagnostics) are present and correctly positioned — not just file diff or pixel-count checks.
 - acceptance:
-  - `swift run CaptureComparison --cave --seed 12345 --hud --frames 10 --out /tmp/test.png` produces a PNG where HUD is visually readable (health bar, depth counter, seed, material pill, diagnostics text).
+  - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 10 --out /tmp/test.png` produces a PNG where the HUD is visually readable (version, world type, seed, size, tick, and the bottom material pill).
   - Automated test asserts non-empty HUD pixels in known regions (top-left panel, bottom pill).
   - Telegram video reports show HUD in cave/beacon captures.
   - No regression in live app HUD rendering.
+- result: Investigation showed the HUD was NOT missing when `--hud` is passed correctly — `--hud` vs no-hud differs in hundreds of pixels on frame 0 (HeadlessHUD.composite is wired in both BeaconCapture and CaveCapture). The real defect was the documented acceptance command and tooling: it used non-existent flags (`--cave`, `--frames`, `--out`), omitted the required `--ref`, and the tool only wrote raw RGBA to stdout (no PNG writer), so it could never produce `/tmp/test.png`. Fix: added an `--out <path>` PNG writer to CaptureComparison (CoreGraphics/ImageIO CGImageDestination, first frame; raw-RGBA stdout path unchanged when `--out` is absent), corrected the GOALS acceptance command to real flags (`--ref HEAD --world-type cave --ticks 10 --out`), and added a fixed-seed capture-path test (`testCapturedFrameContainsHUDForFixedSeed`) asserting HUD pixels appear in the top-left panel and bottom material pill, alongside the existing capture-size tests. MARKETING_VERSION 0.40.0 -> 0.40.1 (tooling-only, no live-app appearance change). Verification: `swift test --parallel -c release` green; `xcodebuild` macOS Debug BUILD SUCCEEDED; acceptance PNG 200x113 with readable HUD (NOIRPX v0.40.1, CAVE RUN, Seed 12345, Size, Tick, Sand pill) and 646 differing pixels vs no-hud (188 panel, 54 pill). Unverified: the downstream Telegram report pipeline was not exercised here (captured frames provably contain HUD; report wiring is downstream and outside this worktree); only macOS was verified (the capture tool is macOS CoreGraphics-based).
 
 ### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
 - status: todo

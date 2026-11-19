@@ -2,6 +2,7 @@
 import CoreGraphics
 import XCTest
 import GamePresentation
+import SimulationCore
 
 /// HeadlessHUD renders text via Core Graphics / Core Text offscreen, so it can be
 /// exercised without a window or SwiftUI. These tests assert the HUD actually
@@ -130,6 +131,61 @@ final class HeadlessHUDTests: XCTestCase {
         XCTAssertEqual(pixels[i], before[i], "R")
         XCTAssertEqual(pixels[i + 1], before[i + 1], "G")
         XCTAssertEqual(pixels[i + 2], before[i + 2], "B")
+    }
+
+    /// Exercises the same rasterize + composite path CaptureComparison uses for
+    /// a fixed seed, proving HUD pixels land in the panel and pill regions of an
+    /// actual captured frame (not only synthetic HUD state).
+    func testCapturedFrameContainsHUDForFixedSeed() throws {
+        var simulation = Simulation(seed: 12345)
+        let generator = CaveWorldGenerator(seed: 12345, width: 64, height: 48)
+        try generator.stamp(into: &simulation, tick: 1)
+        let bounds = FixtureViewport.CellRange(x: -32...31, y: -24...23)
+        let viewport = try XCTUnwrap(FixtureViewport(
+            drawableWidth: 200, drawableHeight: 113,
+            center: CellPosition(x: 0, y: 0), longEdgeCells: 200, worldBounds: bounds))
+        let width = viewport.columns
+        let height = viewport.rows
+        let (raster, chunks) = FixturePixels.rasterize(
+            snapshot: simulation.snapshot, viewport: viewport, character: nil, frame: 0)
+
+        var withHud = raster
+        let state = HeadlessHUDState(
+            version: "0.40.1",
+            worldType: .cave,
+            seed: 12345,
+            worldWidth: 64,
+            worldHeight: 48,
+            position: nil,
+            tick: simulation.snapshot.tick,
+            outcome: .playing,
+            selectedMaterial: .sand,
+            isCasting: false,
+            renderedChunks: chunks
+        )
+        HeadlessHUD.composite(onto: &withHud, width: width, height: height, state: state)
+
+        func diffCount(x: Range<Int>, y: Range<Int>) -> Int {
+            var count = 0
+            for row in y {
+                for col in x {
+                    let i = (row * width + col) * 4
+                    if withHud[i] != raster[i]
+                        || withHud[i + 1] != raster[i + 1]
+                        || withHud[i + 2] != raster[i + 2] {
+                        count += 1
+                    }
+                }
+            }
+            return count
+        }
+
+        // Top-left panel region and bottom material-pill region must contain
+        // pixels changed by the HUD composite.
+        XCTAssertGreaterThan(diffCount(x: 0..<min(140, width), y: 0..<min(30, height)),
+                             0, "expected HUD pixels in the top-left panel")
+        XCTAssertGreaterThan(diffCount(x: 40..<max(41, width - 40), y: max(0, height - 30)..<height),
+                             0, "expected HUD pixels in the bottom material pill")
     }
 }
 #endif

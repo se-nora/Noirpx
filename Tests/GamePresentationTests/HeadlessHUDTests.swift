@@ -48,6 +48,58 @@ final class HeadlessHUDTests: XCTestCase {
                              "Expected HUD title glyph pixels in the top-left panel region")
     }
 
+    func testCompositeDrawsHUDAtCaptureFrameSize() {
+        // CaptureComparison rasterizes at the viewport cell size (200×113 for
+        // a 16:9 window). Verify the HUD still writes glyphs and the bottom
+        // material pill at that small size, for both world types.
+        let width = 200
+        let height = 113
+
+        for (world, label) in [(HeadlessHUDState.WorldType.cave, "cave"),
+                               (HeadlessHUDState.WorldType.beacon, "beacon")] {
+            let state = HeadlessHUDState(
+                version: "0.37.0",
+                worldType: world,
+                seed: 42,
+                worldWidth: 128,
+                worldHeight: 64,
+                position: nil,
+                tick: 0,
+                selectedMaterial: .sand,
+                isCasting: false
+            )
+
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            for i in stride(from: 3, to: pixels.count, by: 4) { pixels[i] = 255 }
+
+            HeadlessHUD.composite(onto: &pixels, width: width, height: height, state: state)
+
+            // Top-left panel region should contain title glyphs.
+            var titlePixels = 0
+            for y in 0..<30 {
+                for x in 0..<140 {
+                    let i = (y * width + x) * 4
+                    if pixels[i] > 30 || pixels[i + 1] > 30 || pixels[i + 2] > 30 {
+                        titlePixels += 1
+                    }
+                }
+            }
+            XCTAssertGreaterThan(titlePixels, 0, "\(label): expected HUD title pixels")
+
+            // Bottom third should contain the material pill glyphs.
+            var pillPixels = 0
+            for y in (height - 30)..<height {
+                for x in 40..<(width - 40) {
+                    let i = (y * width + x) * 4
+                    if pixels[i] > 30 || pixels[i + 1] > 30 || pixels[i + 2] > 30 {
+                        pillPixels += 1
+                    }
+                }
+            }
+            XCTAssertGreaterThan(pillPixels, 0, "\(label): expected bottom material pill pixels")
+        }
+    }
+
     func testCompositeLeavesNonPanelRegionUnchanged() {
         let width = 120
         let height = 80

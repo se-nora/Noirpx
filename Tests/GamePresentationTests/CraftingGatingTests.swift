@@ -21,13 +21,13 @@ final class CraftingGatingTests: XCTestCase {
         XCTAssertFalse(allowed, "Crafting must be disabled during active play")
     }
 
-    func testIsAllowed_afterFell_returnsTrue() {
-        // Given a run that ended with .fell
-        let outcome: CaveRun.Outcome = .fell
+    func testIsAllowed_afterDied_returnsTrue() {
+        // Given a run that ended with .died
+        let outcome: CaveRun.Outcome = .died
         // When checking gating
         let allowed = CraftingGating.isAllowed(outcome)
         // Then crafting is allowed
-        XCTAssertTrue(allowed, "Crafting must be enabled after .fell outcome")
+        XCTAssertTrue(allowed, "Crafting must be enabled after .died outcome")
     }
 
     func testIsAllowed_noRun_returnsFalse() {
@@ -43,10 +43,10 @@ final class CraftingGatingTests: XCTestCase {
         // This test documents that any future non-.playing outcome enables crafting
         // without requiring code changes. It uses reflection to verify the logic.
         let playing: CaveRun.Outcome = .playing
-        let fell: CaveRun.Outcome = .fell
-        // Simulate a hypothetical future outcome by using .fell as proxy
+        let died: CaveRun.Outcome = .died
+        // Simulate a hypothetical future outcome by using .died as proxy
         XCTAssertFalse(CraftingGating.isAllowed(playing))
-        XCTAssertTrue(CraftingGating.isAllowed(fell))
+        XCTAssertTrue(CraftingGating.isAllowed(died))
         // The gate is simply `outcome != nil && outcome != .playing`, so any non-.playing passes
     }
 
@@ -67,7 +67,9 @@ final class CraftingGatingTests: XCTestCase {
             showSpellCraftingAllowed: true,
             wand: Wand(),
             manaPool: ManaPool(),
-            onCycleWandSlot: { _ in }
+            onCycleWandSlot: { _ in },
+            health: nil,
+            maxHealth: nil
         ))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
@@ -111,7 +113,9 @@ final class CraftingGatingTests: XCTestCase {
             showSpellCraftingAllowed: false,
             wand: Wand(),
             manaPool: ManaPool(),
-            onCycleWandSlot: { _ in }
+            onCycleWandSlot: { _ in },
+            health: nil,
+            maxHealth: nil
         ))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],

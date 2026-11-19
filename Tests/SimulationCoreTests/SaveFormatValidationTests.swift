@@ -377,21 +377,21 @@ final class SaveFormatValidationTests: XCTestCase {
         //   goal.x: 60, goal.y: 64
         //   patrolX.lower: 68, patrolX.upper: 72
         //   patrolSpawn.x: 76, patrolSpawn.y: 80
-        // Character: 17 bytes at offset 84
-        //   x: 84, y: 88, grounded: 92, verticalVelocity: 93, verticalRemainder: 97
-        // Warden: 15 bytes at offset 101
-        //   x: 101, y: 105, direction: 109, phase: 113, alive: 115
-        // Collected: 2 bytes at offset 116
-        // Outcome: 1 byte at offset 118
-        // Facing: 4 bytes at offset 119
-        // Pulse cooldown: 2 bytes at offset 123
-        // Health: 1 byte at offset 125
-        // Damage cooldown: 2 bytes at offset 126
-        // Last damage source: 1 byte at offset 128
-        // Vent cooling: 2 bytes at offset 129
-        // Pulse flash remaining: 1 byte at offset 131
-        // Pulse flash count: 2 bytes at offset 132
-        // Pulse flash cells: count * 8 bytes at offset 134
+        // Character: 21 bytes at offset 84
+        //   x: 84, y: 88, grounded: 92, verticalVelocity: 93, verticalRemainder: 97, lastLandingImpactVelocity: 101
+        // Warden: 15 bytes at offset 105
+        //   x: 105, y: 109, direction: 113, phase: 117, alive: 119
+        // Collected: 2 bytes at offset 120
+        // Outcome: 1 byte at offset 122
+        // Facing: 4 bytes at offset 123
+        // Pulse cooldown: 2 bytes at offset 127
+        // Health: 1 byte at offset 129
+        // Damage cooldown: 2 bytes at offset 130
+        // Last damage source: 1 byte at offset 132
+        // Vent cooling: 2 bytes at offset 133
+        // Pulse flash remaining: 1 byte at offset 135
+        // Pulse flash count: 2 bytes at offset 136
+        // Pulse flash cells: count * 8 bytes at offset 138
 
         let gp = gameplayOffset
 
@@ -488,56 +488,56 @@ final class SaveFormatValidationTests: XCTestCase {
 
         // warden direction not -1 or 1
         var badWardenDir = bytes
-        badWardenDir = replaced32(2, at: gp + 109, in: badWardenDir)
+        badWardenDir = replaced32(2, at: gp + 113, in: badWardenDir)
         assertThrowsGameplay(badWardenDir, .wardenDirection)
 
         // warden phase > 59
         var badWardenPhase = bytes
-        badWardenPhase = replaced16(60, at: gp + 113, in: badWardenPhase)
+        badWardenPhase = replaced16(60, at: gp + 117, in: badWardenPhase)
         assertThrowsGameplay(badWardenPhase, .wardenPhase)
 
         // warden position out of bounds
         var badWardenPos = bytes
-        badWardenPos = replaced32(limit + 1, at: gp + 101, in: badWardenPos) // warden.x
+        badWardenPos = replaced32(limit + 1, at: gp + 105, in: badWardenPos) // warden.x
         assertThrowsGameplay(badWardenPos, .wardenPosition)
 
         var badWardenPosY = bytes
-        badWardenPosY = replaced32(limit + 1, at: gp + 105, in: badWardenPosY) // warden.y
+        badWardenPosY = replaced32(limit + 1, at: gp + 109, in: badWardenPosY) // warden.y
         assertThrowsGameplay(badWardenPosY, .wardenPosition)
 
         // health > 3
         var badHealth = bytes
-        badHealth[gp + 125] = 4
+        badHealth[gp + 129] = 4
         assertThrowsGameplay(badHealth, .health)
 
         // facing not -1 or 1
         var badFacing = bytes
-        badFacing = replaced32(2, at: gp + 119, in: badFacing)
+        badFacing = replaced32(2, at: gp + 123, in: badFacing)
         assertThrowsGameplay(badFacing, .facing)
 
         // pulseCooldown > 18
         var badPulseCooldown = bytes
-        badPulseCooldown = replaced16(19, at: gp + 123, in: badPulseCooldown)
+        badPulseCooldown = replaced16(19, at: gp + 127, in: badPulseCooldown)
         assertThrowsGameplay(badPulseCooldown, .pulseCooldown)
 
         // damageCooldown > 30
         var badDamageCooldown = bytes
-        badDamageCooldown = replaced16(31, at: gp + 126, in: badDamageCooldown)
+        badDamageCooldown = replaced16(31, at: gp + 130, in: badDamageCooldown)
         assertThrowsGameplay(badDamageCooldown, .damageCooldown)
 
         // ventCooling > 120
         var badVentCooling = bytes
-        badVentCooling = replaced16(121, at: gp + 129, in: badVentCooling)
+        badVentCooling = replaced16(121, at: gp + 133, in: badVentCooling)
         assertThrowsGameplay(badVentCooling, .ventCooling)
 
         // pulseFlashRemaining > 4
         var badFlashRemaining = bytes
-        badFlashRemaining[gp + 131] = 5
+        badFlashRemaining[gp + 135] = 5
         assertThrowsGameplay(badFlashRemaining, .pulseFlash)
 
         // flash count > limit - triggers oversizedCount before gameplay validation
         var badFlashCount = bytes
-        badFlashCount = replaced16(UInt16(SaveCodec.maximumPulseFlashCellCount + 1), at: gp + 132, in: badFlashCount)
+        badFlashCount = replaced16(UInt16(SaveCodec.maximumPulseFlashCellCount + 1), at: gp + 136, in: badFlashCount)
         XCTAssertThrowsError(try codec.decode(badFlashCount)) { error in
             guard case SaveError.oversizedCount(field: .pulseFlashCells, declared: SaveCodec.maximumPulseFlashCellCount + 1, limit: SaveCodec.maximumPulseFlashCellCount) = error else {
                 XCTFail("expected oversizedCount for pulseFlashCells, got \(error)")
@@ -547,21 +547,21 @@ final class SaveFormatValidationTests: XCTestCase {
 
         // flash count nonzero with zero remaining
         var badFlashCombo = bytes
-        badFlashCombo[gp + 131] = 0 // pulseFlashRemaining = 0
-        badFlashCombo = replaced16(1, at: gp + 132, in: badFlashCombo) // flashCount = 1
-        // Need to add a flash cell position (x, y) at offset 134
-        if badFlashCombo.count > gp + 134 + 8 {
-            badFlashCombo = replaced32(0, at: gp + 134, in: badFlashCombo)
+        badFlashCombo[gp + 135] = 0 // pulseFlashRemaining = 0
+        badFlashCombo = replaced16(1, at: gp + 136, in: badFlashCombo) // flashCount = 1
+        // Need to add a flash cell position (x, y) at offset 138
+        if badFlashCombo.count > gp + 138 + 8 {
             badFlashCombo = replaced32(0, at: gp + 138, in: badFlashCombo)
+            badFlashCombo = replaced32(0, at: gp + 142, in: badFlashCombo)
         }
         assertThrowsGameplay(badFlashCombo, .pulseFlash)
 
         // lastDamageSource != none when damageCooldown == 0
         var badDamageSource = bytes
         // Set damageCooldown to 0
-        badDamageSource = replaced16(0, at: gp + 126, in: badDamageSource)
+        badDamageSource = replaced16(0, at: gp + 130, in: badDamageSource)
         // Set lastDamageSource to fire (1)
-        badDamageSource[gp + 128] = 1
+        badDamageSource[gp + 132] = 1
         assertThrowsGameplay(badDamageSource, .damageSource)
     }
 
@@ -726,6 +726,7 @@ final class SaveFormatValidationTests: XCTestCase {
         encoder.writeU8(run.character.grounded ? 1 : 0)
         encoder.writeI32(Int32(run.character.verticalVelocity))
         encoder.writeI32(Int32(run.character.verticalRemainder))
+        encoder.writeI32(Int32(run.character.lastLandingImpactVelocity))
         // Warden
         encoder.writeI32(Int32(run.warden.position.x))
         encoder.writeI32(Int32(run.warden.position.y))

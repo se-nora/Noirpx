@@ -188,4 +188,23 @@ final class FixtureCharacterTests: XCTestCase {
             XCTAssertTrue(character.grounded)
         }
     }
+
+    func testLastLandingImpactVelocityOnLanding() throws {
+        let snapshot = try world()
+        // Start high enough that fixed 10 ticks doesn't reach ground (ground at y=-2)
+        var character = FixtureCharacter(position: CellPosition(x: 0, y: 30))
+        XCTAssertFalse(character.grounded)
+        // Fall until landing
+        while !character.grounded {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        }
+        // Now grounded - landing just occurred
+        XCTAssertTrue(character.grounded)
+        // lastLandingImpactVelocity should be non-zero (captured at impact)
+        XCTAssertGreaterThan(character.lastLandingImpactVelocity, 0)
+        let captured = character.lastLandingImpactVelocity
+        // On the following resting tick, it should not be clobbered to 0
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        XCTAssertEqual(character.lastLandingImpactVelocity, captured)
+    }
 }

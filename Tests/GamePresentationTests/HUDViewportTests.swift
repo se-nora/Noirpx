@@ -24,7 +24,8 @@ final class HUDViewportTests: XCTestCase {
                     ForEach(0..<6) { i in Text("Status \(i)") }
                     HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
                                 select: { selected = $0 },
-                                discoveredMaterials: Set(MaterialBrush.drawable))
+                                discoveredMaterials: Set(MaterialBrush.drawable),
+                                health: nil, maxHealth: nil)
                 }
                 .font(.system(.caption, design: .monospaced))
             })
@@ -118,7 +119,15 @@ final class HUDViewportTests: XCTestCase {
         var selected: SimulationCore.Material = .sand
         let view = NSHostingView(rootView: HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
                                                         select: { selected = $0 },
-                                                        discoveredMaterials: Set([.sand, .water, .fire, .lava])))
+                                                        discoveredMaterials: Set([.sand, .water, .fire, .lava]),
+                                                        onToggleSpellCrafting: {},
+                                                        showSpellCrafting: false,
+                                                        showSpellCraftingAllowed: false,
+                                                        wand: Wand(),
+                                                        manaPool: ManaPool(),
+                                                        onCycleWandSlot: { _ in },
+                                                        health: 3,
+                                                        maxHealth: 3))
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 200)
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled],
                               backing: .buffered, defer: false)
@@ -143,8 +152,9 @@ final class HUDViewportTests: XCTestCase {
         XCTAssertEqual(buttons.count, 4 + 1 + 4)
 
         // Find the horizontal palette scroll view (the one with multiple rows of buttons)
-        let paletteScroll = try XCTUnwrap(allScrollViews.first { scroll in
-            let docButtons = descendants(scroll.documentView!).filter {
+        let paletteScroll = try XCTUnwrap(allScrollViews.first { (scroll: NSScrollView) in
+            guard let docView = scroll.documentView else { return false }
+            let docButtons = descendants(docView).filter {
                 String(describing: type(of: $0)).contains("FocusRingView")
             }
             return docButtons.count >= 5 // palette has erase + 4 materials = 5 buttons minimum
@@ -204,14 +214,15 @@ final class HUDViewportTests: XCTestCase {
         }
 
         // Find water button by position (3rd button: index 2 after Erase and sand)
-        let waterButton = try XCTUnwrap(paletteButtons.sorted { $0.frame.minX < $1.frame.minX }.dropFirst(2).first)
+        let sortedButtons = paletteButtons.sorted { $0.frame.minX < $1.frame.minX }
+        let waterButton = try XCTUnwrap(sortedButtons.dropFirst(2).first as NSView?)
         XCTAssertEqual(waterButton.frame.minX, 206.0, accuracy: 2, "Water button should be at x≈206")
 
         clickView(waterButton)
         XCTAssertEqual(selected, .water, "Clicking water palette item should select water")
 
         // Test clicking Erase (first button)
-        let eraseButton = try XCTUnwrap(paletteButtons.sorted { $0.frame.minX < $1.frame.minX }.first)
+        let eraseButton = try XCTUnwrap(sortedButtons.first as NSView?)
         XCTAssertEqual(eraseButton.frame.minX, 2.0, accuracy: 2, "Erase button should be at x≈2")
 
         clickView(eraseButton)

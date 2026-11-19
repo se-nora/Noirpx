@@ -28,7 +28,8 @@ final class HUDVisibilityTests: XCTestCase {
                             Text("NOIRPX").fontWeight(.bold)
                             Text("CAVE RUN").fontWeight(.bold)
                             HUDControls(selected: .sand, restart: {}, newRun: {}, diagnostics: {}, help: {},
-                                        select: { _ in })
+                                        select: { _ in },
+                                        health: nil, maxHealth: nil)
                         }
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.white)

@@ -123,6 +123,7 @@ public struct SaveCodec: Sendable {
         encoder.writeU8(run.character.grounded ? 1 : 0)
         encoder.writeI32(Int32(run.character.verticalVelocity))
         encoder.writeI32(Int32(run.character.verticalRemainder))
+        encoder.writeI32(Int32(run.character.lastLandingImpactVelocity))
         // Warden
         encoder.writeI32(Int32(run.warden.position.x))
         encoder.writeI32(Int32(run.warden.position.y))
@@ -478,6 +479,7 @@ public struct SaveCodec: Sendable {
         let grounded = try readU8() == 1
         let verticalVelocity = Int(try readI32())
         let verticalRemainder = Int(try readI32())
+        let lastLandingImpactVelocity = Int(try readI32())
 
         guard Simulation.coordinateBounds.contains(charX), Simulation.coordinateBounds.contains(charY) else {
             throw SaveError.invalidGameplayField(.characterPosition)
@@ -486,6 +488,9 @@ public struct SaveCodec: Sendable {
             throw SaveError.invalidGameplayField(.characterMotion)
         }
         guard verticalRemainder >= -3 && verticalRemainder <= 3 else {
+            throw SaveError.invalidGameplayField(.characterMotion)
+        }
+        guard lastLandingImpactVelocity >= 0 && lastLandingImpactVelocity <= 12 else {
             throw SaveError.invalidGameplayField(.characterMotion)
         }
 
@@ -610,7 +615,8 @@ public struct SaveCodec: Sendable {
             position: CellPosition(x: charX, y: charY),
             grounded: grounded,
             verticalVelocity: verticalVelocity,
-            verticalRemainder: verticalRemainder
+            verticalRemainder: verticalRemainder,
+            lastLandingImpactVelocity: lastLandingImpactVelocity
         )
 
         // Build warden

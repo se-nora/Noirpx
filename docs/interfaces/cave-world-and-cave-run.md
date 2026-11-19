@@ -79,15 +79,26 @@ public struct CaveRun {
 
     internal private(set) var termination: CaveSpawnTemplate.Termination
     internal private(set) var fallLimit: Int
+    public private(set) var health: Int
+    public let maxHealth: Int
+    public private(set) var damageProtectionTimer: Int
+    public private(set) var lastLandingImpactVelocity: Int
 
     public init(seed: UInt64, width: Int = 256, height: Int = 128) throws
 
     public enum Outcome: Equatable, Sendable {
         case playing
-        case fell
+        case died
     }
 
-    /// Advances one tick. Order: material tick → character advance → outcome checks.
+    /// Advances one tick. Order:
+    /// 1. Material tick: `simulation.advance(activeChunks:)`
+    /// 2. Capture pre-advance grounded state for fall-damage transition detection
+    /// 3. Character advance: `character.advance(snapshot: horizontal: jump:)` (records `lastLandingImpactVelocity` on landing)
+    /// 4. Protection timer decrement
+    /// 5. Material damage (hazard contact)
+    /// 6. Fall damage (airborne → grounded transition; gated on `damageProtectionTimer == 0`)
+    /// 7. Fall-limit check (`character.position.y <= fallLimit` → `.died`)
     /// Terminal outcomes freeze further input and paint.
     public mutating func advance(horizontal: Int, jump: Bool, activeChunks: ChunkRegion? = nil) throws
 
@@ -114,28 +125,61 @@ public struct CaveRun {
 
 ### Tick order and outcome checks
 
-Each `advance(horizontal:jump:)` call executes in this exact order:
+Each `advance(horizontal:jump:)` call executes in this exact 7-step order:
 
 1. **Material tick**: `simulation.advance(activeChunks:)` processes one full
    deterministic physics tick on the active region (default: all chunks).
-2. **Character advance**: `character.advance(snapshot: horizontal: jump:)` on
-   the completed snapshot.
-3. **Fell check**: `character.position.y <= fallLimit` → `.fell`.
-4. **Fall check**: `character.position.y <= fallLimit` → `.fell`.
+2. **Capture pre-advance grounded**: `wasGrounded = character.grounded` for
+   fall-damage transition detection.
+3. **Character advance**: `character.advance(snapshot: horizontal: jump:)` on
+   the completed snapshot. `FixtureCharacter.advance` records
+   `lastLandingImpactVelocity` on landing (loop collision or post-loop grounded
+   transition).
+4. **Protection timer decrement**: `damageProtectionTimer = max(0, damageProtectionTimer - 1)`.
+5. **Material damage**: If `touchesHazard` and `damageProtectionTimer == 0`,
+   decrement `health` by 1 and set `damageProtectionTimer = 30`.
+   Hazard materials: `.fire`, `.lava`, `.acid` (player damage = 1).
+6. **Fall damage**: If `damageProtectionTimer == 0` and `!wasGrounded && character.grounded`,
+   apply `CaveRun.fallDamage(impactSpeed: character.lastLandingImpactVelocity)`:
+   - 0..8 → 0 damage
+   - 9..10 → 1 damage
+   - 11 → 2 damage
+   - ≥12 → 3 damage
+   Decrement `health` by the fall damage amount; if damage > 0, set `damageProtectionTimer = 30`.
+7. **Fall-limit check**: `character.position.y <= fallLimit` → outcome = `.died`.
 
 Once `outcome != .playing`, further `advance` calls are no-ops (input frozen,
 paint disabled by host). Insufficient descent (grounded mid-shaft) is detected
 by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
 
+### Health and damage
+
+- `health` starts at 3 (`maxHealth = 3`).
+- Material damage (fire/lava/acid contact) deals 1 damage per tick when
+  `damageProtectionTimer == 0`, then sets `damageProtectionTimer = 30`.
+- Fall damage is computed from `lastLandingImpactVelocity` at the airborne→grounded
+  transition and is also gated on `damageProtectionTimer == 0`. This prevents
+  stacking material and fall damage in the same tick (e.g., landing in fire).
+- `damageProtectionTimer` decrements by 1 each tick (step 4) before damage checks.
+- When `health <= 0`, outcome becomes `.died`.
+
 ### Determinism and replay
 
 - Same seed + same per-tick `horizontal`/`jump` inputs + same `activeChunks`
-  sequence → identical `outcome`, `character.position`, and simulation digest
+  sequence → identical `outcome`, `character.position`, `health`,
+  `damageProtectionTimer`, `lastLandingImpactVelocity`, and simulation digest
   at every tick.
 - The `simulation` field exposes the full `Simulation` for snapshot and digest
   access; `CaveRun` does not add its own digest.
-- Character state is outside the simulation snapshot and digest (like BeaconRun).
+- Character state (`health`, `damageProtectionTimer`, `lastLandingImpactVelocity`)
+  is outside the simulation snapshot and digest (like BeaconRun).
 - No wall-clock or platform input is read; the host supplies ticks.
+
+### Save/Resume
+
+`CaveRun` is not persisted. `SaveCodec` encodes only `BeaconRun`; `CaveRun`
+state is not saved or restored. This is a deliberate design: cave runs are
+session-scoped and regenerated from seed on restart.
 
 ### Verified configurations
 
@@ -154,3 +198,10 @@ by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
 - Disabled after any terminal outcome (`outcome != .playing`).
 - Cannot paint blocking material into the character body (silently rejected).
 - Enqueued at `snapshot.tick + 1`.
+
+### Touches hazard
+
+`CaveRun.touchesHazard` checks the character body cells for `.fire`, `.lava`,
+or `.acid`. Player damage is 1 for all three materials. Note that
+`ChimeWarden.Hazard` models different damage values per material for the
+warden entity; the player always takes 1 damage per tick from any hazard.

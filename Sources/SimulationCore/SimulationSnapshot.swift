@@ -4,6 +4,8 @@ public struct SimulationSnapshot: Equatable, Sendable {
     public let seed: UInt64
     public let randomState: UInt64
     public let chunks: [ChunkSnapshot]
+    /// Presentation-only blast flash cells from the completed tick. Excluded from digest.
+    public let blastFlash: BlastFlash
 
     public static let digestVersion: UInt64 = 7
 

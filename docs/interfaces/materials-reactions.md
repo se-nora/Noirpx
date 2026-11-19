@@ -29,8 +29,16 @@ added.
   water with small deterministic probability when its heat is 0 and no heat source
   is adjacent.
 - `gunpowder` (13): fine powder falling like sand, with a slightly faster fall.
-  Explodes on contact with fire/lava or a burning flammable: the cell and up to
-  12 cells within radius 3 become fire or empty by deterministic ~0.5 probability.
+  Explodes on contact with fire/lava or a burning flammable: the gunpowder cell is
+  consumed and an explosion request is queued (radius 3, power 100). Explosions are
+  processed after the material pass: cells within Chebyshev radius are considered in
+  global y-then-x order. Each non-empty cell is destroyed when a hash-derived roll
+  (position × tick × salt) falls below the destruction chance `max(0, power - hardness)`.
+  Destroyed cells become empty; destroyed gunpowder chains with radius 3, power 100.
+  Chained explosions are processed FIFO up to depth 8, with a per-tick cap of 512 blast cells.
+  Each cell detonates at most once per tick. Hardness values: empty/fire/steam=0,
+  water/oil/gunpowder/blood=5, pitch/magicLiquid=10, acid/slime=15, lava=20,
+  sand=30, ice=40, gold=60, solid=90.
 - `gold` (14): dense inert powder falling like sand, displacing water and oil
   (not lava). No reactions.
 - `magicLiquid` (15): non-flowing liquid. Each turn transforms one adjacent
@@ -67,7 +75,7 @@ added.
 
 ### Digest and rules version
 - `SimulationSnapshot.digestVersion` bumped from 6 to 7.
-- `SaveCodec.rulesVersion` bumped from 4 to 5.
+- `SaveCodec.rulesVersion` bumped from 5 to 6 (gunpowder behavior change).
 - Replay/save compatibility changes: removing charring eliminates solid->pitch
   writes from fire and burning flammables, so old digests and old saves are not
   compatible.

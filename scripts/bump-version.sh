@@ -1,17 +1,23 @@
 #!/bin/sh
-# Bump the app's minor marketing version (0.x.0), reset patch to 0.
-# Updates every MARKETING_VERSION in Noirpx.xcodeproj/project.pbxproj.
+# Bump the app's marketing version. Default: minor bump, patch reset to 0
+# (0.x.0 -> 0.(x+1).0). With --patch: patch bump only (0.x.y -> 0.x.(y+1)),
+# for changes with no visual or gameplay effect (docs, refactoring, internal
+# cleanups). Updates every MARKETING_VERSION in Noirpx.xcodeproj/project.pbxproj.
 #
-# usage: scripts/bump-version.sh [--dry-run] <worktree-path>
+# usage: scripts/bump-version.sh [--dry-run] [--patch] <worktree-path>
 set -eu
 
 dry_run=false
-if [ "${1:-}" = "--dry-run" ]; then
-  dry_run=true
+patch_mode=false
+while [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "--patch" ]; do
+  case "$1" in
+    --dry-run) dry_run=true ;;
+    --patch)   patch_mode=true ;;
+  esac
   shift
-fi
+done
 
-wt="${1:?usage: $0 [--dry-run] <worktree-path>}"
+wt="${1:?usage: $0 [--dry-run] [--patch] <worktree-path>}"
 pbxproj="$wt/Noirpx.xcodeproj/project.pbxproj"
 [ -f "$pbxproj" ] || { echo "error: $pbxproj not found" >&2; exit 1; }
 
@@ -25,12 +31,17 @@ case "$cur" in
   *) echo "error: cannot parse MARKETING_VERSION from '$cur'" >&2; exit 1 ;;
 esac
 
-# Parse major.minor.patch; bump minor, zero patch.
+# Parse major.minor.patch.
 IFS='.' read -r major minor patch <<EOF
 $cur
 EOF
-new_minor=$((minor + 1))
-new_version="${major}.${new_minor}.0"
+if $patch_mode; then
+  new_patch=$((patch + 1))
+  new_version="${major}.${minor}.${new_patch}"
+else
+  new_minor=$((minor + 1))
+  new_version="${major}.${new_minor}.0"
+fi
 
 if $dry_run; then
   echo "current: $cur"

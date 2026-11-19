@@ -175,6 +175,19 @@ final class ResidentSimulationTests: XCTestCase {
         XCTAssertFalse(simulation.snapshot.chunks.isEmpty)
     }
 
+    func testGunpowderChainInResidentMode() throws {
+        var simulation = try ResidentSimulation(seed: 7, chunkWidth: 16)
+        try place(.fire, 0, 0, in: &simulation)
+        try place(.gunpowder, 1, 0, in: &simulation)
+        try place(.gunpowder, 2, 0, in: &simulation)
+        // Fire ignites gunpowder at (1,0); its radius-3 blast destroys gunpowder
+        // at (2,0) and chains to a second explosion in the same tick.
+        try simulation.advance(focus: focus) { true }
+        let result = simulation.snapshot
+        XCTAssertEqual(try cell(result, 1, 0), .empty, "Ignited gunpowder must be consumed")
+        XCTAssertEqual(try cell(result, 2, 0), .empty, "Chained gunpowder must be destroyed")
+    }
+
     func testWorldBottomStopsMovementAndSnapshotsDescribeRemoval() throws {
         var simulation = try ResidentSimulation(seed: 0, chunkWidth: 16)
         try place(.sand, -32_000, -64_000, in: &simulation)

@@ -67,11 +67,14 @@ public struct CaveRun {
         // 1. Material tick
         try simulation.advance(activeChunks: activeChunks)
 
-        // 2. Character physics on completed material tick
+        // 2. Explosion damage seam (applied by player-health goal; not wired in
+        // this slice — simulation.lastExplosionDamage is recorded but unused here).
+
+        // 3. Character physics on completed material tick
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump)
 
-        // 3. Outcome checks (order matters)
-        // 3a. Fell check (uses fallLimit with margin)
+        // 4. Outcome checks (order matters)
+        // 4a. Fell check (uses fallLimit with margin)
         if character.position.y <= fallLimit {
             outcome = .fell
             return

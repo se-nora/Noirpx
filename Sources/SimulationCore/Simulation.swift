@@ -21,6 +21,13 @@ public struct Simulation {
     private var chunks: [ChunkPosition: SimulationChunk] = [:]
     private var commands: [UInt64: [SimulationCommand]] = [:]
 
+    /// Pending explosions queued from material behaviors, processed FIFO after the material pass.
+    var pendingExplosions: [ExplosionInput] = []
+    /// Explosion damage event from the completed tick; read by CaveRun for health application (deferred to player-health goal).
+    var lastExplosionDamage: ExplosionDamageEvent?
+    /// Presentation-only blast flash cells from the completed tick; excluded from digest.
+    var lastBlastFlash: BlastFlash = BlastFlash(cells: [])
+
     public init(seed: UInt64) {
         self.seed = seed
         self.randomState = seed
@@ -70,7 +77,7 @@ public struct Simulation {
         let published = chunks.keys.sorted(by: ordered).map {
             ChunkSnapshot(position: $0, cells: chunks[$0]!.cells, thermalStates: chunks[$0]!.thermalStates)
         }
-        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published)
+        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published, blastFlash: lastBlastFlash)
     }
 
     public mutating func enqueue(_ command: SimulationCommand) throws {
@@ -126,6 +133,10 @@ public struct Simulation {
         }
         positions.sort { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
         var moved: Set<CellPosition> = []
+
+        // Reset explosion damage for this tick.
+        lastExplosionDamage = nil
+
         for position in positions where !moved.contains(position) {
             let current = material(at: position)
             let behavior = MaterialBehavior.forMaterial(current)
@@ -159,15 +170,30 @@ public struct Simulation {
                 set(material(at: position), at: position, thermal: state)
             }
             moved.formUnion(action.moved)
+            pendingExplosions.append(contentsOf: action.explosions)
         }
+
+        // Process pending explosions FIFO after material pass, before tick publish.
+        // Bounded by maxChainDepth: requests beyond the depth cap are dropped,
+        // not carried over — the queue is not part of saved state and must not
+        // leak across ticks (save/restore would silently lose them).
+        var explodedCells: Set<CellPosition> = []
+        var blastCellCount = 0
+        let blastFlashCells = processPendingExplosions(tick: nextTick, explodedCells: &explodedCells, blastCellCount: &blastCellCount, activeChunks: activeChunks)
+        lastBlastFlash = BlastFlash(cells: blastFlashCells)
+        pendingExplosions.removeAll()
+
+        // Union blast-affected cells into moved to prevent double-update in this tick.
+        moved.formUnion(explodedCells)
+
         tick = nextTick
     }
 
-    private func isInBounds(_ position: CellPosition) -> Bool {
+    func isInBounds(_ position: CellPosition) -> Bool {
         Self.coordinateBounds.contains(position.x) && Self.coordinateBounds.contains(position.y)
     }
 
-    private func material(at position: CellPosition) -> Material {
+    func material(at position: CellPosition) -> Material {
         let (chunk, index) = SimulationGrid.locate(position)
         return chunks[chunk]?.cells[index] ?? .empty
     }
@@ -186,13 +212,13 @@ public struct Simulation {
         return true
     }
 
-    private func thermalUnchecked(at position: CellPosition) -> ThermalCellState {
+    func thermalUnchecked(at position: CellPosition) -> ThermalCellState {
         let (chunk, index) = SimulationGrid.locate(position)
         return chunks[chunk]?.thermalStates[index] ?? .zero
     }
 
-    private mutating func set(_ material: Material, at position: CellPosition,
-                              thermal: ThermalCellState = .zero) {
+    mutating func set(_ material: Material, at position: CellPosition,
+                      thermal: ThermalCellState = .zero) {
         let (chunk, index) = SimulationGrid.locate(position)
         if chunks[chunk] == nil {
             guard material != .empty else { return }

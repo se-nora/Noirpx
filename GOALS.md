@@ -44,7 +44,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### checks-warm-builds: Reuse build products in the check script
-- status: todo
+- status: done
 - priority: 5
 - track: infra
 - depends: none
@@ -62,6 +62,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     starts tests within 5 s of invocation (record both runs' timings).
   - Two worktrees can run checks concurrently without lock contention.
   - Documentation matches the script.
+- result: merged 2c8d1a3; cold 38s/warm 20s/first-test <1s; concurrent worktrees exit 0 (49s wall); --full/--ios BUILD SUCCEEDED; README/docs match
 
 ### host-split: Split the Apple host into focused files
 - status: done
@@ -104,6 +105,36 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     mapping in the delivery notes); no normative rule is lost.
   - INTERFACES.md is an index under 80 lines; all repository links resolve.
 - result: Restructured 1,532-line INTERFACES.md into 11 subsystem files under docs/interfaces/ + 36-line index; all 55 H2+ headings preserved with 4 retitles per spec; stale blocks removed (save "not implemented", spell status, coding-stage sections); directional refs rewritten to cross-file links; known defects preserved; no version bump (docs-only)
+
+### capture-hud: Include HUD overlay in CaptureComparison videos
+- status: done
+- priority: 9
+- track: infra
+- depends: none
+- areas: renderer, hud, tests-infra
+- why: The headless CaptureComparison tool outputs raw simulation frames for
+  video comparison and telegram reports, but the HUD (health, depth, seed,
+  wand stats, material bar, diagnostics) is not included. Adding the HUD makes
+  reported videos immediately readable without cross-referencing logs.
+- scope: Extend `Sources/CaptureComparison/main.swift` to composite the HUD
+  onto captured frames. Reuse `GamePresentation` HUD view logic (or a
+  headless equivalent) to render the same HUD state shown in Cave Run:
+  version, seed, size, position, tick, depth, outcome banner, material/wand
+  bar, crafting grid when open, FPS/chunks, and error messages. Add a
+  `--hud` flag to enable it (default off for backward compatibility). Keep
+  the capture headless (no SwiftUI window); render HUD via an offscreen
+  Metal or CoreGraphics pass composited over the simulation pixels.
+- acceptance:
+  - `--hud` flag produces frames with HUD visible at the same layout as the
+    live app (top-left scrollable panel, bottom material name, iOS buttons
+    excluded).
+  - Beacon and Cave world captures both support the flag.
+  - Frame dimensions and pixel format unchanged; existing `--info` output
+    still matches.
+  - A new test (or updated capture-comparison test) verifies HUD pixels are
+    non-empty in a known region for a fixed seed.
+  - No changes to the live app's HUD rendering or behavior.
+- result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
 
 ## Performance
 
@@ -232,7 +263,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Noita-like gameplay
 
 ### explosions: Terrain-destroying explosions
-- status: todo
+- status: done
 - priority: 15
 - track: noita
 - depends: none
@@ -243,12 +274,16 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   power): removes cells by material hardness (rock resists more than sand),
   converts some cells to fire and hot gas, heats flammables, and damages the
   character by distance. Burning or heated gunpowder explodes, chaining.
-  Visible blast flash as presentation-only state.
+  Visible blast flash as presentation-only state. Character damage application
+  is deferred to the player-health goal; this goal only records the damage
+  event (lastExplosionDamage).
 - acceptance:
   - Tests: radius and hardness rules, chain reaction, deterministic replay,
-    chunk-edge and negative-coordinate blasts.
+    chunk-edge and negative-coordinate blasts, and damage-event recording.
   - In Cave Run, painting fire next to painted gunpowder visibly blasts a hole
     (screenshot).
+  - Character damage application is deferred to player-health (no health bar,
+    no death outcome in this goal).
 
 ### player-health: Health, material damage, and death in Cave Run
 - status: todo
@@ -534,3 +569,24 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - acceptance:
   - Tests: deterministic on-demand generation, unload/reload equality, memory
     bound; benchmark shows steady tick time while descending.
+
+### hud-material-discovery: HUD material discovery and scroll replaces material picker
+- status: done
+- priority: 13
+- track: noita
+- depends: none
+- areas: hud
+- why: The material picker is a separate list that takes screen space and
+  duplicates the drawing selection. A compact HUD bar with discovered materials
+  that scrolls is more Noita-like and keeps the viewport clear.
+- scope: Replace the material picker with a two-line HUD bar showing discovered
+  materials. The bar scrolls horizontally when more materials are discovered
+  than fit. Items are selectable for drawing (tap/click to set the active draw
+  material). Remove the separate drawing-material list/view entirely. The HUD
+  bar shows only materials the player has discovered (picked up or seen).
+- acceptance:
+  - The HUD bar renders at most two rows of material icons and scrolls.
+  - Tapping/clicking a material in the bar sets it as the active draw material.
+  - The old material picker and drawing selection list are removed.
+  - Cave Run plays with the new HUD; no separate picker view remains (screenshot).
+- result: Merged in commit 79961de. All 450 tests pass (swift test --parallel -c release); macOS Debug xcodebuild build succeeds. Click test verified via synthesized mouse events on FocusRingView buttons.

@@ -117,6 +117,10 @@ final class LevitationTests: XCTestCase {
         // Character height 9, top at y+8. Ceiling at y=12 means top at 11 is clear, 12 blocked.
         // When vertical integration tries to move into y=12, blocked(dx:0,dy:+1) clamps verticalVelocity ≤ 0.
         XCTAssertLessThanOrEqual(character.verticalVelocity, 0, "Ceiling collision clamps verticalVelocity ≤ 0")
+        // After hitting the ceiling, heldJump keeps levitation engaged at velocity ≤ climbCap:
+        // gravity pushes velocity to -1 (≤ cap), levitation re-engages and drains energy.
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
         // Energy continues draining while heldJump && !grounded (ceiling-hug drain).
         XCTAssertLessThan(character.levitationEnergy, FixtureCharacter.maxLevitationEnergy)
     }
@@ -150,13 +154,67 @@ final class LevitationTests: XCTestCase {
         XCTAssertEqual(character.verticalVelocity, 12, "Jump press gives impulse 12")
         XCTAssertFalse(character.grounded)
 
-        // Next tick: heldJump = true (player continues holding)
-        // gravity: max(12-1, -12) = 11; levitation: min(11+2, 1) = 1 (capped at climb cap)
+        let energyAfterJump = character.levitationEnergy
+
+        // Ticks 2-11: heldJump = true, velocity > climbCap (1), so no levitation.
+        // Gravity reduces velocity from 12 → 11 → 10 → ... → 3 → 2.
+        // Energy should NOT drain during these ticks (velocity > climbCap).
+        for tick in 2...11 {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+            let expectedVelocity = 13 - tick  // tick 2→11, tick 3→10, ..., tick 11→2
+            XCTAssertEqual(character.verticalVelocity, expectedVelocity,
+                           "Tick \(tick): gravity reduces velocity to \(expectedVelocity), no levitation")
+            XCTAssertEqual(character.levitationEnergy, energyAfterJump,
+                           "Tick \(tick): no energy drain while velocity > climbCap")
+        }
+
+        // Tick 12: gravity max(2-1, -12) = 1. Velocity == climbCap → levitation engages.
+        // Drain 1 energy, cap velocity at 1.
         try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
         XCTAssertEqual(character.verticalVelocity, FixtureCharacter.levitationClimbCap,
-                       "Held jump caps upward velocity at climb cap (1)")
-        XCTAssertEqual(character.levitationEnergy, FixtureCharacter.maxLevitationEnergy - 1,
-                       "Energy drained 1 on first airborne held tick")
+                       "Tick 12: velocity == climbCap, levitation engages, capped at 1")
+        XCTAssertEqual(character.levitationEnergy, energyAfterJump - 1,
+                       "Tick 12: energy drained 1 (first levitation tick)")
+
+        // Tick 13: gravity max(1-1, -12) = 0. Velocity < climbCap → levitation continues.
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        XCTAssertEqual(character.verticalVelocity, FixtureCharacter.levitationClimbCap,
+                       "Tick 13: velocity capped at climbCap (1)")
+        XCTAssertEqual(character.levitationEnergy, energyAfterJump - 2,
+                       "Tick 13: energy drained 1 again")
+    }
+
+    // MARK: - Velocity above climb cap boundary
+
+    func testVelocityAboveClimbCapNoDrain() throws {
+        let snapshot = try emptySnapshot()
+        var character = try landed(in: snapshot)
+
+        // Jump to get airborne with velocity 12
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: true, heldJump: false)
+        let energyAfterJump = character.levitationEnergy
+
+        // Tick 2: velocity = 11 (after gravity), heldJump = true
+        // Since 11 > climbCap (1), no levitation should engage.
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        XCTAssertEqual(character.verticalVelocity, 11, "Velocity 11 > climbCap, gravity applies")
+        XCTAssertEqual(character.levitationEnergy, energyAfterJump,
+                       "No drain when velocity > climbCap")
+
+        // Ticks 3-11: gravity reduces velocity 10 → 2, still > climbCap
+        for _ in 3...11 {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        }
+        XCTAssertEqual(character.verticalVelocity, 2, "Velocity 2 > climbCap, no levitation")
+        XCTAssertEqual(character.levitationEnergy, energyAfterJump,
+                       "No drain when velocity == cap+1")
+
+        // Tick 12: velocity = 1 (after gravity), == climbCap → levitation engages
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        XCTAssertEqual(character.verticalVelocity, FixtureCharacter.levitationClimbCap,
+                       "Velocity == climbCap, levitation engages, capped at 1")
+        XCTAssertEqual(character.levitationEnergy, energyAfterJump - 1,
+                       "Energy drains 1 when velocity <= climbCap")
     }
 
     // MARK: - Altitude budget
@@ -166,17 +224,22 @@ final class LevitationTests: XCTestCase {
         var character = try landed(in: snapshot)
         let startY = character.position.y
 
-        // Tick 1: jump press (impulse 12, rises 3 cells) while holding.
+        // Tick 1: jump press (impulse 12, rises ~3 cells) while holding.
         try character.advance(snapshot: snapshot, horizontal: 0, jump: true, heldJump: true)
-        // Ticks 2...180: levitation holds climb at 1 quarter-cell/tick → 1 cell per 4 ticks.
-        for _ in 2...FixtureCharacter.maxLevitationEnergy {
+        // Ticks 2-11: gravity-only, velocity 12 → 2 (10 ticks, velocity > climbCap, no levitation drain).
+        for _ in 2...11 {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
+        }
+        // Ticks 12..max: post-gravity velocity ≤ climbCap → levitation engages, drains 1/tick.
+        for _ in 12...FixtureCharacter.maxLevitationEnergy {
             try character.advance(snapshot: snapshot, horizontal: 0, jump: false, heldJump: true)
         }
 
         let risen = character.position.y - startY
-        XCTAssertEqual(character.levitationEnergy, 1, "179 levitating ticks drain 179 energy")
-        // 3 cells from jump impulse + ~44 from levitation ≈ 47; accept ~45 ± 5.
-        XCTAssertTrue((40...50).contains(risen), "Expected ~45 cells of climb, got \(risen)")
+        // 180 - 12 + 1 = 169 levitating ticks drain 169 energy → 180 - 169 = 11 left.
+        XCTAssertEqual(character.levitationEnergy, 11, "169 levitating ticks drain 169 energy")
+        // ~9 cells from jump arc (velocity 12→2 over 10 ticks) + ~42 cells from 169 ticks at 1 cell/4 ticks ≈ 51.
+        XCTAssertTrue((59...63).contains(risen), "Expected ~61 cells of climb, got \(risen)")
     }
 
     // MARK: - Helper

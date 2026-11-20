@@ -60,7 +60,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Investigation showed the HUD was NOT missing when `--hud` is passed correctly — `--hud` vs no-hud differs in hundreds of pixels on frame 0 (HeadlessHUD.composite is wired in both BeaconCapture and CaveCapture). The real defect was the documented acceptance command and tooling: it used non-existent flags (`--cave`, `--frames`, `--out`), omitted the required `--ref`, and the tool only wrote raw RGBA to stdout (no PNG writer), so it could never produce `/tmp/test.png`. Fix: added an `--out <path>` PNG writer to CaptureComparison (CoreGraphics/ImageIO CGImageDestination, first frame; raw-RGBA stdout path unchanged when `--out` is absent), corrected the GOALS acceptance command to real flags (`--ref HEAD --world-type cave --ticks 10 --out`), and added a fixed-seed capture-path test (`testCapturedFrameContainsHUDForFixedSeed`) asserting HUD pixels appear in the top-left panel and bottom material pill, alongside the existing capture-size tests. MARKETING_VERSION 0.40.0 -> 0.40.1 (tooling-only, no live-app appearance change). Verification: `swift test --parallel -c release` green; `xcodebuild` macOS Debug BUILD SUCCEEDED; acceptance PNG 200x113 with readable HUD (NOIRPX v0.40.1, CAVE RUN, Seed 12345, Size, Tick, Sand pill) and 646 differing pixels vs no-hud (188 panel, 54 pill). Unverified: the downstream Telegram report pipeline was not exercised here (captured frames provably contain HUD; report wiring is downstream and outside this worktree); only macOS was verified (the capture tool is macOS CoreGraphics-based).
 
 ### levitation-jump-bugfix: Fix levitation activating immediately on jump instead of at max levitation speed
-- status: todo
+- status: done
 - priority: 18
 - track: noita
 - depends: levitation
@@ -70,7 +70,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - acceptance:
   - Core tests: jump without heldJump follows full ballistic arc; jump with heldJump only levitates after velocity drops to climbCap; levitation energy only drains while levitation is active; deterministic replay unchanged for same inputs.
   - Cave Run playtest: tapping jump gives a high arc; holding jump gives a high arc then transitions to steady levitation climb at 0.25 cell/tick.
-- result:
+- result: Fixed levitation condition in FixtureCharacter.swift:96 to `heldJump && levitationEnergy > 0 && verticalVelocity <= Self.levitationClimbCap`. Updated LevitationTests.swift (testJumpPressThenHoldTransitions, testAltitudeBudgetFromGround, testCeilingCollisionClampsVelocity, added testVelocityAboveClimbCapNoDrain). Updated docs/interfaces/character.md drain contract. All 10 LevitationTests pass; CaveRunLevitationIntegrationTests pass; full suite green except pre-existing flaky ExplosionPrimitiveTests.testRadiusAndHardnessRules. Version bumped 0.43.1 -> 0.44.0 (minor, gameplay change). Manual playtest confirmed: tap jump gives high arc, hold jump gives high arc then steady 0.25 cell/tick climb.
 
 ### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
 - status: done

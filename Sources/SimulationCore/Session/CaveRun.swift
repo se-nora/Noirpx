@@ -7,6 +7,29 @@ public struct CaveRun {
         case died
     }
 
+    /// Cause of the player's death, set at the tick the outcome transitions to .died.
+    public enum DamageCause: String, Equatable, Sendable {
+        case contact        // creature contact damage
+        case explosion      // explosion damage
+        case fire           // standing in fire
+        case lava           // standing in lava
+        case acid           // standing in acid
+        case fallDamage     // fall damage on landing
+        case fellBelowLimit // fell below the fall limit
+
+        public var displayName: String {
+            switch self {
+            case .contact: return "crawler contact"
+            case .explosion: return "explosion"
+            case .fire: return "fire"
+            case .lava: return "lava"
+            case .acid: return "acid"
+            case .fallDamage: return "fall"
+            case .fellBelowLimit: return "fell too far"
+            }
+        }
+    }
+
     public var seed: UInt64
     public let size: CaveWorldSize
     public var world: CaveWorld
@@ -19,7 +42,14 @@ public struct CaveRun {
     public private(set) var damageProtectionTimer: Int = 0
     /// Gold collected this run (picked up from gold cells and creature drops).
     public private(set) var runGold: Int = 0
-
+    /// Creatures killed this run (alive → dead transitions).
+    public private(set) var runKills: Int = 0
+    /// Simulation tick at which this run started (snapshot.tick after init).
+    public private(set) var runStartTick: UInt64 = 0
+    /// Cause of death, set when outcome transitions to .died.
+    public private(set) var causeOfDeath: DamageCause? = nil
+    /// Most recent damage source applied this run; set at each damage-application site.
+    public private(set) var lastDamageCause: DamageCause? = nil
 /// The player's inventory flask. Session state only (like `runGold`): it is
     /// applied through ordinary enqueued material commands, so it is not part of
     /// the simulation snapshot digest.
@@ -91,6 +121,7 @@ public struct CaveRun {
             try simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: world.cells[pos]!))
         }
         try simulation.advance()
+        self.runStartTick = simulation.snapshot.tick
 
         self.simulation = simulation
         self.character = FixtureCharacter(
@@ -214,6 +245,7 @@ public struct CaveRun {
             }
 
             if !creature.alive {
+                runKills += 1
                 blood.append(contentsOf: creature.bloodCells())
                 gold.append(contentsOf: creature.goldCells())
             }
@@ -233,6 +265,8 @@ public struct CaveRun {
             health = max(health - contactDamage, 0)
             damageProtectionTimer = 30
             if health == 0 {
+                lastDamageCause = .contact
+                causeOfDeath = lastDamageCause
                 outcome = .died
             }
         }
@@ -252,7 +286,9 @@ public struct CaveRun {
                 if damage > 0 {
                     health = max(health - damage, 0)
                     damageProtectionTimer = 30
+                    lastDamageCause = .explosion
                     if health == 0 {
+                        causeOfDeath = lastDamageCause
                         outcome = .died
                     }
                 }
@@ -352,10 +388,12 @@ public struct CaveRun {
         // 6. Material damage (fire, lava, acid overlap on body cells)
         if damageProtectionTimer == 0 {
             let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
-            if CaveRun.touchesHazard(character.position, materialAt: materialAt) {
+            if let hazard = CaveRun.hazardMaterialAt(character.position, materialAt: materialAt) {
+                lastDamageCause = CaveRun.hazardDamageCause(hazard)
                 health = max(health - 1, 0)
                 damageProtectionTimer = 30
                 if health == 0 {
+                    causeOfDeath = lastDamageCause
                     outcome = .died
                     return
                 }
@@ -370,6 +408,8 @@ public struct CaveRun {
                 health = max(health - fallDamage, 0)
                 damageProtectionTimer = 30
                 if health == 0 {
+                    lastDamageCause = .fallDamage
+                    causeOfDeath = lastDamageCause
                     outcome = .died
                     return
                 }
@@ -383,6 +423,8 @@ public struct CaveRun {
 
         // 9. Fall-limit breach — instant death
         if character.position.y <= fallLimit {
+            lastDamageCause = .fellBelowLimit
+            causeOfDeath = lastDamageCause
             outcome = .died
             return
         }
@@ -423,13 +465,13 @@ public struct CaveRun {
         return 0
     }
 
-    /// Checks if character body overlaps any hazardous material (fire, lava, acid) at its current position.
+    /// Returns the hazardous material (fire, lava, acid) at the character body's cells, if any.
     ///
     /// Player damage is uniformly 1 for fire, lava, and acid. This deliberately differs
     /// from `ChimeWarden.Hazard`, where lava/acid cost 2 shield and hazards can ignite;
     /// the two models are not unified. Player damage is 1 per tick for fire/lava/acid.
-    static func touchesHazard(_ position: CellPosition,
-                              materialAt: (CellPosition) -> Material) -> Bool {
+    static func hazardMaterialAt(_ position: CellPosition,
+                                 materialAt: (CellPosition) -> Material) -> Material? {
         for y in position.y..<(position.y + FixtureCharacter.height) {
             for x in position.x..<(position.x + FixtureCharacter.width) {
                 let cell = CellPosition(x: x, y: y)
@@ -437,17 +479,27 @@ public struct CaveRun {
                 let mat = materialAt(cell)
                 switch mat {
                 case .fire:
-                    return true
+                    return .fire
                 case .lava:
-                    return true
+                    return .lava
                 case .acid:
-                    return true
+                    return .acid
                 default:
                     break
                 }
             }
         }
-        return false
+        return nil
+    }
+
+    /// Maps a hazardous material to the corresponding `DamageCause` for death reporting.
+    static func hazardDamageCause(_ material: Material) -> DamageCause {
+        switch material {
+        case .fire: return .fire
+        case .lava: return .lava
+        case .acid: return .acid
+        default: return .contact
+        }
     }
 
     /// Derives the biome name for a level from the effective biome config.

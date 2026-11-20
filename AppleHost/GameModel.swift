@@ -19,6 +19,16 @@ final class GameModel: ObservableObject {
     /// Flask capacity exposed to HUD. `0` when no active run.
     @Published private(set) var flaskCapacity: Int = 0
 
+    /// Session best (in-memory only, reset on app launch): deepest level reached.
+    @Published private(set) var sessionBestLevel: Int = 1
+    /// Session best depth (in-memory only, reset on app launch).
+    @Published private(set) var sessionBestDepth: Int = 0
+
+    /// Simulation tick at which the current run started; play time = snapshot.tick - runStartTick.
+    private var runStartTick: UInt64 = 0
+    /// Latched once the current run's death has been captured into session best.
+    private var runDeathCaptured = false
+
     /// Last non-nil hover cell for fluid interaction when hover clears (iOS touch end).
     private var lastHoverCell: CellPosition?
     /// The cell at which flask actions target (hover cell or last known hover).
@@ -30,6 +40,17 @@ final class GameModel: ObservableObject {
     var hoveredMaterialName: String? {
         guard let cell = hoverCell, let snapshot else { return nil }
         return MaterialProbe.name(at: cell, in: snapshot)
+    }
+
+    /// Elapsed run ticks (snapshot.tick - runStartTick), 0 when no active run.
+    var playTimeTicks: UInt64 {
+        guard let run = caveRun else { return 0 }
+        return run.simulation.snapshot.tick - runStartTick
+    }
+
+    /// Cause of death for the current run, or nil if the run is still playing.
+    var causeOfDeath: String? {
+        caveRun?.causeOfDeath.map { $0.displayName }
     }
 
     func setHover(_ position: CellPosition?) {
@@ -122,9 +143,18 @@ final class GameModel: ObservableObject {
     }
 
     private func startCaveRun(newSeed: Bool) {
+        // Capture session best from the previous run before it is replaced.
+        if let previous = caveRun, previous.outcome == .died {
+            let depth = previous.world.spawn.y - previous.character.position.y
+            sessionBestLevel = max(sessionBestLevel, previous.level)
+            sessionBestDepth = max(sessionBestDepth, depth)
+        }
+
         do {
             let run = try newSeed ? caveRunSession.newRun() : caveRunSession.restart()
             caveRun = run
+            runStartTick = run.simulation.snapshot.tick
+            runDeathCaptured = false
             snapshot = run.simulation.snapshot
             updateActiveChunks()
             scanAndDiscover()
@@ -429,6 +459,12 @@ final class GameModel: ObservableObject {
                 updateFluidPublished()
                 scanAndDiscover()
                 if run.outcome != .playing {
+                    if run.outcome == .died, !runDeathCaptured {
+                        runDeathCaptured = true
+                        let depth = run.world.spawn.y - run.character.position.y
+                        sessionBestLevel = max(sessionBestLevel, run.level)
+                        sessionBestDepth = max(sessionBestDepth, depth)
+                    }
                     clearControls()
                     break
                 }

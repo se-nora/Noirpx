@@ -292,7 +292,100 @@ public enum HUDLayout {
             list.append(contentsOf: GuideLayout.helpOverlay(width: width, height: height, state: state).items)
         }
 
+        // ---- Death summary overlay (full screen, dimmed) ----
+        if state.outcome == .died {
+            list.append(contentsOf: summaryOverlay(width: width, height: height, state: state).items)
+        }
+
         return list
+    }
+
+    // MARK: - Death summary overlay
+
+    /// Renders a dimmed full-screen summary when `outcome == .died`.
+    private static func summaryOverlay(width: Int, height: Int, state: DisplayListState) -> DisplayList {
+        var list = DisplayList(width: width, height: height)
+
+        // Dim scrim behind the summary panel.
+        list.append(.fillRect(rect: DisplayRect(x: 0, y: 0, width: width, height: height),
+                              color: .rgba(0, 0, 0, 140)))
+
+        let lh = lineHeight(forFontSize: fontSize(forHeight: height))
+        let op = outerPadding(forHeight: height)
+
+        // Panel sized to fit all lines plus padding.
+        let lineCount = summaryLines(state: state).count + 3 // header + buttons spacing
+        let panelWidth = min(300, width - 2 * op)
+        let panelHeight = lineCount * lh + 4 * op
+        let panelX = max(op, (width - panelWidth) / 2)
+        let panelY = max(op, (height - panelHeight) / 2)
+        let panelRect = DisplayRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight)
+        list.append(.roundRect(rect: panelRect, color: .rgba(0, 0, 0, 220), cornerRadius: 8))
+
+        // Text lines inside the panel.
+        let contentX = panelX + op
+        var lineTop = panelY + op
+        for line in summaryLines(state: state) {
+            let textRect = DisplayRect(x: contentX, y: lineTop, width: max(line.totalWidth, 1), height: lh)
+            list.append(.text(rect: textRect, runs: line.runs, baselineFromTop: 6))
+            lineTop += lh
+        }
+
+        // Buttons: Restart (same seed), New Run (fresh seed).
+        let buttonHeight = lh + 8
+        let buttonGap: Int = 8
+        let buttonY = lineTop + op / 2
+        let buttons: [(String, DisplayActionTag)] = [
+            ("Restart", .restart),
+            ("New Run", .newRun),
+        ]
+        var bx = contentX
+        for (title, tag) in buttons {
+            let bw = max(52, BitmapFont.textWidth(title) + 16)
+            let brect = DisplayRect(x: bx, y: buttonY, width: bw, height: buttonHeight)
+            list.append(.roundRect(rect: brect, color: .rgba(60, 60, 60, 255), cornerRadius: 4))
+            list.append(.strokeRect(rect: brect, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+            let tRect = DisplayRect(x: bx + 8, y: buttonY, width: bw - 16, height: lh)
+            list.append(.text(rect: tRect, runs: [DisplayTextRun(text: title, color: .rgba(255, 255, 255, 255))], baselineFromTop: (buttonHeight - lh) / 2))
+            list.append(.hitRegion(rect: brect, actionTag: tag))
+            bx += bw + buttonGap
+        }
+
+        return list
+    }
+
+    private static func summaryLines(state: DisplayListState) -> [HUDLine] {
+        let red = DisplayColor.rgba(255, 0, 0, 255)
+        let white = DisplayColor.rgba(255, 255, 255, 255)
+
+        var lines: [HUDLine] = []
+        lines.append(HUDLine(text: "RUN ENDED — DIED", bold: true, color: red))
+
+        if let level = state.level, let biome = state.biomeName {
+            lines.append(HUDLine(text: "Level \(level) • \(biome)"))
+        } else if let level = state.level {
+            lines.append(HUDLine(text: "Level \(level)"))
+        }
+
+        if let depth = state.depth {
+            lines.append(HUDLine(text: "Depth \(depth)"))
+        }
+
+        lines.append(HUDLine(text: "Gold \(state.runGold)"))
+        lines.append(HUDLine(text: "Time \(formatPlayTime(state.playTimeTicks))"))
+        lines.append(HUDLine(text: "Kills \(state.kills)"))
+
+        let cause = state.causeOfDeath ?? "unknown"
+        lines.append(HUDLine(text: "Cause: \(cause)"))
+
+        lines.append(HUDLine(text: "Session Best: Level \(state.sessionBestLevel) / Depth \(state.sessionBestDepth)", bold: true))
+
+        return lines
+    }
+
+    private static func formatPlayTime(_ ticks: UInt64) -> String {
+        let seconds = Int(ticks / 60)
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
     // MARK: - Public layout API (convenience wrappers for test/integration)

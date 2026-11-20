@@ -795,7 +795,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Crafting UI edits wand slots in the safe zone (screenshot).
 
 ### digging-spells: Digging bolt and bomb spells
-- status: todo
+- status: done
 - priority: 32
 - track: noita
 - depends: explosions, projectile-entities
@@ -915,7 +915,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tests for selection determinism and each perk's effect; screenshot.
 
 ### flasks: Potion flasks that collect and pour liquids
-- status: todo
+- status: done
 - priority: 42
 - track: noita
 - depends: player-health
@@ -927,7 +927,12 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   contents keep per-material counts.
 - acceptance:
   - Tests: capacity, collect, pour, spill determinism; screenshot.
-
+- result: Flask inventory with collect/pour/throw; capacity in cells; mixed
+  contents keep per-material counts; wired HUD callbacks and input plumbing.
+  Tests cover capacity, collect, pour, spill determinism.
+- result: Digging bolt removes soft materials along path (stops at rock);
+  bomb projectile uses explosion primitive on impact/fuse. Tests cover dig
+  path, stopping rules, bomb timing/replay determinism.
 ### pixel-look: Per-cell texture and a world-bounded camera
 - status: done
 - priority: 14

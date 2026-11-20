@@ -121,15 +121,15 @@ public enum FixturePixels {
         -> (r: Float, g: Float, b: Float, intensity: Float, radius: Float)? {
         switch material {
         case .fire:
-            return (1.00, 0.45, 0.10, 1.00, 6)
+            return (1.00, 0.45, 0.10, 0.08, 8)
         case .lava:
-            return (1.00, 0.35, 0.05, 1.00, 8)
+            return (1.00, 0.35, 0.05, 0.05, 6)
         case .pitch where isBurning:
-            return (1.00, 0.60, 0.20, 0.85, 5)
+            return (1.00, 0.60, 0.20, 0.08, 8)
         case .oil where isBurning:
-            return (1.00, 0.60, 0.20, 0.85, 5)
+            return (1.00, 0.60, 0.20, 0.08, 8)
         case .magicLiquid:
-            return (0.70, 0.20, 1.00, 0.90, 6)
+            return (0.70, 0.20, 1.00, 0.08, 6)
         default:
             return nil
         }

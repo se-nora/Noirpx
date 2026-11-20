@@ -78,7 +78,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### capture-video-quality-bugfix: Telegram comparison video missing light/darkness, low res, HUD squeezed
-- status: todo
+- status: done
 - priority: 3
 - track: infra
 - depends: capture-hud-fix
@@ -89,6 +89,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 60 --out /tmp/test.mp4` produces an MP4 where frames are production resolution (e.g., 800x450+), lighting and darkness visible, HUD elements (health, depth, seed, material pill) readable.
   - Screenshot of frame 30 shows light radius around player, darkness beyond, and crisp HUD.
   - Telegram report pipeline receives the higher-res source and encodes it appropriately.
+- result: CaptureComparison renders at 800x450 production resolution with lightMap/applyLightMap wiring, nearest-neighbor upscale, HUD-over-lit composition, and ffmpeg MP4 output; CapturePipelineLightingTests 4/4 pass; pre-existing test failures unrelated.
 
 
 

@@ -113,6 +113,11 @@ suite currently takes several minutes, dominated by a few exhaustive seed/size
 matrices; see PLAN.md "Performance" for the measured baseline and the
 `test-suite-speed` goal.
 
+Agent editing conventions (mandatory for all goal passes) are documented in
+`docs/agent-editing-conventions.md` and enforced as a `scripts/checks.sh`
+step (`edit-convention`). See AGENTS.md "File Editing Conventions" for the
+pre-flight checklist.
+
 All unit tests run in **Release** configuration by default:
 `scripts/checks.sh`, `scripts/test-timings.sh`, the `Noirpx` scheme's Test
 action, and `ParallelTestPlan.xctestplan` all use Release.

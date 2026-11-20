@@ -62,7 +62,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### fall-damage-bugfix: Fall damage kills on landing at same height
-- status: todo
+- status: done
 - priority: 1
 - track: perf
 - depends: player-health
@@ -74,6 +74,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Falling 3-4 cells deals minor damage.
   - Falling 10+ cells deals lethal or near-lethal damage.
   - Deterministic replay test covers the damage curve.
+- result: Fall damage is now height-based: CaveRun.fallDamage(fallDistanceCells:) tiers ≤1→0, 2-4→1, 5-7→2, ≥8→3 (maxHealth=3, so ≥8 is lethal). Fall distance tracked via runtime-only FixtureCharacter.fallStartY (set on takeoff, cleared on landing, excluded from SaveCodec — no save migration). Damage applies once per landing on airborne→grounded transition, gated on damageProtectionTimer == 0. Jump physics, gravity, terminal velocity, levitation, material damage, HUD untouched. Tests: testFallDamageThresholds (curve + 0/1→0, 2-4→1, 5/7→2, 8/10/100→3 + jump-in-place + 3/4/10-cell integration), testFallDamageGatedByProtectionTimer, testFallDamageNotDoubleAppliedAfterLanding, testDeterministicReplayWithHealth, testDeterministicReplayCrossSeed_256x128, 4 new fallStartY tests. CaveRunTests 50 pass, FixtureCharacterTests 16 pass; full suite green except pre-existing CaveRunLevitationIntegrationTests failure (fails on main). MARKETING_VERSION 0.53.0→0.54.0 (minor). Unverified: docs/interfaces/cave-world-and-cave-run.md still documents old velocity-based API; macOS launch playtest and iOS build not exercised.
 
 
 ### capture-video-quality-bugfix: Telegram comparison video missing light/darkness, low res, HUD squeezed

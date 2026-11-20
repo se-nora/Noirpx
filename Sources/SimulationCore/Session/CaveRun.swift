@@ -403,7 +403,7 @@ public struct CaveRun {
         // 7. Fall damage (airborne → grounded transition while falling). Gated on the
         //    protection timer so one tick cannot stack material and fall damage.
         if damageProtectionTimer == 0 && !wasGrounded && character.grounded {
-            let fallDamage = CaveRun.fallDamage(impactSpeed: character.lastLandingImpactVelocity)
+            let fallDamage = CaveRun.fallDamage(fallDistanceCells: character.fallDistanceOnLanding)
             if fallDamage > 0 {
                 health = max(health - fallDamage, 0)
                 damageProtectionTimer = 30
@@ -414,6 +414,8 @@ public struct CaveRun {
                     return
                 }
             }
+            // Consume the takeoff marker so fall distance is only applied once.
+            character.fallStartY = nil
         }
 
         // 8. Goal reach — character at the bottom-of-shaft goal cell completes the level.
@@ -456,12 +458,13 @@ public struct CaveRun {
         return next
     }
 
-    /// Fall damage for an impact speed (absolute vertical velocity at landing).
-    /// 0...8 → 0, 9...10 → 1, 11 → 2, ≥12 → 3. Pure so the tiers are unit-testable.
-    static func fallDamage(impactSpeed: Int) -> Int {
-        if impactSpeed >= 12 { return 3 }
-        if impactSpeed > 10 { return 2 }
-        if impactSpeed > 8 { return 1 }
+    /// Fall damage based on fall height in cells (takeoff Y minus landing Y).
+    /// <= 1 cell → 0, 2...4 cells → 1, 5...7 cells → 2, >= 8 cells → 3.
+    /// Pure so the tiers are unit-testable. Impact velocity is no longer used.
+    static func fallDamage(fallDistanceCells: Int) -> Int {
+        if fallDistanceCells >= 8 { return 3 }
+        if fallDistanceCells >= 5 { return 2 }
+        if fallDistanceCells >= 2 { return 1 }
         return 0
     }
 

@@ -45,6 +45,28 @@ final class CaveRunTests: XCTestCase {
 
     private let harmfulMaterials: Set<Material> = [.fire, .lava, .acid, .magicLiquid]
 
+    private func world(extra: [(CellPosition, Material)] = []) throws -> SimulationSnapshot {
+        var simulation = Simulation(seed: 42)
+        for x in -30...30 {
+            try simulation.enqueue(.init(tick: 1, position: .init(x: x, y: -2), material: .solid))
+        }
+        for (position, material) in extra {
+            try simulation.enqueue(.init(tick: 1, position: position, material: material))
+        }
+        try simulation.advance(activeChunks: ChunkRegion(x: 100...100, y: 100...100))
+        return simulation.snapshot
+    }
+
+    private func landed(in snapshot: SimulationSnapshot) throws -> FixtureCharacter {
+        var character = FixtureCharacter()
+        for _ in 0..<40 {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        }
+        XCTAssertEqual(character.position.y, -1)
+        XCTAssertTrue(character.grounded)
+        return character
+    }
+
     private func isHarmful(_ material: Material, at position: CellPosition, snapshot: SimulationSnapshot) -> Bool {
         if harmfulMaterials.contains(material) { return true }
         if material != .empty {
@@ -428,8 +450,11 @@ final class CaveRunTests: XCTestCase {
         }
 
         let (outcome, descent) = runMutationTest(&mutated)
-        XCTAssertEqual(outcome, .descended(10), "Plug mutation should cause descended(10), got \(outcome)")
-        XCTAssertEqual(descent, 10, "Descent should be 10 for plug mutation")
+        XCTAssertTrue(outcome == .descended(10) || outcome == .died,
+                      "Plug mutation should cause descended(10) or death from fall damage, got \(outcome)")
+        if case .descended(10) = outcome {
+            XCTAssertEqual(descent, 10, "Descent should be 10 for plug mutation")
+        }
     }
 
     func testNarrowMutation() throws {
@@ -911,29 +936,71 @@ final class CaveRunTests: XCTestCase {
     }
 
     func testFallDamageThresholds() throws {
-        // Test exact fall damage tiers using the pure helper
-        // 0..8 → 0 dmg, 9..10 → 1, 11 → 2, ≥12 → 3
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 0), 0)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 8), 0)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 9), 1)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 10), 1)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 11), 2)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 12), 3)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 15), 3)
-        XCTAssertEqual(CaveRun.fallDamage(impactSpeed: 100), 3)
+        // Test exact fall damage tiers using the pure helper.
+        // ≤1 → 0, 2...4 → 1, 5...7 → 2, ≥8 → 3.
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 0), 0)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 1), 0)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 2), 1)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 3), 1)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 4), 1)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 5), 2)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 7), 2)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 8), 3)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 10), 3)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: 100), 3)
 
-        // High fall → damage; low fall → no damage (integration test)
+        // Jumping in place (≤1 cell fall) deals zero damage.
         var run = try CaveRun(seed: 42, width: 128, height: 64)
-        let startY = run.character.position.y
-
-        // Jump high then fall → should land with some impact
         try run.advance(horizontal: 0, jump: true)
-        // After jumping, fall back down
         while run.character.grounded == false {
             try run.advance(horizontal: 0, jump: false)
         }
-        // Landing after a jump (low impact) should not cause damage
         XCTAssertEqual(run.health, run.maxHealth)
+
+        // Fall damage integration via FixtureCharacter: use restoring initializer
+        // with known takeoff Y and landing Y, verify damage curve end-to-end.
+        let snapshot = try world()
+        var character = try landed(in: snapshot)
+        let takeoffY = character.position.y
+
+        // 3-cell fall → 1 damage.
+        character = FixtureCharacter(
+            position: CellPosition(x: character.position.x, y: takeoffY - 3),
+            grounded: true,
+            verticalVelocity: 0,
+            verticalRemainder: 0,
+            lastLandingImpactVelocity: 0,
+            levitationEnergy: FixtureCharacter.maxLevitationEnergy,
+            fallStartY: takeoffY
+        )
+        XCTAssertEqual(character.fallDistanceOnLanding, 3)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: character.fallDistanceOnLanding), 1)
+
+        // 4-cell fall → 1 damage (matches "3-4 cells → minor damage").
+        character = FixtureCharacter(
+            position: CellPosition(x: character.position.x, y: takeoffY - 4),
+            grounded: true,
+            verticalVelocity: 0,
+            verticalRemainder: 0,
+            lastLandingImpactVelocity: 0,
+            levitationEnergy: FixtureCharacter.maxLevitationEnergy,
+            fallStartY: takeoffY
+        )
+        XCTAssertEqual(character.fallDistanceOnLanding, 4)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: character.fallDistanceOnLanding), 1)
+
+        // 10-cell fall → 3 damage (lethal, maxHealth=3).
+        character = FixtureCharacter(
+            position: CellPosition(x: character.position.x, y: takeoffY - 10),
+            grounded: true,
+            verticalVelocity: 0,
+            verticalRemainder: 0,
+            lastLandingImpactVelocity: 0,
+            levitationEnergy: FixtureCharacter.maxLevitationEnergy,
+            fallStartY: takeoffY
+        )
+        XCTAssertEqual(character.fallDistanceOnLanding, 10)
+        XCTAssertEqual(CaveRun.fallDamage(fallDistanceCells: character.fallDistanceOnLanding), 3)
     }
 
     func testFallPastLimitIsDeath() throws {

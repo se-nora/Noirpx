@@ -75,6 +75,21 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Falling 10+ cells deals lethal or near-lethal damage.
   - Deterministic replay test covers the damage curve.
 
+
+### capture-video-quality-bugfix: Telegram comparison video missing light/darkness, low res, HUD squeezed
+- status: todo
+- priority: 3
+- track: infra
+- depends: capture-hud-fix
+- areas: renderer, hud, tests-infra
+- why: The comparison videos sent via Telegram don't show lighting effects or the new darkness system, render at a very low resolution (HUD is squeezed/unreadable), and the video resolution is too small to be useful for review. The game should render at production resolution (same as live app) for captures; the video encoding can be lower bitrate but the frame content must be full-res.
+- scope: Fix the CaptureComparison pipeline to render at the same viewport size as the production Cave Run (matching the app's windowed resolution). Ensure lighting and darkness systems are enabled in headless capture (they may be disabled for performance or due to missing Metal state). Verify the HUD is fully readable in captured frames at full resolution. The output video can be re-encoded at a lower bitrate for Telegram, but the source frames must be production-size.
+- acceptance:
+  - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 60 --out /tmp/test.mp4` produces an MP4 where frames are production resolution (e.g., 800x450+), lighting and darkness visible, HUD elements (health, depth, seed, material pill) readable.
+  - Screenshot of frame 30 shows light radius around player, darkness beyond, and crisp HUD.
+  - Telegram report pipeline receives the higher-res source and encodes it appropriately.
+
+
 ### cpu-freeze-bugfix: Game freezes at 100% CPU after a few seconds
 - status: todo
 - priority: 2

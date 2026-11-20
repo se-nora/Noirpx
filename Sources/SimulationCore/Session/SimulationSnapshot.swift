@@ -8,8 +8,10 @@ public struct SimulationSnapshot: Equatable, Sendable {
     public let blastFlash: BlastFlash
     /// Presentation-only projectiles from the completed tick. Excluded from digest.
     public let projectiles: [ProjectileSnapshot]
+    /// Presentation-only debris particles from the completed tick. Excluded from digest.
+    public let debris: [DebrisParticleSnapshot]
 
-    public static let digestVersion: UInt64 = 8
+    public static let digestVersion: UInt64 = 9
 
     public func material(at position: CellPosition) throws -> Material {
         try SimulationGrid.validate(position)

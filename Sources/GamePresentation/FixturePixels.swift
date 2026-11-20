@@ -290,6 +290,17 @@ public enum FixturePixels {
             pixels[y * width + x] = color.littleEndian
         }
 
+        // Draw debris particles on top of projectiles (single pixel tinted by material).
+        // Sort by ID for deterministic order-independence.
+        for particle in snapshot.debris.sorted(by: { $0.id < $1.id }) {
+            let cell = particle.cell
+            let x = cell.x - viewport.center.x + width / 2
+            let y = height / 2 - 1 - cell.y + viewport.center.y
+            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+            let color = materialColor(particle.material)
+            pixels[y * width + x] = color.littleEndian
+        }
+
         // Draw creatures as colored rects (crawler = dark red, brighter when attacking).
         for creature in creatures where creature.alive {
             let color: UInt32 = creature.state == .attack ? 0xffcc4444 : 0xffaa3333

@@ -26,6 +26,9 @@ public struct Simulation {
     var lastExplosionDamage: ExplosionDamageEvent?
     /// Presentation-only blast flash cells from the completed tick; excluded from digest.
     var lastBlastFlash: BlastFlash = BlastFlash(cells: [])
+    /// Projectile paths recorded during the projectile pass; (projectileId, cells).
+    /// Reset each tick; session-only data for creature hit detection.
+    var lastProjectilePaths: [(projectileId: UInt64, cells: [CellPosition])] = []
     /// Active projectiles in the simulation. Advanced after material/explosion pass each tick.
     private var projectiles: [ProjectileEntity] = []
     /// Monotonically increasing ID for new projectiles.
@@ -139,6 +142,8 @@ public struct Simulation {
 
         // Reset explosion damage for this tick.
         lastExplosionDamage = nil
+        // Reset projectile paths for this tick.
+        lastProjectilePaths.removeAll(keepingCapacity: true)
 
         for position in positions where !moved.contains(position) {
             let current = material(at: position)
@@ -305,6 +310,10 @@ public struct Simulation {
                 impactedEntities.append((entity, impactCell))
             } else if entity.lifetimeTicks > 0 && !entity.hasImpacted {
                 stillActive.append(entity)
+            }
+            // Record the path this tick for creature hit detection.
+            if !entity.lastPath.isEmpty {
+                lastProjectilePaths.append((projectileId: entity.id, cells: entity.lastPath))
             }
             // If lifetimeTicks == 0 and not impacted, it expires silently (no footprint)
         }

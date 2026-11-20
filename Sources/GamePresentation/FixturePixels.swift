@@ -138,7 +138,8 @@ public enum FixturePixels {
 
     /// Counts chunks with at least one nonempty cell in the camera.
     public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport,
-                                 character: FixtureCharacter? = nil, frame: UInt64 = 0)
+                                 character: FixtureCharacter? = nil,
+                                 creatures: [Creature] = [], frame: UInt64 = 0)
         -> (pixels: [UInt8], renderedChunks: Int) {
         let width = viewport.columns
         let height = viewport.rows
@@ -249,6 +250,19 @@ public enum FixturePixels {
             let material = RecipeRegistry.blueprintById[projectile.blueprintId]?.primaryMaterial ?? .empty
             let color = materialColor(material)
             pixels[y * width + x] = color.littleEndian
+        }
+
+        // Draw creatures as colored rects (crawler = dark red, brighter when attacking).
+        for creature in creatures where creature.alive {
+            let color: UInt32 = creature.state == .attack ? 0xffcc4444 : 0xffaa3333
+            for dy in 0..<creature.height {
+                for dx in 0..<creature.width {
+                    let x = creature.position.x + dx - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - creature.position.y - dy + viewport.center.y
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    pixels[y * width + x] = color.littleEndian
+                }
+            }
         }
 
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)

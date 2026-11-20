@@ -18,6 +18,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private var frameCount = 0
     var snapshot: SimulationSnapshot
     var character: FixtureCharacter
+    var creatures: [Creature] = []
     var worldBounds: FixtureViewport.CellRange? = nil
 
     init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
@@ -77,7 +78,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         // Drive shimmer from the simulation tick so the same snapshot always
         // rasterizes to the same pixels, independent of display callback count.
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
-                                            frame: snapshot.tick)
+                                            creatures: creatures, frame: snapshot.tick)
         var mutablePixels = frame.pixels
         mutablePixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),

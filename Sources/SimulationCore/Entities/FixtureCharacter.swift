@@ -92,7 +92,8 @@ public struct FixtureCharacter: Equatable, Sendable {
             // Levitation: hold jump in the air to climb against gravity.
             // Gravity already applied −1; add +2 impulse → net +1 quarter-cell/tick,
             // capped at levitationClimbCap so the climb is a steady 0.25 cell/tick.
-            if heldJump && levitationEnergy > 0 {
+            // Levitation only engages after gravity naturally reduces velocity to <= climbCap.
+            if heldJump && levitationEnergy > 0 && verticalVelocity <= Self.levitationClimbCap {
                 levitationEnergy = max(levitationEnergy - Self.levitationDrainPerTick, 0)
                 verticalVelocity = min(verticalVelocity + Self.levitationImpulsePerTick, Self.levitationClimbCap)
             }

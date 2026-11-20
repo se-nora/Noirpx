@@ -27,7 +27,7 @@ edge-only collision permits it to leave such an overlap.
 
 - `FixtureCharacter.maxLevitationEnergy = 180` (integer ticks, 3 seconds at 60 Hz).
 - `levitationEnergy: Int` (0…max), initialized to full energy.
-- **Drain**: 1 energy/tick while `heldJump && !grounded && energy > 0`. Applies upward impulse
+- **Drain**: 1 energy/tick while `heldJump && !grounded && energy > 0 && post-gravity verticalVelocity <= levitationClimbCap`. Applies upward impulse
   of +2 quarter-cells after gravity (−1) → net +1 quarter-cell/tick climb, capped at 1
   quarter-cell/tick (`levitationClimbCap`). Ceiling collision clamps vertical velocity
   to ≤0; energy continues draining while held at ceiling.

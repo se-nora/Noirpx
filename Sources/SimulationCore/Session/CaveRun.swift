@@ -216,6 +216,30 @@ public struct CaveRun {
                 outcome = .died
             }
         }
+
+        // Explosion damage to the character, applied exactly once per event and
+        // gated on the damage-protection timer (same gating as contact/material/fall
+        // damage so one blast cannot stack with other hits in one tick). Damage is
+        // distance-scaled from the blast center to the nearest character body cell.
+        if let explosion {
+            if damageProtectionTimer == 0 {
+                var damage = 0
+                for cell in characterBody {
+                    let distance = max(abs(cell.x - explosion.center.x),
+                                       abs(cell.y - explosion.center.y))
+                    damage = max(damage, max(0, explosion.power - distance))
+                }
+                if damage > 0 {
+                    health = max(health - damage, 0)
+                    damageProtectionTimer = 30
+                    if health == 0 {
+                        outcome = .died
+                    }
+                }
+            }
+            // Consume the event so it is applied at most once per tick.
+            simulation.lastExplosionDamage = nil
+        }
     }
 
     /// Writes a creature's death blood through the ordinary material command path.

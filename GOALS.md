@@ -709,7 +709,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   proof PNGs captured under state/goals/; MARKETING_VERSION bumped 0.41.0 -> 0.43.0; CaptureProjectile executable added for reproducible visual proof.
 
 ### explosion-impact-feedback: Apply explosion damage and draw the blast flash
-- status: todo
+- status: done
+- result: Applied `Simulation.lastExplosionDamage` to character health exactly once per event (distance-scaled `max(0, power - distance)`, gated on `damageProtectionTimer`, sets timer to 30, `died` outcome at zero health, event nilled after consumption). Drew `snapshot.blastFlash` in `FixturePixels.rasterize` as a presentation-only flash-color overlay clipped to viewport. Added 4 core explosion-damage tests + 3 presentation flash tests (digest exclusion, in-viewport tint, out-of-viewport clipping). `swift test` passes (pre-existing levitation failures unrelated); macOS Debug xcodebuild succeeds; app launches locally. Version bumped 0.49.1 -> 0.50.0.
 - priority: 21
 - track: noita
 - depends: explosions, player-health

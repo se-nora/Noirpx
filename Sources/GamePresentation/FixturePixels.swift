@@ -303,6 +303,17 @@ public enum FixturePixels {
             }
         }
 
+        // Blast flash overlay (presentation only): draw flash cells in flash
+        // color, clipped to the viewport. Excluded from the snapshot digest
+        // and save format.
+        let flashColor = materialColor(.fire)
+        for cell in snapshot.blastFlash.cells {
+            let x = cell.x - viewport.center.x + width / 2
+            let y = height / 2 - 1 - cell.y + viewport.center.y
+            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+            pixels[y * width + x] = flashColor.littleEndian
+        }
+
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)
     }
 

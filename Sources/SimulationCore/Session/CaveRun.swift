@@ -7,9 +7,9 @@ public struct CaveRun {
         case died
     }
 
-    public let seed: UInt64
+    public var seed: UInt64
     public let size: CaveWorldSize
-    public let world: CaveWorld
+    public var world: CaveWorld
     public private(set) var character: FixtureCharacter
     public private(set) var outcome: Outcome = .playing
     public private(set) var simulation: Simulation
@@ -19,6 +19,16 @@ public struct CaveRun {
     public private(set) var damageProtectionTimer: Int = 0
     /// Gold collected this run (picked up from gold cells and creature drops).
     public private(set) var runGold: Int = 0
+
+    /// Current level index (starts at 1). Increments when the character reaches the goal.
+    public private(set) var level: Int = 1
+    /// Biome name for the current level (e.g., "surface", "collapsed mine").
+    public private(set) var biomeName: String = "surface"
+    /// Set to true when the character reaches the goal cell (bottom of shaft).
+    /// GameModel polls this via `isLevelComplete` and calls nextLevel() to transition.
+    internal var levelComplete: Bool = false
+    /// Public getter for levelComplete for cross-module access.
+    public var isLevelComplete: Bool { levelComplete }
 
     internal private(set) var fallLimit: Int
 
@@ -34,11 +44,21 @@ public struct CaveRun {
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
     /// - Parameter biomeConfig: Optional biome configuration. Defaults to
     ///   `CaveBiomeConfig.defaultForHeight(height)`.
-    public init(seed: UInt64, width: Int = 256, height: Int = 128, biomeConfig: CaveBiomeConfig? = nil) throws {
+    public init(seed: UInt64, width: Int = 256, height: Int = 128, level: Int = 1, biomeConfig: CaveBiomeConfig? = nil) throws {
         self.seed = seed
         self.size = CaveWorldSize(width: width, height: height)
+        self.level = level
 
-        let generator = CaveWorldGenerator(seed: seed, width: width, height: height, biomeConfig: biomeConfig)
+        // Mix seed by level for deterministic per-level generation.
+        // Level 1 uses raw seed; level >= 2 uses seed mixed with level index.
+        let generationSeed = level == 1 ? seed : seed &+ 0x9e3779b97f4a7c15 &* UInt64(level)
+
+        // Determine biome config and name
+        let effectiveBiomeConfig = biomeConfig ?? caveBiomeConfigForLevel(level, height: height)
+        let biomeName = Self.biomeName(for: level, height: height, biomeConfig: effectiveBiomeConfig)
+        self.biomeName = biomeName
+
+        let generator = CaveWorldGenerator(seed: generationSeed, width: width, height: height, biomeConfig: effectiveBiomeConfig)
         let (world, prePassGrid) = generator.generateInspected(stampSpawnTemplate: true, capturePrePass: true)
 
         guard let prePassGrid = prePassGrid else {
@@ -324,11 +344,42 @@ public struct CaveRun {
             }
         }
 
-        // 8. Fall-limit breach — instant death
+        // 8. Goal reach — character at the bottom-of-shaft goal cell completes the level.
+        if outcome == .playing && character.position == world.goal {
+            levelComplete = true
+        }
+
+        // 9. Fall-limit breach — instant death
         if character.position.y <= fallLimit {
             outcome = .died
             return
         }
+    }
+
+    /// Advances to the next level. Requires `levelComplete == true`. Mixes the seed
+    /// by the level index, increments `level`, updates `biomeName`, and replaces
+    /// `world`, `simulation`, and `character` with a fresh CaveRun for the new level.
+    /// Health, wands, mana, and runGold carry across levels. Returns nil if not complete.
+    public mutating func nextLevel() -> CaveRun? {
+        guard levelComplete else { return nil }
+
+        level += 1
+        levelComplete = false
+        let newConfig = caveBiomeConfigForLevel(level, height: size.height)
+        let mixedSeed = seed &+ 0x9e3779b97f4a7c15 &* UInt64(level)
+        let next = try? CaveRun(seed: mixedSeed, width: size.width, height: size.height,
+                                level: level, biomeConfig: newConfig)
+        guard let next else { return nil }
+
+        self.world = next.world
+        self.simulation = next.simulation
+        self.character = next.character
+        self.seed = next.seed
+        self.fallLimit = next.fallLimit
+        self.biomeName = next.biomeName
+        self.level = next.level
+
+        return next
     }
 
     /// Fall damage for an impact speed (absolute vertical velocity at landing).
@@ -367,11 +418,16 @@ public struct CaveRun {
         return false
     }
 
+    /// Derives the biome name for a level from the effective biome config.
+    /// Level 1 → surface ("surface"), level >= 2 → collapsed mine ("collapsed mine").
+    static func biomeName(for level: Int, height: Int, biomeConfig: CaveBiomeConfig) -> String {
+        if level >= 2 { return "collapsed mine" }
+        return "surface"
+    }
+
     /// Paints a material for the next tick. Disabled after terminal outcome.
     /// Blocking material cannot be painted into the character body.
     public mutating func paint(_ material: Material, at position: CellPosition) throws {
-        guard outcome == .playing else { return }
-        guard !(material.blocksCharacter && character.contains(position)) else { return }
 
         let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
         guard !overflow else { throw SimulationError.tickOverflow }
@@ -427,7 +483,8 @@ public struct CaveRun {
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
          outcome: Outcome, simulation: Simulation, fallLimit: Int,
          creatures: [Creature] = [], nextCreatureId: UInt64 = 1,
-         wands: [Wand] = []) {
+         wands: [Wand] = [], level: Int = 1, biomeName: String = "surface",
+         levelComplete: Bool = false) {
         self.seed = seed
         self.size = size
         self.world = world
@@ -438,5 +495,8 @@ public struct CaveRun {
         self.creatures = creatures
         self.nextCreatureId = nextCreatureId
         self.wands = wands
+        self.level = level
+        self.biomeName = biomeName
+        self.levelComplete = levelComplete
     }
 }

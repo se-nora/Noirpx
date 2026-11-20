@@ -64,6 +64,8 @@ public struct DisplayListState: Equatable, Sendable {
     public let tick: UInt64
     public let depth: Int?
     public let outcome: DisplayOutcome?
+    public let level: Int?
+    public let biomeName: String?
 
     // Cave HUD
     public let health: Int?
@@ -108,6 +110,8 @@ public struct DisplayListState: Equatable, Sendable {
         position: CellPosition? = nil,
         tick: UInt64,
         depth: Int? = nil,
+        level: Int? = nil,
+        biomeName: String? = nil,
         outcome: DisplayOutcome? = nil,
         health: Int? = nil,
         maxHealth: Int? = nil,
@@ -140,6 +144,8 @@ public struct DisplayListState: Equatable, Sendable {
         self.position = position
         self.tick = tick
         self.depth = depth
+        self.level = level
+        self.biomeName = biomeName
         self.outcome = outcome
         self.health = health
         self.maxHealth = maxHealth

@@ -168,6 +168,101 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                      "Bands must cover [0, h-1]")
         return config
     }
+
+    /// Creates a collapsed-mine biome configuration for deeper levels.
+    /// Bottom-to-top bands: collapsed mine deep (lava/acid/gunpowder dominant),
+    /// collapsed mine mid (pitch/oil/slime), collapsed mine surface (rock with ice/gold).
+    /// Carve thresholds lowered (more open caves) → more hazardous traversal.
+    public static func collapsedMine(height: Int) -> CaveBiomeConfig {
+        let h = height
+        let third = h / 3
+        let remainder = h % 3
+
+        let surfaceExtra = remainder >= 1 ? 1 : 0
+        let undergroundExtra = remainder == 2 ? 1 : 0
+        let deepExtra = 0
+
+        let surfaceHeight = third + surfaceExtra
+        let undergroundHeight = third + undergroundExtra
+        let deepHeight = third + deepExtra
+
+        let surfaceTop = 0
+        let surfaceBottom = surfaceHeight - 1
+        let undergroundTop = surfaceBottom + 1
+        let undergroundBottom = undergroundTop + undergroundHeight - 1
+        let deepTop = undergroundBottom + 1
+        let deepBottom = deepTop + deepHeight - 1
+
+        let deep = CaveBiomeBand(
+            name: "collapsed mine deep",
+            rowRange: deepTop...deepBottom,
+            densities: [
+                .lava: CaveBiomeDensity(multiplier: 3.5, maxPlacements: nil, edgeMargin: 1),
+                .acid: CaveBiomeDensity(multiplier: 3.0, maxPlacements: nil, edgeMargin: 1),
+                .gunpowder: CaveBiomeDensity(multiplier: 2.5, maxPlacements: nil, edgeMargin: 1),
+                .slime: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
+                .gold: CaveBiomeDensity(multiplier: 0.6, maxPlacements: nil, edgeMargin: 1),
+                .ice: CaveBiomeDensity(multiplier: 0.05, maxPlacements: 0, edgeMargin: 2),
+            ],
+            carveThreshold: 0.30,
+            carveFrequency: 0.10,
+            maxPools: 6,
+            maxPockets: 8,
+            maxVeins: 6
+        )
+
+        let mid = CaveBiomeBand(
+            name: "collapsed mine mid",
+            rowRange: undergroundTop...undergroundBottom,
+            densities: [
+                .pitch: CaveBiomeDensity(multiplier: 3.0, maxPlacements: nil, edgeMargin: 1),
+                .oil: CaveBiomeDensity(multiplier: 2.5, maxPlacements: nil, edgeMargin: 1),
+                .slime: CaveBiomeDensity(multiplier: 2.0, maxPlacements: nil, edgeMargin: 1),
+                .blood: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .acid: CaveBiomeDensity(multiplier: 0.6, maxPlacements: nil, edgeMargin: 1),
+                .lava: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
+                .gold: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
+            ],
+            carveThreshold: 0.34,
+            carveFrequency: 0.08,
+            maxPools: 5,
+            maxPockets: 6,
+            maxVeins: 4
+        )
+
+        let surface = CaveBiomeBand(
+            name: "collapsed mine surface",
+            rowRange: surfaceTop...surfaceBottom,
+            densities: [
+                .ice: CaveBiomeDensity(multiplier: 2.5, maxPlacements: nil, edgeMargin: 1),
+                .gold: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .slime: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
+                .lava: CaveBiomeDensity(multiplier: 0.4, maxPlacements: 2, edgeMargin: 2),
+                .acid: CaveBiomeDensity(multiplier: 0.3, maxPlacements: 1, edgeMargin: 2),
+                .pitch: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+                .oil: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+            ],
+            carveThreshold: 0.38,
+            carveFrequency: 0.06,
+            maxPools: 3,
+            maxPockets: 4,
+            maxVeins: 3
+        )
+
+        let config = CaveBiomeConfig(bands: [deep, mid, surface], transitionRows: 1)
+        precondition(config.bands.first?.rowRange.upperBound == h - 1 && config.bands.last?.rowRange.lowerBound == 0,
+                     "Bands must cover [0, h-1]")
+        return config
+    }
+}
+
+/// Selects the biome config for a given level. Level 1 uses the surface config;
+/// level >= 2 uses the collapsed mine config.
+public func caveBiomeConfigForLevel(_ level: Int, height: Int) -> CaveBiomeConfig {
+    if level >= 2 {
+        return .collapsedMine(height: height)
+    }
+    return .defaultForHeight(height)
 }
 
 // MARK: - PlacementBudget
@@ -252,6 +347,10 @@ public struct CaveWorldGenerator: Sendable {
     public let seed: UInt64
     public let size: CaveWorldSize
     private let biomeConfig: CaveBiomeConfig
+
+    private var isCollapsedMineBiome: Bool {
+        biomeConfig.bands.first?.name.hasPrefix("collapsed mine") == true
+    }
 
     public init(seed: UInt64, width: Int, height: Int, biomeConfig: CaveBiomeConfig? = nil) {
         self.seed = seed
@@ -763,6 +862,18 @@ public struct CaveWorldGenerator: Sendable {
             finalSpawnCell = layout.spawnCell
             // Goal was already chosen outside footprint; keep it.
             finalGoalCell = goalCell
+        }
+
+        // Post-template connectivity: if the template changed spawn/goal,
+// ensure they remain connected via empty cells. Collapsed mine only.
+        if layout != nil, isCollapsedMineBiome {
+            applySafetyMargin(grid: &grid, width: w, height: h,
+                             spawn: finalSpawnCell, goal: finalGoalCell)
+            if !emptyPathExists(grid: grid, width: w, height: h,
+                                from: finalSpawnCell, to: finalGoalCell) {
+                carveDirectRoute(grid: &grid, width: w, height: h,
+                                 from: finalSpawnCell, to: finalGoalCell)
+            }
         }
 
         // The border walls and the spawn/goal cells survive every carve.

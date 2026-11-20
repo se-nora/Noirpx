@@ -12,17 +12,17 @@ Status: committed deliverable of goal `fix-digging-spells-recipe-edits` (infra/t
 
 ```sh
 F=Sources/SimulationCore/Spells/RecipeRegistry.swift   # target path; relative to the repo root
-wc -l "$F"                                              # 414 (file has no trailing newline on line 415); total line count via `grep -c '' "$F"` = 415
-grep -cE '^                id: "' "$F"                   # 13  (16-space indent = recipe ids only)
-grep -c 'id: "' "$F"                                    # 39  (pitfall: also counts blueprint + footprint ids; never use as the recipe count)
-grep -nE 'dig_bolt|bomb' "$F"                           # 0 matches — absent on main; belong to the parent digging-spells goal
+grep -c '' "$F"                                         # 468 (file has no trailing newline)
+grep -cE '^                id: "' "$F"                   # 15  (16-space indent = recipe ids only)
+grep -c 'id: "' "$F"                                    # 44  (pitfall: also counts blueprint + footprint ids; never use as the recipe count)
+grep -nE 'dig_bolt|bomb' "$F"                           # present — already merged by parent digging-spells goal
 grep -n 'primaryMaterial: \.fire,' "$F"                 # exactly one hit: line 54
-grep -n '// gunpowder_blast:' "$F"                      # line 230, unique
+grep -n '// gunpowder_blast:' "$F"                      # line 265, unique
+grep -n '// heavy_shot:' "$F"                           # line 421, unique
+grep -n '// dig_bolt:' "$F"                             # line 443, unique
 ```
 
-Recipe `id:` lines: firebolt 49, waterjet 79, lava_lob 105, acid_spray 141, blood_boil 170, ice_shard 206, gunpowder_blast 232, golden_touch 270, steam_cloud 298, magic_missile 332, double_cast 354, speed_up 374, heavy_shot 394. Comment lines: firebolt 47, gunpowder_blast 230, heavy_shot 392.
-
-**Doc-drift warning**: line 43's comment still says "the 10 deterministic recipes" while the anchored count is 13 (PLAN.md also says ten) — pre-existing drift. The 13 count is correct; do not distrust it.
+Recipe `id:` lines: firebolt 49, waterjet 81, lava_lob 109, acid_spray 147, blood_boil 178, ice_shard 216, bomb 245, gunpowder_blast 267, golden_touch 289, steam_cloud 319, magic_missile 355, double_cast 379, speed_up 401, heavy_shot 423, dig_bolt 445. Comment lines: firebolt 47, bomb 243, gunpowder_blast 265, heavy_shot 421, dig_bolt 443.
 
 ## Mandatory pre-read mandate
 
@@ -38,53 +38,15 @@ Current line 54 (20-space indent), verbatim:
 
 Runbook wording: *if the parent spec requires `.fire`, SKIP — the line is already correct and `oldString == newString` is a forbidden no-op (this is the exact signature behind the 3 pass-tool failures); if the parent spec requires any other value, `oldString` = the exact current line 54 copied from a fresh pre-read.*
 
-## Edit B — bomb recipe insertion anchor (before gunpowder_blast)
+## Bomb and dig_bolt — already present (no edit needed)
 
-Line 230 (12-space indent, unique), verbatim:
-
-```
-            // gunpowder_blast: [.gunpowder, .gunpowder, .gunpowder, nil, .fire, nil, nil, nil, nil] — gravityFactor=192 (0.75), speed=256 (1.0)
-```
-
-Insert the new bomb `Recipe(...)` block immediately **before** this line: `oldString` = the comment line above; `newString` = new block + blank line + the comment line.
-
-## Edit C — dig_bolt insertion anchor (after heavy_shot, before closing brackets)
-
-Complete heavy_shot block through the registry close, lines 392–414, verbatim from the fresh read (no ellipses):
-
-```
-            // heavy_shot: [nil, .magicLiquid, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil] — marks modifier spells
-            Recipe(
-                id: "heavy_shot",
-                pattern: [nil, .magicLiquid, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil],
-                output: ProjectileBlueprint(
-                    id: "heavy_shot",
-                    name: "Heavy Shot",
-                    primaryMaterial: .magicLiquid,
-                    secondaryMaterial: nil,
-                    maxRange: 18,
-                    budgetPerTick: 1,
-                    cooldownTicks: 0,
-                    manaCost: 0,
-                    flags: [.isModifier],
-                    footprint: SpellFootprint(id: "modifier_heavy_shot", cells: []),
-                    gravityFactor: 0,
-                    speed: 0
-                )
-            ),
-        ]
-
-        return RecipeRegistry(recipes: recipes)
-    }()
-```
-
-Insert the dig_bolt `Recipe(...)` block after the heavy_shot closing `),` (line 410) and before `        ]` (line 411): `oldString` = the block above; `newString` = same block with the dig_bolt entry spliced in before `        ]`. Both anchors verified unique; `grep dig_bolt` == 0 beforehand confirms `newString` is not already present.
+`grep -nE 'dig_bolt|bomb'` returns matches on main: bomb `Recipe` block at lines 242–260 and dig_bolt `Recipe` block at lines 443–457 were both inserted by the parent `digging-spells` goal (merged at fd41a85). No `Edit B`/`Edit C` insertion is required — the anchors are verified present. If a future pass needs to re-insert them, copy verbatim from a fresh pre-read; do not use stale line numbers from this runbook.
 
 ## What this goal does NOT do
 
-- No digging-spells spell implementation (bomb/dig_bolt) — that is the parent `digging-spells` goal.
+- No digging-spells spell implementation (bomb/dig_bolt) — that is the parent `digging-spells` goal (already merged on main).
 - No change to `Sources/SimulationCore/Spells/RecipeRegistry.swift` on main or in this worktree.
-- No version bump (MARKETING_VERSION stays 0.49.1; docs-only, no visual/gameplay effect).
+- No version bump (this goal is docs-only, no visual/gameplay effect; MARKETING_VERSION unchanged by this goal).
 - No loop-machinery or implementer-agent edits.
 - No no-op `edit` calls.
 

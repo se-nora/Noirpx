@@ -417,21 +417,23 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   Sources/SimulationCore/RecipeRegistry.swift only.
 - acceptance: >
   Pre-read-verified anchor runbook committed under docs/goal-runbooks/digging-spells.md;
-  every anchor re-verified against main (anchored recipe count 13; firebolt primaryMaterial
-  at line 54; // gunpowder_blast: at line 230; heavy_shot block 392–410 + ] 411 +
-  return 413 + }() 414; dig_bolt/bomb absent = 0 matches); runbook instructs SKIP for
-  the firebolt no-op and names the gunpowder_blast and heavy_shot/closing-bracket anchors;
-  pre-read-before-edit mandate present; git diff main...HEAD --
-  Sources/SimulationCore/Spells/RecipeRegistry.swift empty (run at merge).
+  every anchor re-verified against main fd41a85 (anchored recipe count 15 via
+  `grep -cE '^                id: "'`; firebolt primaryMaterial at line 54 already
+  `.fire` → SKIP per no-op rule; bomb Recipe block lines 242–260 and dig_bolt Recipe
+  block lines 443–457 present, no insertion edit required; // gunpowder_blast: comment
+  line 265 and // heavy_shot: comment line 421 unique; pre-read-before-edit mandate present;
+  git diff main...HEAD -- Sources/SimulationCore/Spells/RecipeRegistry.swift empty
+  (run at merge).
 - result: |
   Committed pre-read-verified anchor runbook docs/goal-runbooks/digging-spells.md verified
-  against main 6c994ee (13 recipes via anchored grep; firebolt line 54 already .fire → SKIP;
-  gunpowder_blast comment line 230 and heavy_shot/closing-bracket anchors 392–414 named;
-  dig_bolt/bomb absent); RecipeRegistry.swift diff vs main empty; MARKETING_VERSION unchanged
-  0.49.1 (no bump, docs-only per brief/precedent); swift test --parallel -c release + edit-convention
-  green; simcore-layout step has 3 pre-existing FAILs on main (Crawler/CreatureSpawn/CaveWorldGenerator
-  top-level type counts), unrelated to this docs-only change; parent digging-spells pass re-run
-  is still pending (tooling-digest signature fix is loop-side, out of repo scope).
+  against main fd41a85 (15 recipes via anchored grep; firebolt line 54 already .fire → SKIP;
+  bomb and dig_bolt Recipe blocks already present from the parent digging-spells merge;
+  gunpowder_blast comment line 265 and heavy_shot comment line 421 named); RecipeRegistry.swift
+  diff vs main empty; MARKETING_VERSION unchanged by this docs-only goal (main at 0.51.0,
+  no bump per brief/precedent); swift test --parallel -c release + edit-convention green;
+  simcore-layout step has 3 pre-existing FAILs on main (Crawler/CreatureSpawn/CaveWorldGenerator
+  top-level type counts), unrelated to this docs-only change; parent digging-spells pass
+  re-run still pending (tooling-digest signature fix is loop-side, out of repo scope).
 
 ### fix-simcore-layout-edit-failures: Stabilize implementer edit calls in simcore-file-layout spec work
 - status: todo

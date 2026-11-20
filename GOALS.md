@@ -396,7 +396,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   Verification-only goal; both edit targets already correctly applied in the tree (Package.swift line 13 SimBenchmark executable product, line 21 executableTarget, line 23 SimulationCoreTests testTarget depending on SimBenchmark; docs/interfaces/snapshots-digest.md line 5 documents the immutable snapshot invariant). swift build -c release --product SimBenchmark green; swift test --parallel -c release 599 tests pass, 0 failures/errors; SimBenchmarkMetricsTests green. QA ACCEPT WITH LIMITS (iOS Simulator build not run; no goal-pass edit-run log). No code change required; no version bump (no visual/gameplay effect).
 
 ### fix-digging-spells-recipe-edits: Stabilize implementer edit calls for digging-spells spell recipes
-- status: todo
+- status: done
 - priority: 6
 - track: infra
 - depends: none
@@ -416,9 +416,22 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   (firebolt and dig_bolt primaryMaterial edits), targeting
   Sources/SimulationCore/RecipeRegistry.swift only.
 - acceptance: >
-  The digging-spells goal pass completes without pass-tool edit
-  `primaryMaterial: .fire,` failures; RecipeRegistry.swift edits apply cleanly;
-  the tooling digest no longer lists this signature as actionable.
+  Pre-read-verified anchor runbook committed under docs/goal-runbooks/digging-spells.md;
+  every anchor re-verified against main (anchored recipe count 13; firebolt primaryMaterial
+  at line 54; // gunpowder_blast: at line 230; heavy_shot block 392–410 + ] 411 +
+  return 413 + }() 414; dig_bolt/bomb absent = 0 matches); runbook instructs SKIP for
+  the firebolt no-op and names the gunpowder_blast and heavy_shot/closing-bracket anchors;
+  pre-read-before-edit mandate present; git diff main...HEAD --
+  Sources/SimulationCore/Spells/RecipeRegistry.swift empty (run at merge).
+- result: |
+  Committed pre-read-verified anchor runbook docs/goal-runbooks/digging-spells.md verified
+  against main 6c994ee (13 recipes via anchored grep; firebolt line 54 already .fire → SKIP;
+  gunpowder_blast comment line 230 and heavy_shot/closing-bracket anchors 392–414 named;
+  dig_bolt/bomb absent); RecipeRegistry.swift diff vs main empty; MARKETING_VERSION unchanged
+  0.49.1 (no bump, docs-only per brief/precedent); swift test --parallel -c release + edit-convention
+  green; simcore-layout step has 3 pre-existing FAILs on main (Crawler/CreatureSpawn/CaveWorldGenerator
+  top-level type counts), unrelated to this docs-only change; parent digging-spells pass re-run
+  is still pending (tooling-digest signature fix is loop-side, out of repo scope).
 
 ### fix-simcore-layout-edit-failures: Stabilize implementer edit calls in simcore-file-layout spec work
 - status: todo

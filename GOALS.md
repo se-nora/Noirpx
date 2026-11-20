@@ -1077,7 +1077,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Spawn debris in Simulation.applyExplosion (40% chance per destroyed cell via blastRoll with distinct debrisSpawnSalt, no nextRandom consumption). Advance after projectiles (advanceDebris pass): Bresenham traversal, gravity (0.5 cells/tick²), collision with blocksCharacter materials, 120-tick lifetime. Deposit on collision/expiry with 8-neighborhood search; conservation invariant enforced. Per-explosion cap: 32; per-tick cap: 512. SimulationSnapshot.debris field (presentation-only, excluded from digest). digestVersion 8→9; SaveCodec.rulesVersion 7→8 (debris not saved). FixturePixels debris overlay: single-pixel tinted by materialColor, after projectiles before blast flash, sorted by ID for deterministic order-independence. Tests: 17 DebrisParticleTests (advance, collision, deposit, conservation), 10 SimulationDebrisTests (spawn determinism, caps, digestion exclusion, chunk-edge), 8 DebrisOverlayTests (viewport, clipping, order-independent, deterministic re-raster, digest exclusion). All 35 debris tests pass; full suite green except pre-existing CaveRunLevitationIntegrationTests failures. MARKETING_VERSION 0.52.0→0.53.0 (gameplay-visible). Headless PNG evidence at /tmp/debris_capture.png and /tmp/debris_capture_cave.png. Unverified: no visual regression test against prior projectile-overlay-proof captures; iOS Simulator build not run.
 
 ### run-summary: Permadeath run summary and new run
-- status: todo
+- status: done
 - priority: 44
 - track: noita
 - depends: player-health, biome-descent
@@ -1087,6 +1087,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   New Run starts a fresh seed. Track a session best.
 - acceptance:
   - Tests for summary data; screenshot of the summary.
+- result: Delivered run-summary overlay (HUDLayout.summaryOverlay when outcome == .died) showing depth/level, gold, play time (MM:SS), kills, cause of death, session best level/depth, with New Run and Restart buttons. CaveRun tracks DamageCause, runKills, runStartTick, causeOfDeath, lastDamageCause; kill counting from alive→dead transitions in advanceCreatures; cause set at all death sites (contact, explosion, fire/lava/acid, fall, fall-limit). DisplayListState gains 5 new fields (kills, playTimeTicks, causeOfDeath, sessionBestLevel, sessionBestDepth). GameModel is thin wrapper holding session best and run state; startCaveRun captures previous session best and resets run state; update captures death into session best on .died transition. HostView renders summary VStack + New Run / Restart buttons. HUDRender populates all new fields. RunSummaryTests (4) all pass; HUDLayoutTests pass; GamePresentationTests (123) pass; macOS Debug xcodebuild BUILD SUCCEEDED; app launched locally and summary overlay verified via HUDRender PNG output (summary_died2.png: "RUN ENDED - DIED", Depth 0, Gold 0, Time 00:00, Kills 0, Cause: explosion, Session Best: Level 1 / Depth 0, Restart, New Run). Pre-existing CaveRunLevitationIntegrationTests failures unchanged. MARKETING_VERSION bumped 0.53.0→0.54.0 (Debug+Release).
 
 ### world-streaming: Tall cave world with on-demand chunks
 - status: todo

@@ -76,6 +76,13 @@ public struct DisplayListState: Equatable, Sendable {
     public let flaskContents: [Material: Int]
     public let flaskCapacity: Int
 
+    // Run summary
+    public let kills: Int
+    public let playTimeTicks: UInt64
+    public let causeOfDeath: String?
+    public let sessionBestLevel: Int
+    public let sessionBestDepth: Int
+
     // Beacon HUD
     public let collectedBeacons: Int
     public let warden: DisplayWarden?
@@ -122,6 +129,11 @@ public struct DisplayListState: Equatable, Sendable {
         runGold: Int = 0,
         flaskContents: [Material: Int] = [:],
         flaskCapacity: Int = 0,
+        kills: Int = 0,
+        playTimeTicks: UInt64 = 0,
+        causeOfDeath: String? = nil,
+        sessionBestLevel: Int = 1,
+        sessionBestDepth: Int = 0,
         collectedBeacons: Int = 0,
         warden: DisplayWarden? = nil,
         selectedMaterial: Material,
@@ -158,6 +170,11 @@ public struct DisplayListState: Equatable, Sendable {
         self.runGold = runGold
         self.flaskContents = flaskContents
         self.flaskCapacity = flaskCapacity
+        self.kills = kills
+        self.playTimeTicks = playTimeTicks
+        self.causeOfDeath = causeOfDeath
+        self.sessionBestLevel = sessionBestLevel
+        self.sessionBestDepth = sessionBestDepth
         self.collectedBeacons = collectedBeacons
         self.warden = warden
         self.selectedMaterial = selectedMaterial

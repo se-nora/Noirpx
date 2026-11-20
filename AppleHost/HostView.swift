@@ -86,7 +86,20 @@ struct HostView: View {
                     Text("Depth \(depth)")
                     Text("Gold \(run.runGold)")
                     if run.outcome == .died {
-                        Text("You died!").foregroundStyle(.red).fontWeight(.bold)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("RUN ENDED — DIED")
+                                .foregroundStyle(.red)
+                                .fontWeight(.bold)
+                            Text("Level \(run.level) • \(run.biomeName)")
+                            let depth = run.world.spawn.y - run.character.position.y
+                            Text("Depth \(depth)")
+                            Text("Gold \(run.runGold)")
+                            Text("Time \(formatPlayTime(model.playTimeTicks))")
+                            Text("Kills \(run.runKills)")
+                            Text("Cause: \(model.causeOfDeath ?? "unknown")")
+                            Text("Session Best: Level \(model.sessionBestLevel) / Depth \(model.sessionBestDepth)")
+                                .fontWeight(.bold)
+                        }
                     } else {
                         Text("Descend the shaft.")
                     }
@@ -239,6 +252,11 @@ struct HostView: View {
             .accessibilityAction { model.activateControl(control) }
     }
     #endif
+
+    private func formatPlayTime(_ ticks: UInt64) -> String {
+        let seconds = Int(ticks / 60)
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
 }
 
 struct DiagnosticsView: View {

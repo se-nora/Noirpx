@@ -90,6 +90,47 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Telegram report pipeline receives the higher-res source and encodes it appropriately.
 
 
+
+### noita-gap-analysis: Compare current game to Noita and add missing goals
+- status: todo
+- priority: 75
+- track: noita
+- depends: none
+- areas: docs-interfaces, sim-rules, worldgen, player, spells, entities, hud
+- why: We need a systematic gap analysis comparing Noirpx's current feature set to Noita's core mechanics, to identify what's missing and prioritize the remaining work. This goal runs the comparison and creates new goals for each significant gap found.
+- scope: Play Noita (or review reference material) and enumerate missing systems: wand editing/crafting UI, biome variety, creature AI, material physics depth, spell variety, parallel worlds, boss fights, alchemy/reactions, perks, secrets. For each gap, create a new goal in GOALS.md with proper fields. Do NOT implement the gaps — just document and create goals.
+- acceptance:
+  - GOALS.md has new goals covering all major Noita systems not yet in Noirpx.
+  - Each new goal has status, priority, track, depends, areas, why, scope, acceptance.
+  - No implementation work done in this goal.
+
+### sound-exploration: Explore adding sound system and create sub-goals
+- status: todo
+- priority: 80
+- track: noita
+- depends: none
+- areas: host, hud, sim-rules, docs-interfaces
+- why: Noita's audio (ambient cave sounds, material reactions, spell casting, creature noises, music) is a core part of its feel. Noirpx has no sound. This goal investigates what's needed (AVAudioEngine? AudioKit? custom?), creates a design, and breaks it into multiple implementation goals.
+- scope: Research audio frameworks suitable for macOS/iOS game (AVAudioEngine, AudioKit, FMOD, SoLoud). Design the sound architecture: event-driven playback from simulation (material reactions, spell casts, impacts, creature sounds), ambient loops per biome, music system. Create 5-10 sub-goals in GOALS.md (e.g., audio-engine-setup, ambient-cave-sounds, spell-cast-sounds, material-reaction-sounds, creature-sounds, music-system, ui-sounds, audio-settings). Do NOT implement — just research, design, and create goals.
+- acceptance:
+  - Sound architecture document in docs/interfaces/audio.md.
+  - GOALS.md has 5-10 new sound-related goals with proper fields.
+  - No implementation work done in this goal.
+
+### cave-navigation-bugfix: Generated cave is too tiny for player navigation
+- status: todo
+- priority: 85
+- track: noita
+- depends: biome-descent
+- areas: worldgen, player
+- why: The current cave generation produces caves too small for the player to meaningfully navigate — corridors are 1-2 cells wide, chambers are tiny, and there's no room for movement, combat, or exploration. Noita's caves are large, open spaces with varied room sizes.
+- scope: Analyze the current cave generator parameters (CaveGenerator, level templates). Identify the constraints causing small caves (noise scale, carve radius, room count, tunnel width). Determine target dimensions: main corridors ≥5 cells wide, chambers ≥15x15 cells, vertical shafts for descent. Create specific goals in GOALS.md for each fix (e.g., cave-generator-noise-scale, cave-room-size-distribution, cave-corridor-width, vertical-shaft-generation). Do NOT implement — just analyze and create goals.
+- acceptance:
+  - Analysis document in docs/interfaces/cave-generation.md or similar.
+  - GOALS.md has 4-6 new cave generation goals with proper fields.
+  - Target dimensions documented and achievable.
+
+
 ### cpu-freeze-bugfix: Game freezes at 100% CPU after a few seconds
 - status: todo
 - priority: 2

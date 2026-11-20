@@ -608,8 +608,8 @@ final class CaveWorldGenTests: XCTestCase {
         let checksum1 = sortedCellsSHA256(w1)
         let checksum2 = sortedCellsSHA256(w3)
         // These are the baseline values; if they change, the test will fail
-        XCTAssertEqual(checksum1, "855726f275f35250b412101a128da5153ca28eb9349a57f6bf37381b33b5f83f")
-        XCTAssertEqual(checksum2, "eed50386c2748f26345c229991f9983f571faab475ccb9738c70ff2efc26e058")
+        XCTAssertEqual(checksum1, "afe79c4acd25516261a36915c8afe1427152d595f0d977fbfcaf37e140aa06d4")
+        XCTAssertEqual(checksum2, "cd0a1d599664cbde3fd7d4d66dce98ad1c2ee8925bf1f6995db91ef0bb27c5ac")
     }
 
     func testMatrixActuallyStamps() throws {
@@ -769,6 +769,123 @@ final class CaveWorldGenTests: XCTestCase {
                 XCTAssertTrue(gy <= layout.minBottomRow, "Queried above minBottomRow (gy=\(gy) > minBottomRow=\(layout.minBottomRow)): scan range is minBottomRow down to capRow")
             }
         }
+    }
+
+    // MARK: - Biome band tests
+
+    func testBiomeLayerBoundaries() throws {
+        for (width, height) in [(256, 128), (128, 64), (96, 64)] {
+            let config = CaveBiomeConfig.defaultForHeight(height)
+            // 3 bands
+            XCTAssertEqual(config.bands.count, 3, "\(width)×\(height): expected 3 bands")
+            // Names bottom-to-top
+            XCTAssertEqual(config.bands.map { $0.name }, ["deep", "underground", "surface"], "\(width)×\(height)")
+            // Contiguous
+            for i in 0..<(config.bands.count - 1) {
+                XCTAssertEqual(config.bands[i].rowRange.lowerBound,
+                               config.bands[i + 1].rowRange.upperBound + 1,
+                               "\(width)×\(height): bands not contiguous at index \(i)")
+            }
+            // Full coverage [0, height-1]
+            XCTAssertEqual(config.bands.last?.rowRange.lowerBound, 0, "\(width)×\(height)")
+            XCTAssertEqual(config.bands.first?.rowRange.upperBound, height - 1, "\(width)×\(height)")
+        }
+    }
+
+    func testBiomeMaterialPresence() throws {
+        var acidSeen = false
+        var lavaSeen = false
+        var slimeSeen = false
+        for seed: UInt64 in [1, 2, 3, 42, 64] {
+            let run = try CaveRun(seed: seed, width: 256, height: 128)
+            let counts = run.world.materialCounts
+            if counts[.acid] ?? 0 > 0 { acidSeen = true }
+            if counts[.lava] ?? 0 > 0 { lavaSeen = true }
+            if counts[.slime] ?? 0 > 0 { slimeSeen = true }
+        }
+        XCTAssertTrue(acidSeen, "acid should appear in deep band")
+        XCTAssertTrue(lavaSeen, "lava should appear in deep band")
+        XCTAssertTrue(slimeSeen, "slime should appear in underground band")
+    }
+
+    func testBiomeDeterministicReplay() throws {
+        let sizes: [(Int, Int)] = [(256, 128), (128, 64)]
+        let seeds: [UInt64] = [1, 42, 64]
+        for seed in seeds {
+            for (width, height) in sizes {
+                let config = CaveBiomeConfig.defaultForHeight(height)
+                var runA = try CaveRun(seed: seed, width: width, height: height, biomeConfig: config)
+                var runB = try CaveRun(seed: seed, width: width, height: height, biomeConfig: config)
+                // Same world.
+                XCTAssertEqual(runA.world.cells, runB.world.cells, "seed \(seed) \(width)×\(height)")
+                // Identical digest after 60 ticks.
+                for _ in 0..<60 { try runA.advance(horizontal: 0, jump: false) }
+                for _ in 0..<60 { try runB.advance(horizontal: 0, jump: false) }
+                XCTAssertEqual(runA.simulation.snapshot.digest, runB.simulation.snapshot.digest,
+                               "digest should match for seed \(seed) \(width)×\(height)")
+            }
+        }
+    }
+
+    func testBiomeTransitionBlend() throws {
+        let width = 256, height = 128
+        let originX = -width / 2, originY = -height / 2
+        let run = try CaveRun(seed: 1, width: width, height: height)
+        let grid = run.world.cells
+        let config = CaveBiomeConfig.defaultForHeight(height)
+        let deepBand = config.bands.first!
+
+        // Deep band interior (exclude transition rows at edges)
+        var deepLava = 0, deepCells = 0
+        for gy in deepBand.rowRange.lowerBound + 1 ..< deepBand.rowRange.upperBound {
+            for gx in 1..<(width - 1) {
+                let pos = CellPosition(x: originX + gx, y: originY + gy)
+                if grid[pos] == .lava { deepLava += 1 }
+                deepCells += 1
+            }
+        }
+        // Transition row at deep/underground boundary (deep.lowerBound)
+        let tRow = deepBand.rowRange.lowerBound
+        var tLava = 0, tCells = 0
+        for gx in 1..<(width - 1) {
+            let pos = CellPosition(x: originX + gx, y: originY + tRow)
+            if grid[pos] == .lava { tLava += 1 }
+            tCells += 1
+        }
+        let deepRate = Double(deepLava) / Double(deepCells)
+        let tRate = Double(tLava) / Double(tCells)
+        // Deep band should contain lava.
+        XCTAssertGreaterThan(deepRate, 0, "deep band should contain lava, deepRate=\(deepRate)")
+        // Transition row lava rate must be <= deep band interior (interpolation dilutes).
+        XCTAssertLessThanOrEqual(tRate, deepRate, "transition row lava should be <= deep band interior")
+    }
+
+    func testBiomeConfigChangeChangesDigest() throws {
+        let configDefault = CaveBiomeConfig.defaultForHeight(128)
+        let configCustom = CaveBiomeConfig(
+            bands: [
+                CaveBiomeBand(name: "deep", rowRange: 43...127,
+                            densities: [.lava: CaveBiomeDensity(multiplier: 5.0)]),
+                CaveBiomeBand(name: "underground", rowRange: 22...42,
+                              densities: [.slime: CaveBiomeDensity(multiplier: 5.0)]),
+                CaveBiomeBand(name: "surface", rowRange: 0...21,
+                              densities: [.ice: CaveBiomeDensity(multiplier: 5.0)]),
+            ], transitionRows: 1
+        )
+        var runA = try CaveRun(seed: 1, width: 256, height: 128, biomeConfig: configDefault)
+        var runB = try CaveRun(seed: 1, width: 256, height: 128, biomeConfig: configCustom)
+        for _ in 0..<60 { try runA.advance(horizontal: 0, jump: false) }
+        for _ in 0..<60 { try runB.advance(horizontal: 0, jump: false) }
+        XCTAssertNotEqual(runA.simulation.snapshot.digest, runB.simulation.snapshot.digest,
+                          "changing biome config should change the digest")
+    }
+
+    func testBiomeValidConfigDoesNotTrap() {
+        // Verify valid default configs construct without trapping.
+        XCTAssertNoThrow(try CaveRun(seed: 1, width: 256, height: 128,
+                                     biomeConfig: CaveBiomeConfig.defaultForHeight(128)))
+        XCTAssertNoThrow(try CaveRun(seed: 1, width: 128, height: 64,
+                                     biomeConfig: CaveBiomeConfig.defaultForHeight(64)))
     }
 }
 

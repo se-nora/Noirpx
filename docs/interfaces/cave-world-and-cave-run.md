@@ -45,12 +45,90 @@ coordinates, row increasing upward):
 **Safety margins.** Hazards stay at least 6 cells from the goal. Around the
 published spawn the guarantee is the purge radius 6 on the pad and shaft.
 
-API: `CaveWorldGenerator(seed:width:height:)`, `.generate() -> CaveWorld`, and
+API: `CaveWorldGenerator(seed:width:height:biomeConfig:)`, `.generate() -> CaveWorld`, and
 `.stamp(into:tick:)` which enqueues one `SimulationCommand` per non-empty cell
 in chunked 512-cell batches (no giant intermediate array). `CaveWorld` exposes
 `cells`, `spawn`, `goal`, `extents`, and `materialCounts`. Same seed yields an
 identical `CaveWorld`. Internal `generateInspected(stampSpawnTemplate:capturePrePass:)`
-is available for testing.
+is available for testing. `CaveRun.init(seed:width:height:biomeConfig:)` constructs
+a run with optional biome configuration.
+
+## Biome bands
+
+`CaveRun` world generation supports vertical biome bands through the
+`CaveBiomeConfig` parameter. Bands are contiguous, non-overlapping, and cover
+the full world height `[0, height-1]` in grid rows (row 0 = top/spawn).
+
+### Types
+
+```swift
+public struct CaveBiomeDensity: Equatable, Sendable {
+    public let multiplier: Double        // > 0, applied to base placement probability
+    public let maxPlacements: Int?       // nil = no cap; 0 = never place
+    public let edgeMargin: Int           // cells from band edge where placement is skipped
+    public init(multiplier: Double = 1.0, maxPlacements: Int? = nil, edgeMargin: Int = 0)
+}
+
+public struct CaveBiomeBand: Equatable, Sendable {
+    public let name: String
+    public let rowRange: ClosedRange<Int>          // inclusive grid rows [min, max]
+    public let densities: [Material: CaveBiomeDensity]
+    public let carveThreshold: Double              // default 0.42, lower = more empty
+    public let carveFrequency: Double              // default 0.07
+    public let maxPools: Int                       // band-local water pool budget
+    public let maxPockets: Int                     // band-local pitch/oil pocket budget
+    public let maxVeins: Int                       // band-local gold vein budget
+    public init(name: String, rowRange: ClosedRange<Int>,
+                densities: [Material: CaveBiomeDensity] = [:],
+                carveThreshold: Double = 0.42, carveFrequency: Double = 0.07,
+                maxPools: Int = 0, maxPockets: Int = 0, maxVeins: Int = 0)
+}
+
+public struct CaveBiomeConfig: Equatable, Sendable {
+    public let bands: [CaveBiomeBand]              // bottom-to-top order
+    public let transitionRows: Int                  // 1 or 2, clamped in init
+    public init(bands: [CaveBiomeBand], transitionRows: Int = 1)
+    
+    public static func defaultForHeight(_ height: Int) -> CaveBiomeConfig
+}
+```
+
+### Default bands (height = 128)
+
+| Band | Rows | Key Multipliers |
+|------|------|-----------------|
+| deep (bottom ~⅓) | 43–127 | lava 2.0×, acid 1.8×, gunpowder 1.5×, magicLiquid 1.5×, gold 1.3×; ice 0.1× (cap 0) |
+| underground (middle ~⅓) | 22–42 | slime 1.8×, blood 1.5×, pitch 1.2×, oil 1.2×; lava 0.7×, acid 0.5× |
+| surface (top ~⅓) | 0–21 | gold 1.5×, ice 2.0×, slime 1.5×; lava 0.2× (cap 1), acid 0.1× (cap 0) |
+
+Bands are stored bottom-to-top (`bands[0]` = deep/high gy, `bands[last]` = surface/low gy).
+Remainder rows from integer division go to surface first, then underground.
+
+### Transition interpolation
+
+At band boundaries, `transitionRows` (1 or 2) rows linearly interpolate between
+neighbouring bands:
+- `weight = (R - dist) / (R + 1)` where `R = transitionRows`, `dist = 0` at boundary
+- Carve threshold/frequency and density multipliers are interpolated
+- Per-band caps apply on transition rows using the current (source) band's cap
+
+### API
+
+```swift
+CaveWorldGenerator(seed: UInt64, width: Int, height: Int, biomeConfig: CaveBiomeConfig? = nil)
+CaveRun.init(seed: UInt64, width: Int = 256, height: Int = 128, biomeConfig: CaveBiomeConfig? = nil) throws
+```
+
+### Safety guarantees
+
+- Spawn pad/shaft contract unchanged: clearance radius 6, descent ≥ 32 at 256×128
+- Hazard materials never placed within Chebyshev distance 6 of spawn/goal
+- Band config validated at init: contiguous, full coverage, multiplier > 0
+
+### Digest version
+
+`SimulationSnapshot.digestVersion` bumped from 6 → 7. Same seed + size + config →
+identical digest; changing config → different digest (intentional).
 
 No host features are claimed.
 

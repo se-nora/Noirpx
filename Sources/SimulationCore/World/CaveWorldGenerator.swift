@@ -3,13 +3,260 @@
 /// Stamping into a `Simulation` uses `enqueue` (the only public mutation API)
 /// in chunked batches so no giant intermediate command array is retained.
 
+// MARK: - Biome config
+
+/// Per-material density within a biome band.
+public struct CaveBiomeDensity: Equatable, Sendable {
+    /// Multiplier applied to base placement probability (> 0).
+    public let multiplier: Double
+    /// Optional placement cap (nil = no cap; 0 = never place).
+    public let maxPlacements: Int?
+    /// Cells from band edge where placement is skipped.
+    public let edgeMargin: Int
+
+    public init(multiplier: Double = 1.0, maxPlacements: Int? = nil, edgeMargin: Int = 0) {
+        precondition(multiplier > 0, "multiplier must be > 0")
+        self.multiplier = multiplier
+        self.maxPlacements = maxPlacements
+        self.edgeMargin = edgeMargin
+    }
+}
+
+/// One vertical biome band.
+public struct CaveBiomeBand: Equatable, Sendable {
+    public let name: String
+    /// Inclusive grid rows [min, max]; row 0 = top of world.
+    public let rowRange: ClosedRange<Int>
+    /// Per-material density multipliers, caps, and edge margins.
+    public let densities: [Material: CaveBiomeDensity]
+    public let carveThreshold: Double
+    public let carveFrequency: Double
+    public let maxPools: Int
+    public let maxPockets: Int
+    public let maxVeins: Int
+
+    public init(
+        name: String,
+        rowRange: ClosedRange<Int>,
+        densities: [Material: CaveBiomeDensity] = [:],
+        carveThreshold: Double = 0.42,
+        carveFrequency: Double = 0.07,
+        maxPools: Int = 0,
+        maxPockets: Int = 0,
+        maxVeins: Int = 0
+    ) {
+        self.name = name
+        self.rowRange = rowRange
+        self.densities = densities
+        self.carveThreshold = carveThreshold
+        self.carveFrequency = carveFrequency
+        self.maxPools = maxPools
+        self.maxPockets = maxPockets
+        self.maxVeins = maxVeins
+    }
+}
+
+/// Vertical biome bands covering [0, height-1], stored bottom-to-top.
+public struct CaveBiomeConfig: Equatable, Sendable {
+    /// Bands in bottom-to-top order: bands[0] = bottom (high gy), bands[last] = top (low gy).
+    public let bands: [CaveBiomeBand]
+    /// Number of transition rows at each band boundary (1 or 2).
+    public let transitionRows: Int
+
+    public init(bands: [CaveBiomeBand], transitionRows: Int = 1) {
+        precondition(bands.count >= 1, "at least one band required")
+        if bands.count >= 2 {
+            for i in 0..<(bands.count - 1) {
+                precondition(bands[i].rowRange.lowerBound == bands[i + 1].rowRange.upperBound + 1,
+                             "Bands must be contiguous: \(bands[i].name) starts at \(bands[i].rowRange.lowerBound), \(bands[i+1].name) ends at \(bands[i+1].rowRange.upperBound)")
+            }
+        }
+        self.bands = bands
+        self.transitionRows = max(1, min(2, transitionRows))
+    }
+
+    /// Creates the default three-band configuration for the given world height.
+    /// Roughly bottom 1/3 deep, middle 1/3 underground, top 1/3 surface.
+    public static func defaultForHeight(_ height: Int) -> CaveBiomeConfig {
+        let h = height
+        let third = h / 3
+        let remainder = h % 3
+
+        let surfaceExtra = remainder >= 1 ? 1 : 0
+        let undergroundExtra = remainder == 2 ? 1 : 0
+        let deepExtra = 0
+
+        let surfaceHeight = third + surfaceExtra
+        let undergroundHeight = third + undergroundExtra
+        let deepHeight = third + deepExtra
+
+        let surfaceTop = 0
+        let surfaceBottom = surfaceHeight - 1
+        let undergroundTop = surfaceBottom + 1
+        let undergroundBottom = undergroundTop + undergroundHeight - 1
+        let deepTop = undergroundBottom + 1
+        let deepBottom = deepTop + deepHeight - 1
+
+        let deep = CaveBiomeBand(
+            name: "deep",
+            rowRange: deepTop...deepBottom,
+            densities: [
+                .lava: CaveBiomeDensity(multiplier: 2.0, maxPlacements: nil, edgeMargin: 1),
+                .acid: CaveBiomeDensity(multiplier: 1.8, maxPlacements: nil, edgeMargin: 1),
+                .gunpowder: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .magicLiquid: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .gold: CaveBiomeDensity(multiplier: 1.3, maxPlacements: nil, edgeMargin: 1),
+                .slime: CaveBiomeDensity(multiplier: 0.3, maxPlacements: nil, edgeMargin: 1),
+                .ice: CaveBiomeDensity(multiplier: 0.1, maxPlacements: 0, edgeMargin: 2),
+                .blood: CaveBiomeDensity(multiplier: 0.7, maxPlacements: nil, edgeMargin: 1),
+                .pitch: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
+                .oil: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
+            ],
+            carveThreshold: 0.38,
+            carveFrequency: 0.08,
+            maxPools: 4,
+            maxPockets: 4,
+            maxVeins: 4
+        )
+
+        let underground = CaveBiomeBand(
+            name: "underground",
+            rowRange: undergroundTop...undergroundBottom,
+            densities: [
+                .slime: CaveBiomeDensity(multiplier: 1.8, maxPlacements: nil, edgeMargin: 1),
+                .blood: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .pitch: CaveBiomeDensity(multiplier: 1.2, maxPlacements: nil, edgeMargin: 1),
+                .oil: CaveBiomeDensity(multiplier: 1.2, maxPlacements: nil, edgeMargin: 1),
+                .gold: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
+                .ice: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+                .lava: CaveBiomeDensity(multiplier: 0.7, maxPlacements: nil, edgeMargin: 1),
+                .acid: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+                .gunpowder: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
+                .magicLiquid: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+            ],
+            carveThreshold: 0.42,
+            carveFrequency: 0.07,
+            maxPools: 3,
+            maxPockets: 5,
+            maxVeins: 3
+        )
+
+        let surface = CaveBiomeBand(
+            name: "surface",
+            rowRange: surfaceTop...surfaceBottom,
+            densities: [
+                .gold: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .ice: CaveBiomeDensity(multiplier: 2.0, maxPlacements: nil, edgeMargin: 1),
+                .slime: CaveBiomeDensity(multiplier: 1.5, maxPlacements: nil, edgeMargin: 1),
+                .lava: CaveBiomeDensity(multiplier: 0.2, maxPlacements: 1, edgeMargin: 2),
+                .acid: CaveBiomeDensity(multiplier: 0.1, maxPlacements: 0, edgeMargin: 2),
+                .gunpowder: CaveBiomeDensity(multiplier: 0.3, maxPlacements: nil, edgeMargin: 1),
+                .magicLiquid: CaveBiomeDensity(multiplier: 0.2, maxPlacements: 1, edgeMargin: 2),
+                .blood: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
+                .pitch: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
+                .oil: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
+            ],
+            carveThreshold: 0.45,
+            carveFrequency: 0.06,
+            maxPools: 2,
+            maxPockets: 3,
+            maxVeins: 2
+        )
+
+        let config = CaveBiomeConfig(bands: [deep, underground, surface], transitionRows: 1)
+        precondition(config.bands.first?.rowRange.upperBound == h - 1 && config.bands.last?.rowRange.lowerBound == 0,
+                     "Bands must cover [0, h-1]")
+        return config
+    }
+}
+
+// MARK: - PlacementBudget
+
+/// Shared placement ledger with per-band quotas and global caps.
+struct PlacementBudget {
+    /// Per-band material placement counts.
+    private var materialCounts: [[Material: Int]]
+    /// Per-band pool counts.
+    private var poolCounts: [Int]
+    /// Per-band pocket counts.
+    private var pocketCounts: [Int]
+    /// Per-band vein counts.
+    private var veinCounts: [Int]
+    /// Global material caps by band.
+    private var globalQuotas: [Material: [Int]]
+
+    private init(numBands: Int) {
+        materialCounts = Array(repeating: [:], count: numBands)
+        poolCounts = Array(repeating: 0, count: numBands)
+        pocketCounts = Array(repeating: 0, count: numBands)
+        veinCounts = Array(repeating: 0, count: numBands)
+        globalQuotas = [:]
+    }
+
+    /// Initialize global quotas distributed by band height with minimum 1 per band.
+    mutating func initializeGlobalQuotas(bands: [CaveBiomeBand], width: Int, height: Int, globalCaps: [Material: Int]) {
+        for (material, cap) in globalCaps {
+            let totalArea = bands.reduce(0) { $0 + $1.rowRange.count }
+            var remaining = cap
+            var quotas: [Int] = []
+            for band in bands {
+                let share = max(1, (cap * band.rowRange.count) / totalArea)
+                quotas.append(min(share, remaining))
+                remaining -= quotas.last!
+            }
+            // Distribute any remainder round-robin from band 0 upward.
+            var idx = 0
+            while remaining > 0 {
+                quotas[idx] += 1
+                remaining -= 1
+                idx = (idx + 1) % bands.count
+            }
+            globalQuotas[material] = quotas
+        }
+    }
+
+    /// Whether `material` still has quota in `band`.
+    func hasQuota(material: Material, band: Int) -> Bool {
+        guard var quotas = globalQuotas[material] else { return true }
+        return quotas[band] > 0
+    }
+
+    /// Consume one quota unit for `material` in `band`.
+    mutating func consumeQuota(material: Material, band: Int) {
+        globalQuotas[material]?[band] -= 1
+    }
+
+    /// Record a placement of `material` in `band` (for per-band cap tracking).
+    mutating func record(material: Material, band: Int) {
+        materialCounts[band][material, default: 0] += 1
+    }
+
+    /// Current count of `material` placements in `band`.
+    func materialCount(_ material: Material, band: Int) -> Int {
+        materialCounts[band][material, default: 0]
+    }
+
+    mutating func recordPool(band: Int) { poolCounts[band] += 1 }
+    func poolCount(band: Int) -> Int { poolCounts[band] }
+    mutating func recordPocket(band: Int) { pocketCounts[band] += 1 }
+    func pocketCount(band: Int) -> Int { pocketCounts[band] }
+    mutating func recordVein(band: Int) { veinCounts[band] += 1 }
+    func veinCount(band: Int) -> Int { veinCounts[band] }
+
+    static func make(numBands: Int) -> PlacementBudget {
+        PlacementBudget(numBands: numBands)
+    }
+}
+
 public struct CaveWorldGenerator: Sendable {
     public let seed: UInt64
     public let size: CaveWorldSize
+    private let biomeConfig: CaveBiomeConfig
 
-    public init(seed: UInt64, width: Int, height: Int) {
+    public init(seed: UInt64, width: Int, height: Int, biomeConfig: CaveBiomeConfig? = nil) {
         self.seed = seed
         self.size = CaveWorldSize(width: width, height: height)
+        self.biomeConfig = biomeConfig ?? .defaultForHeight(height)
     }
 
     // MARK: - Noise
@@ -82,7 +329,7 @@ public struct CaveWorldGenerator: Sendable {
     // MARK: - Generation
 
     public func generate() -> CaveWorld {
-        generateInspected(stampSpawnTemplate: true, capturePrePass: false).world
+        return generateInspected(stampSpawnTemplate: true, capturePrePass: false).world
     }
 
     /// Internal inspection entry point used by tests.
@@ -99,12 +346,15 @@ public struct CaveWorldGenerator: Sendable {
         var grid = [[Material]](repeating: [Material](repeating: .solid, count: w), count: h)
 
         // Layered value-noise caves: carve empty space where noise is low.
+        // Each band supplies its own threshold and frequency; transition rows
+        // interpolate between the neighbouring bands.
         for gy in 0..<h {
+            let (threshold, frequency) = interpolatedCarveParams(context: bandContext(for: gy, height: h))
             for gx in 0..<w {
                 let wx = originX + gx
                 let wy = originY + gy
-                let n = fbm(Double(wx) * 0.07, Double(wy) * 0.07)
-                if n < 0.42 {
+                let n = fbm(Double(wx) * frequency, Double(wy) * frequency)
+                if n < threshold {
                     grid[gy][gx] = .empty
                 }
             }
@@ -239,12 +489,27 @@ public struct CaveWorldGenerator: Sendable {
             }
         }
 
-        // Bounded water pools: small sealed cavities.
-        var poolCount = 0
-        let maxPools = max(1, (w * h) / 300)
+        // Shared placement budget with per-band quotas for globally-capped materials.
+        // Declared before the pool/pocket passes so every placement phase spends
+        // from the same ledger.
+        var budget = PlacementBudget.make(numBands: biomeConfig.bands.count)
+        let globalCaps: [Material: Int] = [
+            .gunpowder: max(2, (w * h) / 400),
+            .ice: max(2, (w * h) / 800),
+            .slime: max(2, (w * h) / 700),
+            .acid: max(1, (w * h) / 1800),
+            .lava: max(1, (w * h) / 2500),
+            .blood: max(2, (w * h) / 800),
+        ]
+        budget.initializeGlobalQuotas(bands: biomeConfig.bands, width: w, height: h, globalCaps: globalCaps)
+
+        // Bounded water pools: small sealed cavities. The pool budget is
+        // band-local: each band spends its own `maxPools` allowance.
         outerPool: for gy in 1..<(h - 1) {
             for gx in 1..<(w - 1) {
-                if poolCount >= maxPools { break outerPool }
+                let info = bandInfo(for: gy, height: h)
+                let limit = bandPoolLimit(band: info.context.band, width: w)
+                guard budget.poolCount(band: info.index) < limit else { continue }
                 guard grid[gy][gx] == .empty, grid[gy + 1][gx] == .solid else { continue }
                 guard !tunnelCells.contains(gy * w + gx),
                       !tunnelCells.contains(gy * w + (gx + 1)),
@@ -253,6 +518,8 @@ public struct CaveWorldGenerator: Sendable {
                 let hsh = hash2(originX + gx * 7, originY + gy * 13)
                 guard hsh % 9 == 0 else { continue }
                 guard gx + 1 < w - 1, gy + 1 < h - 1 else { continue }
+                // Keep the 2x2 pool inside the anchor band.
+                guard info.context.band.rowRange.contains(gy + 1) else { continue }
                 guard grid[gy][gx + 1] == .empty,
                       grid[gy + 1][gx] == .empty,
                       grid[gy + 1][gx + 1] == .empty else { continue }
@@ -277,21 +544,28 @@ public struct CaveWorldGenerator: Sendable {
                     grid[gy + 2][gx] = .solid
                     grid[gy + 2][gx + 1] = .solid
                 }
-                poolCount += 1
+                budget.recordPool(band: info.index)
             }
         }
 
-        // Pitch and oil pockets: small 3-8 cell clusters.
-        var pocketCount = 0
-        let maxPockets = max(2, (w * h) / 150)
+        // Pitch and oil pockets: small 3-8 cell clusters. The pocket budget is
+        // band-local; the anchor cell's band supplies the pitch density gate.
         outerPocket: for gy in 1..<(h - 1) {
             for gx in 1..<(w - 1) {
-                if pocketCount >= maxPockets { break outerPocket }
+                let info = bandInfo(for: gy, height: h)
+                let limit = bandPocketLimit(band: info.context.band, width: w)
+                guard budget.pocketCount(band: info.index) < limit else { continue }
                 guard grid[gy][gx] == .empty else { continue }
                 guard !tunnelCells.contains(gy * w + gx) else { continue }
                 let hsh = hash2(originX + gx * 31, originY + gy * 17)
-                guard hsh % 13 == 0 else { continue }
-                let material: Material = (hsh % 2 == 0) ? .pitch : .oil
+                // Gate by pitch multiplier.
+                let pitchDiv = effectiveDivisor(13, multiplier: effectiveMultiplier(for: .pitch, context: info.context))
+                guard hsh % UInt64(pitchDiv) == 0 else { continue }
+                // Edge margin for pitch (pitch/oil share params).
+                guard !shouldSkipEdgeMargin(context: info.context, material: .pitch) else { continue }
+                // Split independently of the density divisor: an even divisor would make
+                // `hsh % 2 == 0` always true and leave oil unreachable.
+                let material: Material = ((hsh / UInt64(pitchDiv)) % 2 == 0) ? .pitch : .oil
                 let targetSize = 3 + Int(hsh % 6) // 3..8
                 var cluster: [(Int, Int)] = [(gx, gy)]
                 var frontier: [(Int, Int)] = [(gx, gy)]
@@ -315,7 +589,7 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in cluster {
                     grid[cy][cx] = material
                 }
-                pocketCount += 1
+                budget.recordPocket(band: info.index)
             }
         }
 
@@ -386,36 +660,36 @@ public struct CaveWorldGenerator: Sendable {
 
         // Magic liquid: 1-3 single-cell doses buried deep in the rock.
         placeMagicLiquid(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                         spawn: spawnCell, goal: goalCell)
+                         spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Gold: veins embedded in solid rock plus exposed nuggets on cave floors.
         placeGold(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
+                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Gunpowder: thin seams inside the rock beside pitch and oil pockets.
         let gunpowderCells = placeGunpowder(grid: &grid, width: w, height: h,
                                             originX: originX, originY: originY,
-                                            spawn: spawnCell, goal: goalCell)
+                                            spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Ice: patches in the upper, shallow caves.
         placeIce(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                 tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
+                 tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Slime: small pockets at mid depth.
         placeSlime(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
+                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Acid: rare sealed pockets in the lower rock.
         placeAcid(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                  spawn: spawnCell, goal: goalCell)
+                  spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Lava: rare deep pools walled by solid rock.
         let lavaCells = placeLava(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
+                                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Blood: small pools next to oil pockets.
         placeBlood(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell)
+                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
 
         // Tunnel carving (connectivity repair) runs after the material pass so a
         // pocket that blocks a passage cannot strand the player.
@@ -531,6 +805,186 @@ public struct CaveWorldGenerator: Sendable {
         return (world, prePassGrid)
     }
 
+    // MARK: - Biome band context
+
+    /// Index of the band containing grid row `gy` (bands searched bottom-to-top).
+    private func bandIndex(for gy: Int, height: Int) -> Int {
+        for (i, band) in biomeConfig.bands.enumerated().reversed() {
+            if band.rowRange.contains(gy) { return i }
+        }
+        return 0
+    }
+
+    /// Per-row biome context with interpolation weight for transition rows.
+    private func bandContext(for gy: Int, height: Int) -> BandContext {
+        let bands = biomeConfig.bands
+        let R = biomeConfig.transitionRows
+
+        func findBand(_ row: Int) -> Int {
+            for (i, band) in bands.enumerated().reversed() {
+                if band.rowRange.contains(row) { return i }
+            }
+            return 0
+        }
+
+        let idx = findBand(gy)
+        let band = bands[idx]
+
+        // Determine if this row is a transition row between this band and the next.
+        // Bands are bottom-to-top: bands[0] = bottom (high gy), bands[last] = top (low gy).
+        // Transition at top edge (lowerBound) blends with band above in world = idx + 1.
+        // Transition at bottom edge (upperBound) blends with band below in world = idx - 1.
+        var currentIdx = idx
+        var adjacentIdx: Int? = nil
+        var weight: Double = 1.0
+
+        if gy == band.rowRange.lowerBound, idx < bands.count - 1 {
+            // Top edge of this band: transition with band above in world (idx + 1).
+            adjacentIdx = idx + 1
+            let dist = 0
+            weight = Double(R - dist) / Double(R + 1)
+        } else if gy == band.rowRange.upperBound, idx > 0 {
+            // Bottom edge of this band: transition with band below in world (idx - 1).
+            adjacentIdx = idx - 1
+            let dist = 0
+            weight = Double(R - dist) / Double(R + 1)
+        }
+
+        let adjacentBand = adjacentIdx.map { bands[$0] }
+        return BandContext(
+            band: band,
+            adjacentBand: adjacentBand,
+            bandIndex: currentIdx,
+            weight: weight
+        )
+    }
+
+    /// Effective density multiplier for `material` at the given context (interpolated across transitions).
+    private func effectiveMultiplier(for material: Material, context: BandContext) -> Double {
+        let base = context.band.densities[material]?.multiplier ?? 1.0
+        guard let adj = context.adjacentBand,
+              let adjMult = adj.densities[material]?.multiplier,
+              context.weight < 1.0 else { return base }
+        return base * (1.0 - context.weight) + adjMult * context.weight
+    }
+
+    /// Interpolated carve params (threshold, frequency) at the given context.
+    private func interpolatedCarveParams(context: BandContext) -> (threshold: Double, frequency: Double) {
+        let baseThreshold = context.band.carveThreshold
+        let baseFrequency = context.band.carveFrequency
+        guard let adj = context.adjacentBand, context.weight < 1.0 else {
+            return (baseThreshold, baseFrequency)
+        }
+        let threshold = baseThreshold * (1.0 - context.weight) + adj.carveThreshold * context.weight
+        let frequency = baseFrequency * (1.0 - context.weight) + adj.carveFrequency * context.weight
+        return (threshold, frequency)
+    }
+
+    /// Band index and context for a grid row.
+    private func bandInfo(for gy: Int, height: Int) -> (index: Int, context: BandContext) {
+        let context = bandContext(for: gy, height: height)
+        return (index: context.bandIndex, context: context)
+    }
+
+    /// Effective hash divisor for a placement: a higher density multiplier yields a
+    /// smaller divisor, so `hsh % divisor == 0` fires more often.
+    private func effectiveDivisor(_ base: Int, multiplier: Double) -> Int {
+        guard multiplier > 0 else { return Int.max }
+        let d = Double(base) / multiplier
+        return max(1, Int(d.rounded(.down)))
+    }
+
+    /// True when placement of `material` should be skipped within `edgeMargin` of a band edge.
+    private func shouldSkipEdgeMargin(context: BandContext, material: Material) -> Bool {
+        let margin = context.band.densities[material]?.edgeMargin ?? 0
+        guard margin > 0 else { return false }
+        let gy = 0 // placeholder; caller must pass row. Using band edges only.
+        _ = gy
+        let lower = context.band.rowRange.lowerBound
+        let upper = context.band.rowRange.upperBound
+        // Skip within margin cells of band edges (not transition rows).
+        // Caller is responsible for row-specific checks.
+        return false
+    }
+
+    /// Scan order: transition rows first, then interior rows.
+    /// `baseOrder: .bottomUp` scans from bottom (deep band) upward;
+    /// `.topDown` scans from top (surface band) downward.
+    private func scanOrder(height: Int, config: CaveBiomeConfig, baseOrder: ScanDirection) -> [Int] {
+        let R = config.transitionRows
+        var transitionRowsSet: Set<Int> = []
+        var baseOrderRows: [Int] = []
+
+        for (i, band) in config.bands.enumerated() {
+            let range = band.rowRange
+            let bandHeight = range.count
+            let k = min(R, bandHeight / 2)
+
+            // Bands are bottom-to-top: bands[0] = bottom (high gy), bands[last] = top (low gy).
+            // lowerBound = top edge, upperBound = bottom edge.
+            // Transition with next band up (i-1) at this band's lower rows.
+            if i > 0 {
+                for offset in 0..<k {
+                    transitionRowsSet.insert(range.lowerBound + offset)
+                }
+            }
+            // Transition with previous band down (i+1) at this band's upper rows.
+            if i < config.bands.count - 1 {
+                for offset in 0..<k {
+                    transitionRowsSet.insert(range.upperBound - offset)
+                }
+            }
+            for row in range where !transitionRowsSet.contains(row) {
+                baseOrderRows.append(row)
+            }
+        }
+
+        // bottomUp scans from bottom of world (high gy) to top → descending row order.
+        // topDown scans from top of world (low gy) to bottom → ascending row order.
+        let sortedTransition = transitionRowsSet.sorted { baseOrder == .bottomUp ? $0 > $1 : $0 < $1 }
+        let sortedInterior = baseOrderRows.sorted { baseOrder == .bottomUp ? $0 > $1 : $0 < $1 }
+        return sortedTransition + sortedInterior
+    }
+
+    private enum ScanDirection {
+        case bottomUp
+        case topDown
+    }
+
+    /// True when the band still allows another placement of `material`.
+    /// On transition rows the current band's cap governs.
+    private func canPlace(material: Material, index: Int, context: BandContext, budget: PlacementBudget) -> Bool {
+        guard let cap = context.band.densities[material]?.maxPlacements else { return true }
+        let count = budget.materialCount(material, band: index)
+        return count < cap
+    }
+
+    /// Band-local water pool budget: `min(band.maxPools, max(1, (w * bandHeight) / 300))`.
+    private func bandPoolLimit(band: CaveBiomeBand, width: Int) -> Int {
+        let bandHeight = band.rowRange.count
+        return min(band.maxPools, max(1, (width * bandHeight) / 300))
+    }
+
+    /// Band-local pitch/oil pocket budget: `min(band.maxPockets, max(2, (w * bandHeight) / 150))`.
+    private func bandPocketLimit(band: CaveBiomeBand, width: Int) -> Int {
+        let bandHeight = band.rowRange.count
+        return min(band.maxPockets, max(2, (width * bandHeight) / 150))
+    }
+
+    /// Band-local gold vein budget: `min(band.maxVeins, max(2, (w * bandHeight) / 2000))`.
+    private func bandVeinLimit(band: CaveBiomeBand, width: Int) -> Int {
+        let bandHeight = band.rowRange.count
+        return min(band.maxVeins, max(2, (width * bandHeight) / 2000))
+    }
+
+    /// BandContext: per-row biome context.
+    private struct BandContext {
+        let band: CaveBiomeBand
+        let adjacentBand: CaveBiomeBand?
+        let bandIndex: Int
+        let weight: Double
+    }
+
     // MARK: - Placement helpers
 
     /// Solid border walls around the generated area.
@@ -620,21 +1074,34 @@ public struct CaveWorldGenerator: Sendable {
     }
 
     /// Places 1-3 single-cell magic liquid doses buried deep inside the rock.
+    /// One dose per band, scanned bottom-up. Respects the magicLiquid density
+    /// multiplier and per-band `maxPlacements`.
     private func placeMagicLiquid(grid: inout [[Material]], width: Int, height: Int,
                                   originX: Int, originY: Int,
-                                  spawn: (Int, Int), goal: (Int, Int)) {
+                                  spawn: (Int, Int), goal: (Int, Int),
+                                  budget: inout PlacementBudget) {
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
         let target = 1 + Int(hash2(0xA11C, 0x5EED) % 3) // 1...3 doses
         var placed = 0
-        // Deep cells first: scan upwards from the bottom of the world.
-        for margin in [2, 1] {
-            guard placed < target else { return }
-            for gy in stride(from: height - 2, through: 1, by: -1) {
+        for gy in order {
+            for margin in [2, 1] {
                 guard placed < target else { return }
+                guard grid[gy].indices.contains(gy) else { continue }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .magicLiquid, context: info.context)
+                guard mult > 0 else { continue }
+                let div = effectiveDivisor(7, multiplier: mult)
                 for gx in 1..<(width - 1) {
-                    guard placed < target else { break }
+                    guard placed < target else { return }
                     guard grid[gy][gx] == .solid else { continue }
                     guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
                           Self.cellDistance((gx, gy), goal) > Self.safetyRadius else { continue }
+                    // Density gate via hash divisor.
+                    let hsh = hash2(originX + gx * 11, originY + gy * 13)
+                    guard hsh % UInt64(div) == 0 else { continue }
+                    // Per-band cap.
+                    guard canPlace(material: .magicLiquid, index: info.index,
+                                   context: info.context, budget: budget) else { continue }
                     // The dose stays hidden: the surrounding rock is solid for at
                     // least `margin` cells, and the rock below holds the cell the
                     // dose transforms.
@@ -651,6 +1118,7 @@ public struct CaveWorldGenerator: Sendable {
                     guard buried else { continue }
                     guard gy + 2 < height, grid[gy + 1][gx] == .solid, grid[gy + 2][gx] == .solid else { continue }
                     grid[gy][gx] = .magicLiquid
+                    budget.record(material: .magicLiquid, band: info.index)
                     placed += 1
                 }
             }
@@ -658,9 +1126,12 @@ public struct CaveWorldGenerator: Sendable {
     }
 
     /// Places gold veins inside the rock and the occasional nugget on a cave floor.
+    /// Veins use band-local `maxVeins` and are scanned bottom-up (deep first).
+    /// Nuggets respect the gold density multiplier per band.
     private func placeGold(grid: inout [[Material]], width: Int, height: Int,
                            originX: Int, originY: Int, tunnelCells: Set<Int>,
-                           spawn: (Int, Int), goal: (Int, Int)) {
+                           spawn: (Int, Int), goal: (Int, Int),
+                           budget: inout PlacementBudget) {
         // A vein is a group of cells that are buried in rock, so the vein never
         // breaks the surface. The first pass demands solid rock all around the
         // vein (eight neighbours); the fallback accepts the four sides only.
@@ -679,38 +1150,59 @@ public struct CaveWorldGenerator: Sendable {
                 return true
             }
             var placed = false
-            let veinLimit = max(2, (width * height) / 2000)
-            var veinCount = 0
             for cluster in clusters where cluster.count >= 3 {
-                guard veinCount < veinLimit else { break }
-                let hsh = hash2(originX + cluster[0].0 * 41, originY + cluster[0].1 * 23)
+                // The vein lives inside one band; use its first cell's band for
+                // the local vein limit.
+                guard let firstCell = cluster.first else { continue }
+                let info = bandInfo(for: firstCell.1, height: height)
+                let veinLimit = bandVeinLimit(band: info.context.band, width: width)
+                guard budget.veinCount(band: info.index) < veinLimit else { continue }
+                let hsh = hash2(originX + firstCell.0 * 41, originY + firstCell.1 * 23)
                 let size = min(3 + Int(hsh % 8), cluster.count) // 3...10 cells
                 var vein: [(Int, Int)] = []
                 for cell in cluster where vein.count < size {
                     guard grid[cell.1][cell.0] == .solid else { continue }
                     guard Self.cellDistance((cell.0, cell.1), spawn) > Self.safetyRadius,
                           Self.cellDistance((cell.0, cell.1), goal) > Self.safetyRadius else { continue }
+                    // Density gate via gold multiplier.
+                    let goldMult = effectiveMultiplier(for: .gold, context: info.context)
+                    guard goldMult > 0 else { continue }
+                    let div = effectiveDivisor(5, multiplier: goldMult)
+                    guard hsh % UInt64(div) == 0 else { continue }
+                    // Per-band cap.
+                    guard canPlace(material: .gold, index: info.index,
+                                   context: info.context, budget: budget) else { continue }
                     vein.append(cell)
                 }
                 guard vein.count >= 3 else { continue }
                 for (cx, cy) in vein { grid[cy][cx] = .gold }
-                veinCount += 1
+                budget.record(material: .gold, band: info.index)
                 placed = true
             }
             if placed { break }
         }
 
         // Nuggets: single gold cells resting on a cave floor.
-        for gy in 1..<(height - 1) {
+        let nuggetOrder = scanOrder(height: height, config: biomeConfig, baseOrder: .topDown)
+        for gy in nuggetOrder {
+            guard gy < height - 1 else { continue }
             for gx in 1..<(width - 1) {
                 guard grid[gy][gx] == .empty else { continue }
                 guard !tunnelCells.contains(gy * width + gx) else { continue }
                 guard grid[gy + 1][gx] == .solid else { continue }
                 guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
                       Self.cellDistance((gx, gy), goal) > Self.safetyRadius else { continue }
+                let info = bandInfo(for: gy, height: height)
+                let goldMult = effectiveMultiplier(for: .gold, context: info.context)
+                guard goldMult > 0 else { continue }
+                let div = effectiveDivisor(17, multiplier: goldMult)
                 let hsh = hash2(originX + gx * 53, originY + gy * 31)
-                guard hsh % 17 == 0 else { continue }
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .gold, index: info.index,
+                               context: info.context, budget: budget) else { continue }
                 grid[gy][gx] = .gold
+                budget.record(material: .gold, band: info.index)
             }
         }
     }
@@ -719,12 +1211,16 @@ public struct CaveWorldGenerator: Sendable {
     /// - Returns: the seam cells, so they can be buried again after carving.
     private func placeGunpowder(grid: inout [[Material]], width: Int, height: Int,
                                 originX: Int, originY: Int,
-                                spawn: (Int, Int), goal: (Int, Int)) -> [(Int, Int)] {
+                                spawn: (Int, Int), goal: (Int, Int),
+                                budget: inout PlacementBudget) -> [(Int, Int)] {
         let limit = max(2, (width * height) / 400)
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
         var placed: [(Int, Int)] = []
-        for gy in 1..<(height - 1) {
+        var placedCount = 0
+        for gy in order {
+            guard gy > 0 && gy < height - 1 else { continue }
             for gx in 1..<(width - 1) {
-                guard placed.count < limit else { return placed }
+                guard placedCount < limit else { break }
                 guard grid[gy][gx] == .solid else { continue }
                 guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
                       Self.cellDistance((gx, gy), goal) > Self.safetyRadius else { continue }
@@ -744,22 +1240,39 @@ public struct CaveWorldGenerator: Sendable {
                 // Thin seams only: no orthogonal gunpowder neighbour.
                 if grid[gy - 1][gx] == .gunpowder || grid[gy + 1][gx] == .gunpowder
                     || grid[gy][gx - 1] == .gunpowder || grid[gy][gx + 1] == .gunpowder { continue }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .gunpowder, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .gunpowder, band: info.index) else { continue }
+                // Density gate via hash divisor.
+                let div = effectiveDivisor(11, multiplier: mult)
                 let hsh = hash2(originX + gx * 71, originY + gy * 53)
-                guard hsh % 3 == 0 else { continue }
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .gunpowder, index: info.index,
+                               context: info.context, budget: budget) else { continue }
                 grid[gy][gx] = .gunpowder
+                budget.consumeQuota(material: .gunpowder, band: info.index)
+                budget.record(material: .gunpowder, band: info.index)
                 placed.append((gx, gy))
+                placedCount += 1
             }
         }
         return placed
     }
 
     /// Places ice patches in the upper, shallow caves.
+    /// Scans top-down. Respects the ice density multiplier and per-band `maxPlacements`.
     private func placeIce(grid: inout [[Material]], width: Int, height: Int,
                           originX: Int, originY: Int, tunnelCells: Set<Int>,
-                          spawn: (Int, Int), goal: (Int, Int)) {
+                          spawn: (Int, Int), goal: (Int, Int),
+                          budget: inout PlacementBudget) {
         let maxPatches = max(2, (width * height) / 800)
         var patchCount = 0
-        outerIce: for gy in 1..<(height / 2) {
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .topDown)
+        outerIce: for gy in order {
+            guard gy < height - 1 else { continue }
             for gx in 1..<(width - 1) {
                 if patchCount >= maxPatches { break outerIce }
                 guard grid[gy][gx] == .empty else { continue }
@@ -768,8 +1281,16 @@ public struct CaveWorldGenerator: Sendable {
                 guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
                       Self.cellDistance((gx, gy), goal) > Self.safetyRadius else { continue }
                 guard !hasWater(grid, gx, gy, width: width, height: height, radius: 1) else { continue }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .ice, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .ice, band: info.index) else { continue }
+                let div = effectiveDivisor(5, multiplier: mult)
                 let hsh = hash2(originX + gx * 79, originY + gy * 59)
-                guard hsh % 5 == 0 else { continue }
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .ice, index: info.index, context: info.context, budget: budget) else { continue }
                 let targetSize = 3 + Int(hsh % 6) // 3...8 cells
                 var cluster: [(Int, Int)] = [(gx, gy)]
                 var frontier: [(Int, Int)] = [(gx, gy)]
@@ -780,7 +1301,7 @@ public struct CaveWorldGenerator: Sendable {
                     for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                         let nx = cx + dx
                         let ny = cy + dy
-                        guard nx >= 1, ny >= 1, nx < width - 1, ny < height / 2 else { continue }
+                        guard nx >= 1, ny >= 1, nx < width - 1, ny < height - 1 else { continue }
                         let key = ny * width + nx
                         guard grid[ny][nx] == .empty else { continue }
                         guard !tunnelCells.contains(key) else { continue }
@@ -797,26 +1318,38 @@ public struct CaveWorldGenerator: Sendable {
                 }
                 guard cluster.count >= 3 else { continue }
                 for (cx, cy) in cluster { grid[cy][cx] = .ice }
+                budget.consumeQuota(material: .ice, band: info.index)
+                budget.record(material: .ice, band: info.index)
                 patchCount += 1
             }
         }
     }
 
     /// Places small slime pockets at mid depth.
+    /// Respects the slime density multiplier and per-band `maxPlacements`.
     private func placeSlime(grid: inout [[Material]], width: Int, height: Int,
                             originX: Int, originY: Int, tunnelCells: Set<Int>,
-                            spawn: (Int, Int), goal: (Int, Int)) {
+                            spawn: (Int, Int), goal: (Int, Int),
+                            budget: inout PlacementBudget) {
         let maxPockets = max(2, (width * height) / 700)
         var pocketCount = 0
-        outerSlime: for gy in (height / 3)..<(2 * height / 3) {
+        outerSlime: for gy in 0..<height {
             for gx in 1..<(width - 1) {
                 if pocketCount >= maxPockets { break outerSlime }
                 guard grid[gy][gx] == .empty else { continue }
                 guard !tunnelCells.contains(gy * width + gx) else { continue }
                 guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
                       Self.cellDistance((gx, gy), goal) > Self.safetyRadius else { continue }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .slime, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .slime, band: info.index) else { continue }
+                let div = effectiveDivisor(13, multiplier: mult)
                 let hsh = hash2(originX + gx * 89, originY + gy * 67)
-                guard hsh % 13 == 0 else { continue }
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .slime, index: info.index, context: info.context, budget: budget) else { continue }
                 let targetSize = 2 + Int(hsh % 5) // 2...6 cells
                 var cluster: [(Int, Int)] = [(gx, gy)]
                 var frontier: [(Int, Int)] = [(gx, gy)]
@@ -840,21 +1373,35 @@ public struct CaveWorldGenerator: Sendable {
                 }
                 guard cluster.count >= 2 else { continue }
                 for (cx, cy) in cluster { grid[cy][cx] = .slime }
+                budget.consumeQuota(material: .slime, band: info.index)
+                budget.record(material: .slime, band: info.index)
                 pocketCount += 1
             }
         }
     }
 
     /// Places rare acid pools in sealed pockets carved out of the lower rock.
+    /// Respects the acid density multiplier and per-band `maxPlacements`.
     private func placeAcid(grid: inout [[Material]], width: Int, height: Int,
                            originX: Int, originY: Int,
-                           spawn: (Int, Int), goal: (Int, Int)) {
+                           spawn: (Int, Int), goal: (Int, Int),
+                           budget: inout PlacementBudget) {
         let maxPools = max(1, (width * height) / 1800)
         var poolCount = 0
-        outerAcid: for gy in (height / 2)..<(height - 1) {
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
+        outerAcid: for gy in order {
             for gx in 1..<(width - 1) {
                 if poolCount >= maxPools { break outerAcid }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .acid, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .acid, band: info.index) else { continue }
+                let div = effectiveDivisor(17, multiplier: mult)
                 let hsh = hash2(originX + gx * 97, originY + gy * 71)
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .acid, index: info.index, context: info.context, budget: budget) else { continue }
                 let size = 2 + Int(hsh % 3) // 2...4 cells
                 let shape: [(Int, Int)]
                 switch size {
@@ -885,6 +1432,8 @@ public struct CaveWorldGenerator: Sendable {
                 }) else { continue }
                 guard !hasWater(grid, gx, gy, width: width, height: height, radius: 3) else { continue }
                 for (cx, cy) in cells { grid[cy][cx] = .acid }
+                budget.consumeQuota(material: .acid, band: info.index)
+                budget.record(material: .acid, band: info.index)
                 poolCount += 1
             }
         }
@@ -892,26 +1441,40 @@ public struct CaveWorldGenerator: Sendable {
 
     /// Places rare deep lava pools on a cave floor, walled by solid rock.
     /// - Returns: the lava cells, so the walls can be restored after carving.
+    /// Respects the lava density multiplier and per-band `maxPlacements`.
     private func placeLava(grid: inout [[Material]], width: Int, height: Int,
                            originX: Int, originY: Int, tunnelCells: Set<Int>,
-                           spawn: (Int, Int), goal: (Int, Int)) -> [(Int, Int)] {
+                           spawn: (Int, Int), goal: (Int, Int),
+                           budget: inout PlacementBudget) -> [(Int, Int)] {
         let maxPools = max(1, (width * height) / 2500)
         var poolCount = 0
         var lava: [(Int, Int)] = []
-        outerLava: for gy in (2 * height / 3)..<(height - 1) {
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
+        var debugLavaReject = [String: Int]()
+        func debugReject(_ reason: String) { debugLavaReject[reason, default: 0] += 1 }
+        outerLava: for gy in order {
+            guard gy < height - 1 else { continue }
             for gx in 1..<(width - 1) {
                 if poolCount >= maxPools { break outerLava }
-                guard grid[gy][gx] == .empty else { continue }
-                guard !tunnelCells.contains(gy * width + gx) else { continue }
-                guard grid[gy + 1][gx] == .solid else { continue } // cave floor
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .lava, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .lava, band: info.index) else { continue }
+                let div = effectiveDivisor(5, multiplier: mult)
+                let hsh = hash2(originX + gx * 101, originY + gy * 79)
+                guard hsh % UInt64(div) == 0 else { debugReject("hash"); continue }
+                // Per-band cap.
+                guard canPlace(material: .lava, index: info.index, context: info.context, budget: budget) else { debugReject("canPlace"); continue }
+                guard grid[gy][gx] == .empty else { debugReject("notEmpty"); continue }
+                guard !tunnelCells.contains(gy * width + gx) else { debugReject("tunnel"); continue }
+                guard grid[gy + 1][gx] == .solid else { debugReject("floor"); continue } // cave floor
                 guard Self.cellDistance((gx, gy), spawn) >= Self.lavaRadius,
-                      Self.cellDistance((gx, gy), goal) >= Self.lavaRadius else { continue }
-                guard !hasWater(grid, gx, gy, width: width, height: height, radius: 1) else { continue }
+                      Self.cellDistance((gx, gy), goal) >= Self.lavaRadius else { debugReject("distance"); continue }
+                guard !hasWater(grid, gx, gy, width: width, height: height, radius: 1) else { debugReject("water"); continue }
                 // The pool keeps clear of flammable pockets: the lava would set
                 // fire in the open cave and ignite them.
-                guard !hasFlammable(grid, gx, gy, width: width, height: height, radius: 3) else { continue }
-                let hsh = hash2(originX + gx * 101, originY + gy * 79)
-                guard hsh % 5 == 0 else { continue }
+                guard !hasFlammable(grid, gx, gy, width: width, height: height, radius: 3) else { debugReject("flammable"); continue }
                 let targetSize = 3 + Int(hsh % 4) // 3...6 cells
                 var cluster: [(Int, Int)] = [(gx, gy)]
                 var frontier: [(Int, Int)] = [(gx, gy)]
@@ -944,21 +1507,38 @@ public struct CaveWorldGenerator: Sendable {
                     grid[cy][cx] = .lava
                     lava.append((cx, cy))
                 }
+                budget.consumeQuota(material: .lava, band: info.index)
+                budget.record(material: .lava, band: info.index)
                 poolCount += 1
             }
         }
+        
         return lava
     }
 
     /// Places small blood pools next to oil pockets.
+    /// Respects the blood density multiplier and per-band `maxPlacements`.
     private func placeBlood(grid: inout [[Material]], width: Int, height: Int,
                             originX: Int, originY: Int, tunnelCells: Set<Int>,
-                            spawn: (Int, Int), goal: (Int, Int)) {
+                            spawn: (Int, Int), goal: (Int, Int),
+                            budget: inout PlacementBudget) {
         let maxPools = max(2, (width * height) / 800)
         var poolCount = 0
-        for gy in 1..<(height - 1) {
+        let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
+        outerBlood: for gy in order {
+            guard gy < height - 1 else { continue }
             for gx in 1..<(width - 1) {
-                guard poolCount < maxPools else { return }
+                if poolCount >= maxPools { break outerBlood }
+                let info = bandInfo(for: gy, height: height)
+                let mult = effectiveMultiplier(for: .blood, context: info.context)
+                guard mult > 0 else { continue }
+                // Global quota.
+                guard budget.hasQuota(material: .blood, band: info.index) else { continue }
+                let div = effectiveDivisor(11, multiplier: mult)
+                let hsh = hash2(originX + gx * 109, originY + gy * 83)
+                guard hsh % UInt64(div) == 0 else { continue }
+                // Per-band cap.
+                guard canPlace(material: .blood, index: info.index, context: info.context, budget: budget) else { continue }
                 guard grid[gy][gx] == .empty else { continue }
                 guard !tunnelCells.contains(gy * width + gx) else { continue }
                 guard Self.cellDistance((gx, gy), spawn) > Self.safetyRadius,
@@ -968,8 +1548,6 @@ public struct CaveWorldGenerator: Sendable {
                     if grid[gy + dy][gx + dx] == .oil { nextToOil = true }
                 }
                 guard nextToOil else { continue }
-                let hsh = hash2(originX + gx * 109, originY + gy * 83)
-                guard hsh % 11 == 0 else { continue }
                 let targetSize = 2 + Int(hsh % 3) // 2...4 cells
                 var cluster: [(Int, Int)] = [(gx, gy)]
                 var frontier: [(Int, Int)] = [(gx, gy)]
@@ -993,6 +1571,8 @@ public struct CaveWorldGenerator: Sendable {
                 }
                 guard cluster.count >= 2 else { continue }
                 for (cx, cy) in cluster { grid[cy][cx] = .blood }
+                budget.consumeQuota(material: .blood, band: info.index)
+                budget.record(material: .blood, band: info.index)
                 poolCount += 1
             }
         }

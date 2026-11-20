@@ -21,6 +21,9 @@ struct MetalSurface {
     let onCycleWandMaterial: (Int) -> Void
     let onCycleWandSlot: (Int) -> Void
     let onToggleCraftingGrid: () -> Void
+    let onCollectFluid: () -> Void
+    let onPourFluid: () -> Void
+    let onThrowFlask: () -> Void
     let onKeyboard: (GameplayControls) -> Void
     let onInputReset: () -> Void
     let onRestart: (() -> Void)?
@@ -48,6 +51,19 @@ struct MetalSurface {
             inputView.onNewRun = onNewRun
             inputView.onCycleMaterial = onCycleMaterial
             inputView.onToggleHUD = onToggleHUD
+            inputView.onCollectFluid = onCollectFluid
+            inputView.onPourFluid = onPourFluid
+            inputView.onThrowFlask = onThrowFlask
+        }
+        #else
+        if let inputView = view as? InputMetalView {
+            inputView.onRestart = onRestart
+            inputView.onNewRun = onNewRun
+            inputView.onCycleMaterial = onCycleMaterial
+            inputView.onToggleHUD = onToggleHUD
+            inputView.onCollectFluid = onCollectFluid
+            inputView.onPourFluid = onPourFluid
+            inputView.onThrowFlask = onThrowFlask
         }
         #endif
     }

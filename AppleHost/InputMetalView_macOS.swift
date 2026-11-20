@@ -21,6 +21,9 @@ final class InputMetalView: MTKView {
     var onNewRun: (() -> Void)?
     var onCycleMaterial: ((Bool) -> Void)?
     var onToggleHUD: (() -> Void)?
+    var onCollectFluid: (() -> Void)?
+    var onPourFluid: (() -> Void)?
+    var onThrowFlask: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     var worldBounds: FixtureViewport.CellRange? = nil
     var lastCell: CellPosition?
@@ -64,6 +67,27 @@ final class InputMetalView: MTKView {
             if event.keyCode == 8 {
                 if event.type == .keyDown && !event.isARepeat {
                     self.onToggleCraftingGrid?()
+                }
+                return nil
+            }
+            // V (9) - Collect fluid
+            if event.keyCode == 9 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onCollectFluid?()
+                }
+                return nil
+            }
+            // B (11) - Pour fluid
+            if event.keyCode == 11 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onPourFluid?()
+                }
+                return nil
+            }
+            // T (17) - Throw flask
+            if event.keyCode == 17 {
+                if event.type == .keyDown && !event.isARepeat {
+                    self.onThrowFlask?()
                 }
                 return nil
             }

@@ -50,7 +50,10 @@ struct HostView: View {
                     onRestart: { model.restart() },
                     onNewRun: { model.newRun() },
                     onCycleMaterial: { model.cycleWandMaterial($0 ? 1 : -1) },
-                    onToggleHUD: { isHUDVisible.toggle() }
+                    onToggleHUD: { isHUDVisible.toggle() },
+                    onCollectFluid: { model.collectFluid() },
+                    onPourFluid: { model.pourFluid() },
+                    onThrowFlask: { model.throwFlask() }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()
@@ -104,7 +107,12 @@ struct HostView: View {
                             health: model.caveRun?.health,
                             maxHealth: model.caveRun?.maxHealth,
                             energy: model.caveRun?.character.levitationEnergy,
-                            maxEnergy: FixtureCharacter.maxLevitationEnergy)
+                            maxEnergy: FixtureCharacter.maxLevitationEnergy,
+                            flaskContents: model.flaskContents,
+                            flaskCapacity: model.flaskCapacity,
+                            onCollectFluid: { model.collectFluid() },
+                            onPourFluid: { model.pourFluid() },
+                            onThrowFlask: { model.throwFlask() })
                 Text("Paint: drag; keys 1–9, 0 (discovered materials)")
                 Text("Wand: \(model.selectedMaterial.wandName)\(model.isCasting ? " (casting)" : "")")
                 // Spell crafting HUD (only presented in safe zones)

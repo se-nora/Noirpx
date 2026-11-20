@@ -15,6 +15,9 @@ final class InputMetalView: MTKView {
     var onCycleWandSlot: ((Int) -> Void)?
     var onToggleCraftingGrid: (() -> Void)?
     var onToggleHUD: (() -> Void)?
+    var onCollectFluid: (() -> Void)?
+    var onPourFluid: (() -> Void)?
+    var onThrowFlask: (() -> Void)?
     var cameraCenter = CellPosition(x: 0, y: 0)
     var worldBounds: FixtureViewport.CellRange? = nil
     var lastCell: CellPosition?

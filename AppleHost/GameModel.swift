@@ -14,6 +14,18 @@ final class GameModel: ObservableObject {
     @Published private(set) var castAim: CellPosition?
     @Published private(set) var hoverCell: CellPosition?
 
+    /// Flask contents exposed to HUD. `[:]` when no active run.
+    @Published private(set) var flaskContents: [SimulationCore.Material: Int] = [:]
+    /// Flask capacity exposed to HUD. `0` when no active run.
+    @Published private(set) var flaskCapacity: Int = 0
+
+    /// Last non-nil hover cell for fluid interaction when hover clears (iOS touch end).
+    private var lastHoverCell: CellPosition?
+    /// The cell at which flask actions target (hover cell or last known hover).
+    private var flaskAimCell: CellPosition? {
+        hoverCell ?? lastHoverCell
+    }
+
     /// Material name under the cursor, derived from the current snapshot so it
     /// tracks changes (falling sand, burning out) without re-aiming.
     var hoveredMaterialName: String? {
@@ -87,6 +99,10 @@ final class GameModel: ObservableObject {
             renderGeneration += 1
             showCraftingGrid = false
 
+            // Publish initial flask state.
+            flaskContents = run.flask.contents
+            flaskCapacity = run.flask.capacity
+
             // Rewire wandController to this run's active wand and stats.
             let activeWand = run.activeWand
             wandController = WandController(wand: activeWand,
@@ -149,6 +165,41 @@ final class GameModel: ObservableObject {
 
     func setPaintHeld(_ held: Bool, cell: CellPosition?) {
         heldInput.setPaintHeld(held, cell: cell)
+    }
+
+    // MARK: - Flask / fluid
+
+    /// Collect one cell of liquid at the cursor cell into the flask.
+    func collectFluid() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        if run.collectFluid(at: cell) {
+            caveRun = run
+            updateFluidPublished()
+        }
+    }
+
+    /// Pour one cell from the flask at the cursor cell.
+    func pourFluid() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        if run.pourFluid(at: cell) {
+            caveRun = run
+            updateFluidPublished()
+        }
+    }
+
+    /// Throw (shatter) the flask at the cursor cell, spilling all contents.
+    func throwFlask() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        run.throwFlask(at: cell)
+        caveRun = run
+        updateFluidPublished()
+    }
+
+    private func updateFluidPublished() {
+        guard let run = caveRun else { return }
+        flaskContents = run.flask.contents
+        flaskCapacity = run.flask.capacity
+        snapshot = run.simulation.snapshot
     }
 
     func updatePaintHeldCell(_ cell: CellPosition?) {
@@ -338,6 +389,7 @@ final class GameModel: ObservableObject {
                 caveRun = run
                 updateActiveChunks()
                 snapshot = run.simulation.snapshot
+                updateFluidPublished()
                 scanAndDiscover()
                 if run.outcome != .playing {
                     clearControls()

@@ -20,6 +20,14 @@ public struct CaveRun {
     /// Gold collected this run (picked up from gold cells and creature drops).
     public private(set) var runGold: Int = 0
 
+    /// The player's inventory flask. Session state only (like `runGold`): it is
+    /// applied through ordinary enqueued material commands, so it is not part of
+    /// the simulation snapshot digest.
+    public var flask: Flask = Flask()
+
+    /// Chebyshev reach, in cells from the character center, for fluid interaction.
+    public static let flaskReach = 3
+
     internal private(set) var fallLimit: Int
 
     /// Creatures spawned deterministically into this cave run. Session state only.
@@ -378,6 +386,103 @@ public struct CaveRun {
         try simulation.enqueue(SimulationCommand(tick: tick, position: position, material: material))
     }
 
+    /// Returns `true` if `position` is within `flaskReach` cells of `character.cameraCenter`.
+    private func withinFlaskReach(_ position: CellPosition) -> Bool {
+        let center = character.cameraCenter
+        let halfX = Self.flaskReach
+        let halfY = Self.flaskReach
+        return abs(position.x - center.x) <= halfX && abs(position.y - center.y) <= halfY
+    }
+
+    /// Attempts to collect a single cell of liquid at `position` into the flask.
+    /// - Returns: `true` if a liquid cell was collected.
+    /// - Requires: playing outcome, flask not full, position within reach, and target is a collectible liquid.
+    @discardableResult
+    public mutating func collectFluid(at position: CellPosition) -> Bool {
+        guard outcome == .playing, !flask.isFull else { return false }
+        guard withinFlaskReach(position) else { return false }
+        guard Simulation.coordinateBounds.contains(position.x),
+              Simulation.coordinateBounds.contains(position.y) else { return false }
+
+        let material = simulation.materialForGameplay(at: position)
+        guard Flask.isCollectible(material) else { return false }
+
+        let (nextTick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return false }
+
+        let collected = flask.collect(material: material, cells: 1)
+        guard collected > 0 else { return false }
+
+        try? simulation.enqueue(SimulationCommand(tick: nextTick, position: position, material: .empty))
+        return true
+    }
+
+    /// Attempts to pour one cell of the flask's dominant liquid at `position`.
+    /// - Returns: `true` if a liquid cell was poured.
+    /// - Requires: playing outcome, flask not empty, position within reach, and target cell empty.
+    @discardableResult
+    public mutating func pourFluid(at position: CellPosition) -> Bool {
+        guard outcome == .playing, !flask.isEmpty else { return false }
+        guard withinFlaskReach(position) else { return false }
+        guard Simulation.coordinateBounds.contains(position.x),
+              Simulation.coordinateBounds.contains(position.y) else { return false }
+
+        // Target must be empty and not occupied by the character body.
+        guard simulation.materialForGameplay(at: position) == .empty else { return false }
+        guard !character.contains(position) else { return false }
+
+        // Choose the dominant material; tie-break by rawValue for determinism.
+        guard let material = flask.dominantMaterial else { return false }
+
+        let (nextTick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return false }
+
+        let poured = flask.pour(material: material, cells: 1)
+        guard poured > 0 else { return false }
+
+        try? simulation.enqueue(SimulationCommand(tick: nextTick, position: position, material: material))
+        return true
+    }
+
+    /// Shatters the flask at `impact`, spilling all contents around the impact cell.
+    /// The flask becomes empty. Spills in a 3x3 area centered on impact, deterministic order.
+    /// - Returns: `true` if the flask was thrown (had contents); `false` if no-op.
+    @discardableResult
+    public mutating func throwFlask(at impact: CellPosition) -> Bool {
+        guard outcome == .playing, !flask.isEmpty else { return false }
+        guard Simulation.coordinateBounds.contains(impact.x),
+              Simulation.coordinateBounds.contains(impact.y) else { return false }
+
+        let spilled = flask.pourAll()
+
+        let (nextTick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return false }
+
+        // Deterministic spill order: materials by rawValue ascending; cells y-then-x.
+        let materialKeys = spilled.keys.sorted { $0.rawValue < $1.rawValue }
+        var cells: [CellPosition] = []
+        for dy in -1...1 {
+            for dx in -1...1 {
+                cells.append(CellPosition(x: impact.x + dx, y: impact.y + dy))
+            }
+        }
+
+        var cellIndex = 0
+        for material in materialKeys {
+            let count = spilled[material] ?? 0
+            for _ in 0..<count {
+                guard cellIndex < cells.count else { return true }
+                let cell = cells[cellIndex]
+                cellIndex += 1
+                guard Simulation.coordinateBounds.contains(cell.x),
+                      Simulation.coordinateBounds.contains(cell.y) else { continue }
+                guard simulation.materialForGameplay(at: cell) == .empty else { continue }
+                try? simulation.enqueue(SimulationCommand(tick: nextTick, position: cell, material: material))
+            }
+        }
+        return true
+    }
+
     /// Enqueues a spell command (with isSpellCommand=true for precedence).
     public mutating func enqueueSpellCommand(_ command: SimulationCommand) throws {
         var cmd = command
@@ -427,7 +532,8 @@ public struct CaveRun {
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
          outcome: Outcome, simulation: Simulation, fallLimit: Int,
          creatures: [Creature] = [], nextCreatureId: UInt64 = 1,
-         wands: [Wand] = []) {
+         wands: [Wand] = [],
+         flask: Flask = Flask()) {
         self.seed = seed
         self.size = size
         self.world = world
@@ -438,5 +544,6 @@ public struct CaveRun {
         self.creatures = creatures
         self.nextCreatureId = nextCreatureId
         self.wands = wands
+        self.flask = flask
     }
 }

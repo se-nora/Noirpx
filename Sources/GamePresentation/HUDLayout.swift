@@ -99,6 +99,15 @@ public enum HUDLayout {
         lines.append(contentsOf: statusLines(state: state))
         lines.append(buildWandLine(state: state, fs: fs))
         lines.append(buildManaLine(state: state))
+        // Flask (cave only)
+        if state.worldKind == .cave, state.flaskCapacity > 0 {
+            let total = state.flaskContents.values.reduce(0, +)
+            var parts = ["Flask \(total)/\(state.flaskCapacity)"]
+            for (mat, count) in state.flaskContents.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                parts.append("\(mat.wandName) \(count)")
+            }
+            lines.append(HUDLine(text: parts.joined(separator: " ")))
+        }
         // FPS / chunks
         if let fps = state.framesPerSecond, let chunks = state.renderedChunks {
             lines.append(HUDLine(text: "FPS: \(Self.formatFPS(fps))  Chunks: \(chunks)"))
@@ -151,6 +160,37 @@ public enum HUDLayout {
             if manaRect.filled > 0 {
                 list.append(.fillRect(rect: manaRect.fill, color: .rgba(0, 120, 255, 255)))
             }
+        }
+
+        // ---- Flask fill bar (cave only) ----
+        if state.worldKind == .cave, state.flaskCapacity > 0 {
+            let barWidth = 80
+            let total = state.flaskContents.values.reduce(0, +)
+            let filled = min(barWidth * total / max(state.flaskCapacity, 1), barWidth)
+            let barBg = DisplayRect(x: contentX, y: lineTop, width: barWidth + 4, height: lh)
+            list.append(.fillRect(rect: barBg, color: .rgba(80, 80, 80, 255)))
+            list.append(.strokeRect(rect: barBg, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+            if filled > 0 {
+                let barFill = DisplayRect(x: contentX + 2, y: lineTop + 2, width: max(filled, 0), height: max(lh - 4, 1))
+                list.append(.fillRect(rect: barFill, color: .rgba(0, 200, 100, 255)))
+            }
+            // Flask swatches row (compact)
+            let swatchSize = 10
+            let swatchGap = 2
+            let swatchY = lineTop + lh + 2
+            var swatchX = contentX
+            for (mat, count) in state.flaskContents.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                let swatchRect = DisplayRect(x: swatchX, y: swatchY, width: swatchSize, height: swatchSize)
+                list.append(.fillRect(rect: swatchRect, color: .material(mat)))
+                list.append(.strokeRect(rect: swatchRect, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+                // count label
+                let label = "\(count)"
+                let labelWidth = BitmapFont.textWidth(label)
+                let labelRect = DisplayRect(x: swatchX + max(0, (swatchSize - labelWidth) / 2), y: swatchY + swatchSize + 1, width: labelWidth, height: lh)
+                list.append(.text(rect: labelRect, runs: [DisplayTextRun(text: label, color: .rgba(255, 255, 255, 255))], baselineFromTop: 6))
+                swatchX += swatchSize + swatchGap
+            }
+            lineTop += lh + swatchSize + lh + 4
         }
 
         // ---- Bottom material pill ----

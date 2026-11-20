@@ -66,7 +66,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - priority: 1
 - track: perf
 - depends: player-health
-- areas: player, sim-rules
+- areas: player
 - why: Jumping up and landing at the same height kills the player instantly — fall damage calculation is excessively punishing and prevents normal movement.
 - scope: Identify the fall damage formula in the player physics/health code, fix the velocity-to-damage conversion so that small falls (≤1 cell) are harmless and lethal damage only occurs at significant heights. Verify with Cave Run gameplay.
 - acceptance:

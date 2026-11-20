@@ -378,7 +378,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   `fix-sim-benchmark-edit-failures`.
 
 ### fix-sim-benchmark-edit-failures: Fix implementer edit mismatches in sim-benchmark-harness spec work
-- status: todo
+- status: done
 - priority: 5
 - track: infra
 - depends: none
@@ -392,6 +392,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   Correct the implementer's Package.swift and spec edit inputs for sim-benchmark-harness so the edit tool applies cleanly: the Snapshot ownership invariant text and the SimulationCoreTests testTarget dependency line adding SimBenchmark.
 - acceptance: |
   sim-benchmark-harness goal pass completes with zero pass-tool edit failures; Package.swift gains the SimBenchmark executable target and SimulationCoreTests gains the SimBenchmark dependency; spec edits apply cleanly on first attempt.
+- result: |
+  Verification-only goal; both edit targets already correctly applied in the tree (Package.swift line 13 SimBenchmark executable product, line 21 executableTarget, line 23 SimulationCoreTests testTarget depending on SimBenchmark; docs/interfaces/snapshots-digest.md line 5 documents the immutable snapshot invariant). swift build -c release --product SimBenchmark green; swift test --parallel -c release 599 tests pass, 0 failures/errors; SimBenchmarkMetricsTests green. QA ACCEPT WITH LIMITS (iOS Simulator build not run; no goal-pass edit-run log). No code change required; no version bump (no visual/gameplay effect).
 
 ### fix-digging-spells-recipe-edits: Stabilize implementer edit calls for digging-spells spell recipes
 - status: todo

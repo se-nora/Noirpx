@@ -165,4 +165,22 @@ final class ManaPoolTests: XCTestCase {
         XCTAssertFalse(pool.spend(1))
         XCTAssertEqual(pool.current, 0)
     }
+
+    // MARK: - Wand-synced regen
+
+    func testVariableMaxAndRegenInit() {
+        let pool = ManaPool(maximum: 100, regenerationPerTick: 2, startingMana: 50)
+        XCTAssertEqual(pool.current, 50)
+        XCTAssertEqual(pool.maximum, 100)
+        XCTAssertEqual(pool.regenerationPerTick, 2)
+    }
+
+    func testRegenerateAmountCap() {
+        var pool = ManaPool(maximum: 100, regenerationPerTick: 1, startingMana: 50)
+        // regenerate(amount:cap:) uses wand-specific cap
+        pool.regenerate(amount: 5, cap: 70)
+        XCTAssertEqual(pool.current, 55)
+        pool.regenerate(amount: 30, cap: 70) // would exceed cap
+        XCTAssertEqual(pool.current, 70)
+    }
 }

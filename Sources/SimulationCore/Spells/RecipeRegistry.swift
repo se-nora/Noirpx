@@ -348,6 +348,66 @@ public extension RecipeRegistry {
                     speed: 1024
                 )
             ),
+
+            // double_cast: [.magicLiquid, .magicLiquid, nil, nil, .magicLiquid, nil, nil, nil, nil] — marks modifier spells
+            Recipe(
+                id: "double_cast",
+                pattern: [.magicLiquid, .magicLiquid, nil, nil, .magicLiquid, nil, nil, nil, nil],
+                output: ProjectileBlueprint(
+                    id: "double_cast",
+                    name: "Double Cast",
+                    primaryMaterial: .magicLiquid,
+                    secondaryMaterial: nil,
+                    maxRange: 18,
+                    budgetPerTick: 1,
+                    cooldownTicks: 0,
+                    manaCost: 0,
+                    flags: [.isModifier],
+                    footprint: SpellFootprint(id: "modifier_double_cast", cells: []),
+                    gravityFactor: 0,
+                    speed: 0
+                )
+            ),
+
+            // speed_up: [.magicLiquid, nil, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil] — marks modifier spells
+            Recipe(
+                id: "speed_up",
+                pattern: [.magicLiquid, nil, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil],
+                output: ProjectileBlueprint(
+                    id: "speed_up",
+                    name: "Speed Up",
+                    primaryMaterial: .magicLiquid,
+                    secondaryMaterial: nil,
+                    maxRange: 18,
+                    budgetPerTick: 1,
+                    cooldownTicks: 0,
+                    manaCost: 0,
+                    flags: [.isModifier],
+                    footprint: SpellFootprint(id: "modifier_speed_up", cells: []),
+                    gravityFactor: 0,
+                    speed: 0
+                )
+            ),
+
+            // heavy_shot: [nil, .magicLiquid, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil] — marks modifier spells
+            Recipe(
+                id: "heavy_shot",
+                pattern: [nil, .magicLiquid, .magicLiquid, nil, .magicLiquid, nil, nil, nil, nil],
+                output: ProjectileBlueprint(
+                    id: "heavy_shot",
+                    name: "Heavy Shot",
+                    primaryMaterial: .magicLiquid,
+                    secondaryMaterial: nil,
+                    maxRange: 18,
+                    budgetPerTick: 1,
+                    cooldownTicks: 0,
+                    manaCost: 0,
+                    flags: [.isModifier],
+                    footprint: SpellFootprint(id: "modifier_heavy_shot", cells: []),
+                    gravityFactor: 0,
+                    speed: 0
+                )
+            ),
         ]
 
         return RecipeRegistry(recipes: recipes)

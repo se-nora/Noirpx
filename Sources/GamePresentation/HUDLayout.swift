@@ -127,10 +127,11 @@ public enum HUDLayout {
                 // Slot hit regions match the text advance: each slot part occupies
                 // slotWidths[i] cells; separators ("  ") advance 2 cells (12 px).
                 var sx = contentX
-                for i in 0..<4 {
+                let count = line.slotWidths.count
+                for i in 0..<count {
                     let slotRect = DisplayRect(x: sx, y: lineTop, width: line.slotWidths[i], height: lh)
                     wandSlotRects.append(slotRect)
-                    sx += line.slotWidths[i] + (i < 3 ? 12 : 0)
+                    sx += line.slotWidths[i] + (i < count - 1 ? 12 : 0)
                 }
             }
             lineTop += lh
@@ -142,7 +143,6 @@ public enum HUDLayout {
             let tag: DisplayActionTag = .cycleWandSlot(i)
             list.append(.hitRegion(rect: rect, actionTag: tag))
         }
-
         // ---- Mana bar (below wand line) ----
         if let manaRect = manaBarRect(state: state, contentX: contentX, lineTop: lineTop, lh: lh) {
             list.append(.fillRect(rect: manaRect.bg, color: .rgba(80, 80, 80, 255)))
@@ -276,8 +276,8 @@ public enum HUDLayout {
         var bold: Bool = false
         var color: DisplayColor = .rgba(255, 255, 255)
         var kind: LineKind = .normal
-        // wand slot info
-        var slotWidths: [Int] = [0, 0, 0, 0]
+        // wand slot info — sized to wand capacity
+        var slotWidths: [Int] = []
         var slotWidthTotal: Int = 0
 
         init(text: String, bold: Bool = false, color: DisplayColor = .rgba(255, 255, 255)) {
@@ -298,7 +298,7 @@ public enum HUDLayout {
     private static func buildWandLine(state: DisplayListState, fs: Int) -> HUDLine {
         let lh = lineHeight(forFontSize: fs)
         var parts: [(text: String, color: DisplayColor)] = []
-        var slotWidths: [Int] = [0, 0, 0, 0]
+        var slotWidths: [Int] = Array(repeating: 0, count: state.wand.capacity)
         var slotTotal = 0
         for (i, slot) in state.wand.slots.enumerated() {
             let isActive = i == state.wand.activeSlotIndex
@@ -321,8 +321,13 @@ public enum HUDLayout {
             let w = parts.last.map { BitmapFont.textWidth($0.text) } ?? 0
             slotWidths[i] = max(w, lh)
             slotTotal += slotWidths[i]
-            if i < 3 { parts.append(("  ", .rgba(255, 255, 255))) }
+            if i < state.wand.slots.count - 1 { parts.append(("  ", .rgba(255, 255, 255))) }
         }
+
+        // Wand stat line: CAP CD RC MANA SPREAD
+        let wandStats = "  CAP:\(state.wand.capacity) CD:\(state.wand.castDelayTicks) RC:\(state.wand.rechargeTimeTicks) MANA:\(state.wand.manaMax)/\(state.wand.manaRegenPerTick)/tick SPREAD:\(state.wand.spreadDegrees)deg"
+        parts.append((wandStats, .rgba(160, 160, 160)))
+
         var runs: [DisplayTextRun] = []
         for (t, c) in parts {
             runs.append(DisplayTextRun(text: t, color: c, bold: false))

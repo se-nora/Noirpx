@@ -179,7 +179,9 @@ final class SpellFootprintTests: XCTestCase {
             let footprint = recipe.output.footprint
             XCTAssertLessThanOrEqual(footprint.maxCells, SpellFootprint.maxFootprintCells)
             XCTAssertEqual(footprint.maxCells, footprint.cells.count)
-            XCTAssertEqual(footprint.id, "\(recipe.id)_impact")
+            // Modifiers use "modifier_<id>" footprint ID instead of "<id>_impact"
+            let expectedId = recipe.output.flags.contains(.isModifier) ? "modifier_\(recipe.id)" : "\(recipe.id)_impact"
+            XCTAssertEqual(footprint.id, expectedId)
 
             // Verify all cells have valid materials
             for cell in footprint.cells {

@@ -66,4 +66,36 @@ final class WandCastingTests: XCTestCase {
         // .empty is NOT drawable, so it falls back to .sand
         XCTAssertEqual(WandMaterials.normalized(.empty), .sand)
     }
+
+    // MARK: - Wand slot hit region count matches capacity
+
+    func testWandSlotHitRegionCountMatchesCapacity() {
+        for cap in [1, 3, 5, 8] {
+            let spells = Array(repeating: nil as Spell?, count: cap)
+            let state = DisplayListState(
+                version: "0.45.0",
+                worldKind: .cave,
+                seed: 42,
+                worldWidth: 256,
+                worldHeight: 128,
+                tick: 100,
+                outcome: .playing,
+                selectedMaterial: .sand,
+                isCasting: false,
+                wand: Wand(slots: spells, capacity: cap),
+                manaPool: ManaPool(startingMana: 80),
+                hudVisible: true,
+                overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
+            )
+            let list = HUDLayout.gameUI(width: 480, height: 270, state: state)
+            let wandTags = list.items.compactMap { item -> DisplayActionTag? in
+                if case .hitRegion(_, let tag) = item { return tag }
+                return nil
+            }.filter { tag in
+                if case .cycleWandSlot = tag { return true }
+                return false
+            }
+            XCTAssertEqual(wandTags.count, cap, "capacity \(cap) wand must produce \(cap) slot hit regions")
+        }
+    }
 }

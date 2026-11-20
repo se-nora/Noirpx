@@ -175,8 +175,8 @@ final class HoldToDrawTests: XCTestCase {
             // Simulate ray completing each tick (so isCasting resets for next attempt)
             isCasting = false
         }
-        // Cast at tick 0, cooldown 2 blocks tick 1, allowed again at tick 2, etc.
-        XCTAssertEqual(startedTicks, [0, 2, 4])
+        // Cast at tick 0 (fires on tick 1), cooldown 2 blocks ticks 2-3, allowed again at tick 3, etc.
+        XCTAssertEqual(startedTicks, [0, 3])
     }
 
     func testHeldCastRespectsMana() throws {

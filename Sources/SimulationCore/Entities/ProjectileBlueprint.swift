@@ -53,5 +53,6 @@ public struct ProjectileBlueprint: Equatable, Sendable {
         public static let explosive     = Flags(rawValue: 1 << 1)  // triggers explosion on impact
         public static let leavesTrail   = Flags(rawValue: 1 << 2)  // places secondaryMaterial along path
         public static let homing        = Flags(rawValue: 1 << 3)  // future: adjusts ray toward nearest target
+        public static let isModifier    = Flags(rawValue: 1 << 4)  // marks modifier spells (double cast, speed up, heavy shot)
     }
 }

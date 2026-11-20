@@ -16,13 +16,13 @@ public struct WandSlotHUD: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Wand slots (4 horizontal)
+            // Wand slots (capacity-driven)
             HStack(spacing: 6) {
-                ForEach(0..<4, id: \.self) { index in
+                ForEach(0..<wand.slots.count, id: \.self) { index in
                     WandSlotView(
                         spell: wand.slots[index],
                         isActive: index == wand.activeSlotIndex,
-                        onTap: { onCycleSlot(0) } // Tap does nothing; cycling is via keys/buttons
+                        onTap: { onCycleSlot(index) }
                     )
                 }
             }

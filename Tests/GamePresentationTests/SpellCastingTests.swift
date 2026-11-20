@@ -92,8 +92,10 @@ final class SpellCastingTests: XCTestCase {
         // Start cast
         let result = controller.tryStartCast()
         XCTAssertEqual(result, .started)
+        // Spell fires on first tick (mana regen of 1 happens in tick)
+        _ = controller.tick()
         XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 20)
-        XCTAssertEqual(controller.manaPool.current, 90)
+        XCTAssertEqual(controller.manaPool.current, 91)
     }
 
     func testPerTickBudgetFromBlueprint() throws {
@@ -145,21 +147,50 @@ final class SpellCastingTests: XCTestCase {
         let spell = Spell(blueprint: blueprint)
 
         controller.setSpell(spell, at: 0)
+        // Use non-zero rechargeTimeTicks so we can test recharging state
+        controller.wand = Wand(slots: [spell], capacity: 1, castDelayTicks: 0,
+                               rechargeTimeTicks: 5, manaMax: 100, manaRegenPerTick: 1)
+        controller.manaPool = ManaPool(maximum: 100, regenerationPerTick: 1, startingMana: 100)
 
-        // First cast succeeds
+        // First cast starts sequence
         XCTAssertEqual(controller.tryStartCast(), .started)
-        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 5)
-
-        // Second cast immediately fails with cooldown
-        XCTAssertEqual(controller.tryStartCast(), .onCooldown(ticksRemaining: 5))
-
-        // Tick down cooldown
-        for i in (1...5).reversed() {
-            controller.tickCooldowns()
-            XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, UInt16(i - 1))
+        // Can't start another cast while sequence active
+        let result2 = controller.tryStartCast()
+        if case .onCooldown(let ticks) = result2 {
+            XCTAssertEqual(ticks, 0) // delayRemaining = 0
+        } else {
+            XCTFail("Expected onCooldown, got \(result2)")
         }
 
-        // After cooldown expires, can cast again
+        // Fire the spell (tickCooldowns runs -> cooldown becomes 4)
+        _ = controller.tick()
+        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 5)
+
+        // Still recharging after last slot
+        if case .recharging(let remaining) = controller.castState {
+            XCTAssertEqual(remaining, controller.wand.rechargeTimeTicks)
+        } else {
+            XCTFail("Expected recharging after last slot, got \(controller.castState)")
+        }
+
+        // Can't start while recharging
+        let result3 = controller.tryStartCast()
+        if case .onCooldown(let ticks) = result3 {
+            XCTAssertEqual(ticks, controller.wand.rechargeTimeTicks)
+        } else {
+            XCTFail("Expected onCooldown, got \(result3)")
+        }
+
+        // Count down recharge
+        for _ in 0..<controller.wand.rechargeTimeTicks - 1 {
+            _ = controller.tick()
+        }
+
+        // Last recharge tick -> idle
+        _ = controller.tick()
+        XCTAssertEqual(controller.castState, .idle)
+
+        // Can cast again when idle
         XCTAssertEqual(controller.tryStartCast(), .started)
     }
 
@@ -185,21 +216,20 @@ final class SpellCastingTests: XCTestCase {
         controller.setSpell(Spell(blueprint: blueprint), at: 0)
         controller.setSpell(Spell(blueprint: blueprint), at: 1)
 
-        // Cast from slot 0
-        controller.wand.activeSlotIndex = 0
+        // New sequence behavior: tryStartCast starts a sequence firing all occupied slots
         XCTAssertEqual(controller.tryStartCast(), .started)
+        // First tick fires slot 0 (tickCooldowns already ran -> cooldown stays at 10)
+        _ = controller.tick()
         XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 10)
         XCTAssertEqual(controller.wand.slots[1]?.cooldownRemaining, 0)
-
-        // Switch to slot 1 and cast
-        controller.wand.activeSlotIndex = 1
-        XCTAssertEqual(controller.tryStartCast(), .started)
-        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 10)
+        // Second tick: tickCooldowns decrements slot 0 to 9, then fires slot 1 with cooldown=10
+        _ = controller.tick()
+        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 9)
         XCTAssertEqual(controller.wand.slots[1]?.cooldownRemaining, 10)
 
-        // Tick down
+        // Tick down cooldowns again
         controller.tickCooldowns()
-        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 9)
+        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 8)
         XCTAssertEqual(controller.wand.slots[1]?.cooldownRemaining, 9)
     }
 
@@ -272,18 +302,17 @@ final class SpellCastingTests: XCTestCase {
         let spell = Spell(blueprint: blueprint)
 
         controller.setSpell(spell, at: 0)
-        _ = controller.tryStartCast()
+        XCTAssertEqual(controller.tryStartCast(), .started)
+        // Mana and cooldown not set until spell fires on tick()
+        XCTAssertEqual(controller.manaPool.current, 100)
+        XCTAssertEqual(controller.wand.slots[0]?.manaReserved, 0)
+        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 0)
 
-        // Mana should be deducted
-        XCTAssertEqual(controller.manaPool.current, 90)
-        XCTAssertEqual(controller.wand.slots[0]?.manaReserved, 10)
-        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 20)
-
-        // Cancel cast - should refund mana but keep cooldown
+        // Cancel cast - nothing spent, nothing to refund
         controller.cancelCast()
         XCTAssertEqual(controller.manaPool.current, 100)
         XCTAssertEqual(controller.wand.slots[0]?.manaReserved, 0)
-        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 20) // Cooldown unchanged
+        XCTAssertEqual(controller.wand.slots[0]?.cooldownRemaining, 0)
     }
 
     // MARK: - Slot Cycling Wrap

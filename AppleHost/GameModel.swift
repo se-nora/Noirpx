@@ -49,6 +49,7 @@ final class GameModel: ObservableObject {
 
     private struct CaveRunSession {
         private(set) var seed: UInt64
+        private(set) var wands: [Wand] = []
         init(seed: UInt64 = 42) { self.seed = seed }
         func restart() throws -> CaveRun { try CaveRun(seed: seed, width: 256, height: 128) }
         mutating func newRun() throws -> CaveRun {
@@ -85,6 +86,14 @@ final class GameModel: ObservableObject {
             renderedChunks = nil
             renderGeneration += 1
             showCraftingGrid = false
+
+            // Rewire wandController to this run's active wand and stats.
+            let activeWand = run.activeWand
+            wandController = WandController(wand: activeWand,
+                                            manaPool: ManaPool(
+                                                maximum: activeWand.manaMax,
+                                                regenerationPerTick: activeWand.manaRegenPerTick,
+                                                startingMana: activeWand.manaMax))
         } catch {
             caveRun = nil
             snapshot = nil
@@ -197,27 +206,15 @@ final class GameModel: ObservableObject {
     func startCasting() {
         guard var run = caveRun, run.outcome == .playing, errorMessage == nil else { return }
 
-        // Gate cast start on WandController.tryStartCast()
+        // Gate cast start on WandController.tryStartCast() — no spawn here,
+        // spells fire from update() via tick() returning [PendingCast].
         let result = wandController.tryStartCast()
         switch result {
         case .started:
             isCasting = true
-            // Spawn the projectile immediately on cast start
-            if let aim = castAim, let activeSpell = wandController.wand.activeSpell {
-                let blueprint = activeSpell.blueprint
-                let origin = CellPosition(x: run.character.position.x + FixtureCharacter.width / 2,
-                                          y: run.character.position.y + FixtureCharacter.height / 2)
-                do {
-                    try run.castSpell(blueprint: blueprint, origin: origin, toward: aim)
-                    caveRun = run
-                } catch {
-                    errorMessage = "Could not cast spell: \(error.localizedDescription)"
-                }
-            }
         case .noActiveSpell, .onCooldown, .insufficientMana:
             // Show HUD feedback via errorMessage
             errorMessage = castStartErrorMessage(result)
-            // Don't start casting
             return
         }
     }
@@ -230,7 +227,7 @@ final class GameModel: ObservableObject {
         isCasting = false
     }
 
-    private func castStartErrorMessage(_ result: CastStartResult) -> String {
+    private func castStartErrorMessage(_ result: WandController.CastStartResult) -> String {
         switch result {
         case .noActiveSpell:
             return "No spell in active wand slot"
@@ -300,8 +297,29 @@ final class GameModel: ObservableObject {
             for _ in 0..<steps {
                 guard let activeChunks else { return }
 
-                // Tick wand controller (cooldowns + mana regen)
-                wandController.tick()
+                // Tick wand controller — returns [PendingCast] to spawn this tick.
+                let pendingCasts = wandController.tick()
+
+                // If the wand controller is idle, the sequence completed; allow new sequence if button still held.
+                if wandController.isIdle {
+                    isCasting = false
+                }
+
+                // Spawn each pending cast with current aim.
+                if let aim = castAim, !pendingCasts.isEmpty {
+                    let origin = CellPosition(
+                        x: run.character.position.x + FixtureCharacter.width / 2,
+                        y: run.character.position.y + FixtureCharacter.height / 2)
+                    for pending in pendingCasts {
+                        do {
+                            try run.castSpell(blueprint: pending.blueprint, origin: origin, toward: aim)
+                        } catch {
+                            // Best effort: continue spawning remaining casts
+                            continue
+                        }
+                    }
+                    caveRun = run
+                }
 
                 // Held material brush: paint once per tick at the held cursor cell.
                 for (cell, material) in heldInput.paintThisTick(material: selectedMaterial) {

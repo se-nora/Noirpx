@@ -25,6 +25,9 @@ public struct CaveRun {
     /// Next creature ID to assign. Starts at 1.
     internal private(set) var nextCreatureId: UInt64 = 1
 
+    /// The player's two starting wands: wands[0] = active wand, wands[1] = secondary.
+    public var wands: [Wand] = []
+
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
     public init(seed: UInt64, width: Int = 256, height: Int = 128) throws {
@@ -72,6 +75,36 @@ public struct CaveRun {
         spawnCreatures(layout: layout, termination: termination, materialAt: { x, y in
             world.cells[CellPosition(x: x, y: y)] ?? .empty
         })
+
+        // Two starting wands with distinct stats and loadouts.
+        let wandA = Wand(
+            slots: [Spell(blueprint: RecipeRegistry.blueprintById["firebolt"]!), nil, nil],
+            activeSlotIndex: 0,
+            capacity: 3,
+            castDelayTicks: 8,
+            rechargeTimeTicks: 30,
+            manaMax: 100,
+            manaRegenPerTick: 1,
+            spreadDegrees: 0
+        )
+        let wandB = Wand(
+            slots: [Spell(blueprint: RecipeRegistry.blueprintById["ice_shard"]!),
+                    Spell(blueprint: RecipeRegistry.blueprintById["waterjet"]!),
+                    nil, nil, nil],
+            activeSlotIndex: 0,
+            capacity: 5,
+            castDelayTicks: 4,
+            rechargeTimeTicks: 20,
+            manaMax: 150,
+            manaRegenPerTick: 2,
+            spreadDegrees: 0
+        )
+        self.wands = [wandA, wandB]
+    }
+
+    /// The active wand (index 0). Used by GameModel/HUD.
+    public var activeWand: Wand {
+        wands[0]
     }
 
     /// Spawns deterministic crawler spawns into the cave run. Uses the final
@@ -325,7 +358,8 @@ public struct CaveRun {
     /// Test-only restoring initializer for mutation/replay tests.
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
          outcome: Outcome, simulation: Simulation, fallLimit: Int,
-         creatures: [Creature] = [], nextCreatureId: UInt64 = 1) {
+         creatures: [Creature] = [], nextCreatureId: UInt64 = 1,
+         wands: [Wand] = []) {
         self.seed = seed
         self.size = size
         self.world = world
@@ -335,5 +369,6 @@ public struct CaveRun {
         self.fallLimit = fallLimit
         self.creatures = creatures
         self.nextCreatureId = nextCreatureId
+        self.wands = wands
     }
 }

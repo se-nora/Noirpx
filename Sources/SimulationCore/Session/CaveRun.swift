@@ -30,11 +30,13 @@ public struct CaveRun {
 
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
-    public init(seed: UInt64, width: Int = 256, height: Int = 128) throws {
+    /// - Parameter biomeConfig: Optional biome configuration. Defaults to
+    ///   `CaveBiomeConfig.defaultForHeight(height)`.
+    public init(seed: UInt64, width: Int = 256, height: Int = 128, biomeConfig: CaveBiomeConfig? = nil) throws {
         self.seed = seed
         self.size = CaveWorldSize(width: width, height: height)
 
-        let generator = CaveWorldGenerator(seed: seed, width: width, height: height)
+        let generator = CaveWorldGenerator(seed: seed, width: width, height: height, biomeConfig: biomeConfig)
         let (world, prePassGrid) = generator.generateInspected(stampSpawnTemplate: true, capturePrePass: true)
 
         guard let prePassGrid = prePassGrid else {

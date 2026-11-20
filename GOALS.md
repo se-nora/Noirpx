@@ -713,7 +713,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tests for pickup rules and replay; HUD screenshot with a nonzero counter.
 
 ### cave-vertical-biome-layers: Vertical biome bands in CaveRun world generation
-- status: todo
+- status: done
 - priority: 44
 - track: noita
 - depends: none
@@ -726,6 +726,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Changing biome config changes digest (intentional).
   - All existing CaveRun tests pass; new tests cover band transitions and negative coordinates.
   - Documentation in `docs/interfaces/cave-world-and-cave-run.md` reflects the new config schema.
+- result: Implemented vertical biome bands in CaveRun world generation. Added CaveBiomeConfig/CaveBiomeBand/CaveBiomeDensity types with three default bands (deep/underground/surface), per-material density multipliers, caps, edge margins, and 1-row linear interpolation at boundaries. Digest version bumped 6→7; MARKETING_VERSION 0.46.0→0.47.0 (minor, visual/gameplay change). All 32 CaveWorldGenTests + 46 CaveRunTests pass; deterministic replay verified per seed+height+config; config change changes digest (intentional). Documentation in docs/interfaces/cave-world-and-cave-run.md. Unverified: no visual capture PNG generated (screenshot verification deferred to biome-descent follow-up).
 
 ### biome-descent: Multi-level descent through distinct biomes
 - status: todo

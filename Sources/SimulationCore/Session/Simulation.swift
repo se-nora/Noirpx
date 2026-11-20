@@ -33,6 +33,11 @@ public struct Simulation {
     private var projectiles: [ProjectileEntity] = []
     /// Monotonically increasing ID for new projectiles.
     private var nextProjectileId: UInt64 = 1
+    /// Active debris particles in the simulation. Advanced after projectiles each tick.
+    /// Not saved (transient session state, like pendingExplosions/lastBlastFlash).
+    private var debris: [DebrisParticle] = []
+    /// Monotonically increasing ID for new debris particles.
+    private var nextDebrisId: UInt64 = 1
 
     public init(seed: UInt64) {
         self.seed = seed
@@ -83,7 +88,7 @@ public struct Simulation {
         let published = chunks.keys.sorted(by: ordered).map {
             ChunkSnapshot(position: $0, cells: chunks[$0]!.cells, thermalStates: chunks[$0]!.thermalStates)
         }
-        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published, blastFlash: lastBlastFlash, projectiles: projectiles.map { $0.snapshot() })
+        return SimulationSnapshot(tick: tick, seed: seed, randomState: randomState, chunks: published, blastFlash: lastBlastFlash, projectiles: projectiles.map { $0.snapshot() }, debris: debris.map { $0.snapshot() })
     }
 
     public mutating func enqueue(_ command: SimulationCommand) throws {
@@ -196,6 +201,9 @@ public struct Simulation {
 
         // PROJECTILE PASS: advance projectiles after explosions, before tick publish
         advanceProjectiles(tick: nextTick, moved: &moved, activeChunks: activeChunks)
+
+        // DEBRIS PASS: advance debris particles after projectiles, before tick publish
+        advanceDebris(tick: nextTick, moved: &moved, activeChunks: activeChunks)
 
         tick = nextTick
     }
@@ -394,6 +402,145 @@ public struct Simulation {
         moved.formUnion(localExplodedCells)
     }
 
+    /// Advances all debris particles for the current tick.
+    /// Runs after projectiles, before tick publish.
+    /// Deposits material on collision or lifetime expiry (conservation invariant:
+    /// every spawned particle deposits exactly once, unless all 9 neighborhood
+    /// cells are occupied).
+    mutating func advanceDebris(tick: UInt64, moved: inout Set<CellPosition>, activeChunks: ChunkRegion?) {
+        guard !debris.isEmpty else { return }
+
+        // Per-tick cap: keep lowest IDs for determinism.
+        if debris.count > maxDebrisPerTick {
+            debris = Array(debris.prefix(maxDebrisPerTick))
+        }
+
+        // Material lookup and bounds check closures — avoid capturing self in mutating context
+        // by using local copies of the methods.
+        // Note: We can't use closures capturing self while also mutating self, so we inline deposit.
+
+        var stillActive: [DebrisParticle] = []
+        stillActive.reserveCapacity(debris.count)
+
+        for var particle in debris {
+            // Decrement lifetime; if it reaches 0 this tick, particle deposits and dies.
+            particle.lifetimeTicks -= 1
+            particle.age += 1
+
+            let fromCell = particle.position.cell()
+
+            let newPosition = FixedPoint(
+                x: particle.position.x &+ particle.velocity.x,
+                y: particle.position.y &+ particle.velocity.y
+            )
+
+            if particle.gravityFactor > 0 {
+                particle.velocity.y = particle.velocity.y &- Int32(particle.gravityFactor)
+            }
+
+            let toCell = newPosition.cell()
+
+            if particle.lifetimeTicks == 0 {
+                // Lifetime expiry: deposit at current cell (no movement this tick for deposit target).
+                let depositCell = fromCell == toCell ? fromCell : toCell
+                // Inline deposit logic
+                if isInBounds(depositCell) && material(at: depositCell) == .empty {
+                    set(particle.material, at: depositCell)
+                    moved.insert(depositCell)
+                } else {
+                    let neighborOffsets: [(dx: Int, dy: Int)] = [
+                        (-1, -1), (0, -1), (1, -1),
+                        (-1, 0), (1, 0),
+                        (-1, 1), (0, 1), (1, 1)
+                    ]
+                    for offset in neighborOffsets {
+                        let candidate = CellPosition(x: depositCell.x + offset.dx, y: depositCell.y + offset.dy)
+                        if isInBounds(candidate) && material(at: candidate) == .empty {
+                            set(particle.material, at: candidate)
+                            moved.insert(candidate)
+                            break
+                        }
+                    }
+                    // Lost if no empty neighbor
+                }
+                continue
+            }
+
+            // Normal movement (lifetime > 0).
+            if fromCell == toCell {
+                particle.position = newPosition
+                stillActive.append(particle)
+                continue
+            }
+
+            // Bresenham traversal from fromCell (exclusive) to toCell (inclusive),
+            // checking each stepped cell for collision. Same algorithm as ProjectileEntity.
+            var x = fromCell.x
+            var y = fromCell.y
+            let dx = abs(toCell.x - fromCell.x)
+            let dy = abs(toCell.y - fromCell.y)
+            let sx = fromCell.x < toCell.x ? 1 : -1
+            let sy = fromCell.y < toCell.y ? 1 : -1
+            var err = dx - dy
+
+            var collided = false
+            var impactCell = CellPosition(x: 0, y: 0)
+
+            while true {
+                let cell = CellPosition(x: x, y: y)
+
+                if cell != fromCell {
+                    if !isInBounds(cell) {
+                        collided = true
+                        impactCell = CellPosition(x: x - sx, y: y - sy)
+                        break
+                    }
+
+                    let material = material(at: cell)
+                    if material.blocksCharacter {
+                        collided = true
+                        impactCell = cell
+                        break
+                    }
+                }
+
+                if x == toCell.x && y == toCell.y { break }
+
+                let e2 = 2 * err
+                if e2 > -dy { err -= dy; x += sx }
+                if e2 < dx  { err += dx; y += sy }
+            }
+
+            if collided {
+                // Inline deposit logic
+                if isInBounds(impactCell) && material(at: impactCell) == .empty {
+                    set(particle.material, at: impactCell)
+                    moved.insert(impactCell)
+                } else {
+                    let neighborOffsets: [(dx: Int, dy: Int)] = [
+                        (-1, -1), (0, -1), (1, -1),
+                        (-1, 0), (1, 0),
+                        (-1, 1), (0, 1), (1, 1)
+                    ]
+                    for offset in neighborOffsets {
+                        let candidate = CellPosition(x: impactCell.x + offset.dx, y: impactCell.y + offset.dy)
+                        if isInBounds(candidate) && material(at: candidate) == .empty {
+                            set(particle.material, at: candidate)
+                            moved.insert(candidate)
+                            break
+                        }
+                    }
+                    // Lost if no empty neighbor
+                }
+            } else {
+                particle.position = newPosition
+                stillActive.append(particle)
+            }
+        }
+
+        debris = stillActive
+    }
+
     private mutating func nextRandom() -> UInt64 {
         randomState = randomState &+ 0x9e3779b97f4a7c15
         var value = randomState
@@ -530,6 +677,35 @@ extension Simulation {
                 destroyed.append(pos)
                 blastFlash.insert(pos)
                 blastCellCount += 1
+
+                // Spawn debris when cell is destroyed to .empty (not fire/steam conversion).
+                if newMaterial == .empty {
+                    let roll = blastRoll(at: pos, tick: tick, salt: debrisSpawnSalt)
+                    if roll % 100 < debrisSpawnChance && debris.count < maxDebrisPerExplosion {
+                        let dx = pos.x - center.x
+                        let dy = pos.y - center.y
+                        let distance = max(abs(dx), abs(dy))
+                        let speedQ8: Int32
+                        if distance == 0 {
+                            speedQ8 = 0
+                        } else {
+                            let raw = (power * 128) / max(1, distance)
+                            speedQ8 = Int32(min(max(raw, 128), 512))
+                        }
+                        let vx: Int32 = distance == 0 ? 0 : (Int32(dx) * speedQ8 + Int32(distance) / 2) / Int32(distance)
+                        let vy: Int32 = distance == 0 ? 0 : (Int32(dy) * speedQ8 + Int32(distance) / 2) / Int32(distance)
+                        let particle = DebrisParticle(
+                            id: nextDebrisId,
+                            material: cellMaterial,
+                            position: FixedPoint.fromCells(x: pos.x, y: pos.y),
+                            velocity: FixedPoint(x: vx, y: vy),
+                            gravityFactor: debrisGravityFactor,
+                            lifetimeTicks: debrisLifetimeTicks
+                        )
+                        nextDebrisId &+= 1
+                        debris.append(particle)
+                    }
+                }
 
                 // Heat flammable neighbors (8-connected).
                 let neighbors8 = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]

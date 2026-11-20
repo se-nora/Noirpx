@@ -834,7 +834,8 @@ final class GamePresentationTests: XCTestCase {
         let snapshot = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: [projectile]
+            projectiles: [projectile],
+            debris: []
         )
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
 
@@ -865,12 +866,14 @@ final class GamePresentationTests: XCTestCase {
         let snapshotWithProjectile = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: [projectile]
+            projectiles: [projectile],
+            debris: []
         )
         let snapshotWithoutProjectile = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let frameWith = FixturePixels.rasterize(snapshot: snapshotWithProjectile, viewport: viewport)
         let frameWithout = FixturePixels.rasterize(snapshot: snapshotWithoutProjectile, viewport: viewport)
@@ -893,7 +896,8 @@ final class GamePresentationTests: XCTestCase {
         let snapshot = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: [projectile]
+            projectiles: [projectile],
+            debris: []
         )
         let frame1 = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
         let frame2 = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
@@ -915,12 +919,14 @@ final class GamePresentationTests: XCTestCase {
         let baseline = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let withProjectile = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: [projectile]
+            projectiles: [projectile],
+            debris: []
         )
         XCTAssertEqual(baseline.digest, withProjectile.digest, "Projectiles are presentation-only and must not affect digest")
     }
@@ -929,12 +935,14 @@ final class GamePresentationTests: XCTestCase {
         let baseline = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let withFlash = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: [CellPosition(x: 5, y: 5)]),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         XCTAssertEqual(baseline.digest, withFlash.digest, "Blast flash is presentation-only and must not affect digest")
     }
@@ -945,7 +953,8 @@ final class GamePresentationTests: XCTestCase {
         let snapshot = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: [flashCell]),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
 
@@ -965,12 +974,14 @@ final class GamePresentationTests: XCTestCase {
         let snapshotWithFlash = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: [farOutside]),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let snapshotWithoutFlash = SimulationSnapshot(
             tick: 1, seed: 42, randomState: 42,
             chunks: [], blastFlash: BlastFlash(cells: []),
-            projectiles: []
+            projectiles: [],
+            debris: []
         )
         let frameWith = FixturePixels.rasterize(snapshot: snapshotWithFlash, viewport: viewport)
         let frameWithout = FixturePixels.rasterize(snapshot: snapshotWithoutFlash, viewport: viewport)

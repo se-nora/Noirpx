@@ -93,6 +93,22 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 
+
+### explosion-bugfix: Explosions invisible, no terrain damage, instant death on spawn
+- status: todo
+- priority: 4
+- track: perf
+- depends: explosions
+- areas: sim-rules, renderer, entities
+- why: Explosions are currently invisible (no visual effect), don't damage terrain, and sometimes the player dies instantly on game start from an explosion. Explosions should be visible, break terrain based on radius/material, and not spawn on the player.
+- scope: Fix the explosion visual (particle/flash rendering in MetalRenderer or FixturePixels), implement terrain destruction in the explosion radius with material-dependent resistance (soft materials break, hard materials resist), fix the spawn logic so explosions don't trigger on player at game start. Ensure the existing `explosions` goal's acceptance criteria are met.
+- acceptance:
+  - Explosion visual appears on detonation (flash, particles, shockwave).
+  - Terrain within radius is destroyed: sand/ice/slime removed, rock partially damaged, dense materials resist.
+  - New game start: player spawns safely, no instant death from explosion.
+  - Deterministic replay test covers explosion damage and terrain modification.
+
+
 ### noita-gap-analysis: Compare current game to Noita and add missing goals
 - status: todo
 - priority: 75

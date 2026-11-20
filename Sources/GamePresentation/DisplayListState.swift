@@ -70,6 +70,7 @@ public struct DisplayListState: Equatable, Sendable {
     public let maxHealth: Int?
     public let energy: Int?
     public let maxEnergy: Int?
+    public let runGold: Int
 
     // Beacon HUD
     public let collectedBeacons: Int
@@ -112,6 +113,7 @@ public struct DisplayListState: Equatable, Sendable {
         maxHealth: Int? = nil,
         energy: Int? = nil,
         maxEnergy: Int? = nil,
+        runGold: Int = 0,
         collectedBeacons: Int = 0,
         warden: DisplayWarden? = nil,
         selectedMaterial: Material,
@@ -143,6 +145,7 @@ public struct DisplayListState: Equatable, Sendable {
         self.maxHealth = maxHealth
         self.energy = energy
         self.maxEnergy = maxEnergy
+        self.runGold = runGold
         self.collectedBeacons = collectedBeacons
         self.warden = warden
         self.selectedMaterial = selectedMaterial

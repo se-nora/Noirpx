@@ -436,11 +436,12 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   re-run still pending (tooling-digest signature fix is loop-side, out of repo scope).
 
 ### fix-simcore-layout-edit-failures: Stabilize implementer edit calls in simcore-file-layout spec work
-- status: todo
+- status: done
 - priority: 7
 - track: infra
 - depends: none
 - areas: tests-infra
+- result: Added docs/goal-runbooks/simcore-file-layout.md pre-read-verified anchor runbook for ResidentSimulation.swift lines 412-441 following the fix-digging-spells-recipe-edits precedent; verbatim anchors + pre-read mandate so parent pass edits apply cleanly on first attempt; docs-only, no ResidentSimulation.swift change (diff vs main empty), no version-bump gameplay effect (patch bump 0.51.0 -> 0.51.1). Verified: edit-convention-check.sh PASS; simcore-layout.sh 3 pre-existing FAILs on main unrelated; swift test pre-existing CaveRunLevitationIntegrationTests failures unrelated. Unverified: iOS Simulator build (optional); tooling-digest signature non-actionable pending parent simcore-file-layout pass re-run (loop-side).
 - why: >
   The tooling review (2026-11-20T00:17:23+0100) surfaces 3 occurrences of
   `pass-tool :: edit :: N: // Each worker publishes one result through the lock; the owner reads after all workers finish.`

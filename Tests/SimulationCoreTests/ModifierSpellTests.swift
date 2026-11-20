@@ -127,13 +127,14 @@ final class ModifierSpellTests: XCTestCase {
         let registry = RecipeRegistry.standard
 
         // Base recipes = 10 (firebolt through magic_missile)
+        // Plus bomb and dig_bolt = 12 base-like, then 3 modifiers, then dig_bolt
         let baseCount = 10
-        XCTAssertEqual(registry.recipes.count, baseCount + 3)
+        XCTAssertEqual(registry.recipes.count, 15)
 
-        // Modifier recipes should be last 3
+        // Modifier recipes are at indices 11, 12, 13 (after 10 base + bomb + gunpowder_blast)
         let modifierIds = ["double_cast", "speed_up", "heavy_shot"]
         for (index, id) in modifierIds.enumerated() {
-            let recipe = registry.recipes[baseCount + index]
+            let recipe = registry.recipes[baseCount + 1 + index] // +1 for bomb inserted before gunpowder_blast
             XCTAssertEqual(recipe.id, id)
             XCTAssertTrue(recipe.output.flags.contains(.isModifier), "\(id) must have .isModifier flag")
         }

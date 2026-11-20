@@ -9,7 +9,7 @@ public struct SimulationSnapshot: Equatable, Sendable {
     /// Presentation-only projectiles from the completed tick. Excluded from digest.
     public let projectiles: [ProjectileSnapshot]
 
-    public static let digestVersion: UInt64 = 7
+    public static let digestVersion: UInt64 = 8
 
     public func material(at position: CellPosition) throws -> Material {
         try SimulationGrid.validate(position)

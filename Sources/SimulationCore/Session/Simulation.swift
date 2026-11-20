@@ -285,8 +285,9 @@ public struct Simulation {
     }
 
     /// Advances all projectiles for the current tick.
-    /// Collisions with blocking materials and world edges are detected via Bresenham.
-    /// On impact, the spell's footprint is applied via spell commands.
+    /// Handles standard projectiles, digging projectiles, and explosive projectiles.
+    /// Explosions from projectiles are enqueued to `pendingExplosions` and drained
+    /// within the same tick (bounded by maxChainDepth) so gunpowder chains process immediately.
     mutating func advanceProjectiles(tick: UInt64, moved: inout Set<CellPosition>, activeChunks: ChunkRegion?) {
         guard !projectiles.isEmpty else { return }
 
@@ -295,44 +296,102 @@ public struct Simulation {
             self.material(at: pos)
         }
 
-        // Bounds check closure
+        // Bounds check closure for standard projectiles (isInBounds only).
+        // Digging projectiles also use isInBounds (world edge = stop).
         let canVisit: (CellPosition) -> Bool = { pos in
             self.isInBounds(pos)
         }
 
-        var impactedEntities: [(projectile: ProjectileEntity, impactCell: CellPosition)] = []
+        var impactedEntities: [(projectile: ProjectileEntity, impactCell: CellPosition, blueprint: ProjectileBlueprint)] = []
         var stillActive: [ProjectileEntity] = []
         stillActive.reserveCapacity(projectiles.count)
 
         for var entity in projectiles {
-            if let impactCell = entity.advance(canVisit: canVisit, materialAt: materialAt) {
-                // Entity impacted a blocking cell or world edge
-                impactedEntities.append((entity, impactCell))
-            } else if entity.lifetimeTicks > 0 && !entity.hasImpacted {
+            guard let blueprint = RecipeRegistry.blueprintById[entity.blueprintId] else {
                 stillActive.append(entity)
+                continue
             }
-            // Record the path this tick for creature hit detection.
-            if !entity.lastPath.isEmpty {
-                lastProjectilePaths.append((projectileId: entity.id, cells: entity.lastPath))
+
+            if blueprint.flags.contains(.digging) {
+                // Digging projectile: custom Bresenham path that removes soft materials.
+                let (impact, _) = entity.advanceDigging(
+                    canVisit: canVisit,
+                    materialAt: materialAt,
+                    blueprint: blueprint,
+                    moved: &moved
+                )
+                // Record the path this tick for creature hit detection.
+                if !entity.lastPath.isEmpty {
+                    lastProjectilePaths.append((projectileId: entity.id, cells: entity.lastPath))
+                }
+                if let impactCell = impact {
+                    impactedEntities.append((entity, impactCell, blueprint))
+                } else if entity.lifetimeTicks > 0 && !entity.hasImpacted {
+                    stillActive.append(entity)
+                }
+            } else {
+                // Standard projectile (may be explosive, piercing, homing, etc.).
+                if let impactCell = entity.advance(canVisit: canVisit, materialAt: materialAt) {
+                    impactedEntities.append((entity, impactCell, blueprint))
+                } else if entity.lifetimeTicks > 0 && !entity.hasImpacted {
+                    stillActive.append(entity)
+                }
+                // Record the path this tick for creature hit detection.
+                if !entity.lastPath.isEmpty {
+                    lastProjectilePaths.append((projectileId: entity.id, cells: entity.lastPath))
+                }
             }
-            // If lifetimeTicks == 0 and not impacted, it expires silently (no footprint)
+
+            // Fuse expiry detonation for explosive projectiles.
+            // Triggers when lifetime expires WITHOUT prior impact.
+            if blueprint.flags.contains(.explosive) &&
+               blueprint.explosionRadius > 0 &&
+               entity.lifetimeTicks == 0 && !entity.hasImpacted {
+                pendingExplosions.append(ExplosionInput(
+                    center: entity.position.cell(),
+                    radius: blueprint.explosionRadius,
+                    power: blueprint.explosionPower
+                ))
+            }
         }
 
         projectiles = stillActive
 
-        // Apply footprints for impacted projectiles immediately as spell effects.
-        // Footprints modify the world directly (not via the command budget), so they
-        // always take precedence over user paint commands for the impact tick.
-        // Out-of-bounds impact cells (world edge) produce no footprint.
-        for (entity, impactCell) in impactedEntities {
-            guard let blueprint = RecipeRegistry.blueprintById[entity.blueprintId] else { continue }
-            guard self.isInBounds(impactCell) else { continue }
-            let characterBody: Set<CellPosition> = [] // Simulation doesn't know character; CaveRun will handle body rejection
-            let resolved = blueprint.footprint.resolve(impact: impactCell, characterBody: characterBody)
-            for cell in resolved where self.isInBounds(cell.cell) {
-                set(cell.material, at: cell.cell)
+        // Impact handling: explosive projectiles enqueue to pendingExplosions;
+        // non-explosive projectiles apply their footprint (if in bounds).
+        for (_, impactCell, blueprint) in impactedEntities {
+            if blueprint.flags.contains(.explosive) && blueprint.explosionRadius > 0 {
+                pendingExplosions.append(ExplosionInput(
+                    center: impactCell,
+                    radius: blueprint.explosionRadius,
+                    power: blueprint.explosionPower
+                ))
+            } else if self.isInBounds(impactCell) {
+                let characterBody: Set<CellPosition> = [] // Simulation doesn't know character; CaveRun will handle body rejection
+                let resolved = blueprint.footprint.resolve(impact: impactCell, characterBody: characterBody)
+                for cell in resolved where self.isInBounds(cell.cell) {
+                    set(cell.material, at: cell.cell)
+                    moved.insert(cell.cell)
+                }
             }
         }
+
+        // Process projectile-triggered explosions from pendingExplosions (same tick, chained).
+        var localExplodedCells: Set<CellPosition> = []
+        var localBlastCellCount = 0
+        var depth = 0
+        while !pendingExplosions.isEmpty && depth < maxChainDepth {
+            let input = pendingExplosions.removeFirst()
+            let result = applyExplosion(
+                input: input, tick: tick,
+                explodedCells: &localExplodedCells,
+                blastCellCount: &localBlastCellCount,
+                activeChunks: activeChunks
+            )
+            lastBlastFlash = BlastFlash(cells: lastBlastFlash.cells + result.blastFlash)
+            depth += 1
+        }
+        moved.formUnion(localExplodedCells)
     }
 
     private mutating func nextRandom() -> UInt64 {

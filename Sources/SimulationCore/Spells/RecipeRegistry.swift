@@ -40,7 +40,7 @@ public struct RecipeRegistry: Sendable {
     }
 }
 
-/// Global recipe registry with the 10 deterministic recipes from the spec.
+/// Global recipe registry with the 15 deterministic recipes from the spec.
 public extension RecipeRegistry {
     static let standard: RecipeRegistry = {
         let recipes = [
@@ -70,7 +70,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  1, y:  1), material: .fire, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 768
+                    speed: 768,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -96,7 +98,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  0, y:  2), material: .water, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 1024
+                    speed: 1024,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -132,7 +136,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  2, y:  2), material: .fire, isPrimary: false),
                     ]),
                     gravityFactor: 128,
-                    speed: 384
+                    speed: 384,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -161,7 +167,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  1, y:  1), material: .acid, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 768
+                    speed: 768,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -197,7 +205,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  2, y:  2), material: .fire, isPrimary: false),
                     ]),
                     gravityFactor: 64,
-                    speed: 512
+                    speed: 512,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -223,7 +233,32 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  0, y:  2), material: .ice, isPrimary: true),
                     ]),
                     gravityFactor: 32,
-                    speed: 768
+                    speed: 768,
+                    explosionRadius: 0,
+                    explosionPower: 0
+                )
+            ),
+
+            // BOMB: inserted BEFORE gunpowder_blast so pitch at slot 8 picks bomb, not gunpowder_blast.
+            // bomb: [.gunpowder, .gunpowder, .gunpowder, nil, .fire, nil, nil, nil, .pitch] — gravityFactor=192 (0.75), speed=256 (1.0)
+            Recipe(
+                id: "bomb",
+                pattern: [.gunpowder, .gunpowder, .gunpowder, nil, .fire, nil, nil, nil, .pitch],
+                output: ProjectileBlueprint(
+                    id: "bomb",
+                    name: "Bomb",
+                    primaryMaterial: .empty,
+                    secondaryMaterial: nil,
+                    maxRange: 10,
+                    budgetPerTick: 1,
+                    cooldownTicks: 90,
+                    manaCost: 30,
+                    flags: [.explosive],
+                    footprint: SpellFootprint(id: "bomb_impact", cells: []),
+                    gravityFactor: 192,
+                    speed: 256,
+                    explosionRadius: 3,
+                    explosionPower: 100
                 )
             ),
 
@@ -241,27 +276,11 @@ public extension RecipeRegistry {
                     cooldownTicks: 80,
                     manaCost: 25,
                     flags: [.explosive],
-                    footprint: SpellFootprint(id: "gunpowder_blast_impact", cells: [
-                        // 5×5 ring (16 cells)
-                        SpellFootprintCell(offset: CellPosition(x: -2, y: -2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -1, y: -2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  0, y: -2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  1, y: -2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  2, y: -2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -2, y: -1), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  2, y: -1), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -2, y:  0), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  2, y:  0), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -2, y:  1), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  2, y:  1), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -2, y:  2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x: -1, y:  2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  0, y:  2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  1, y:  2), material: .gunpowder, isPrimary: true),
-                        SpellFootprintCell(offset: CellPosition(x:  2, y:  2), material: .gunpowder, isPrimary: true),
-                    ]),
+                    footprint: SpellFootprint(id: "gunpowder_blast_impact", cells: []),
                     gravityFactor: 192,
-                    speed: 256
+                    speed: 256,
+                    explosionRadius: 3,
+                    explosionPower: 100
                 )
             ),
 
@@ -289,7 +308,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  3, y: 0), material: .gold, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 512
+                    speed: 512,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -323,7 +344,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  0, y:  2), material: .steam, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 512
+                    speed: 512,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -345,7 +368,9 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  0, y:  0), material: .magicLiquid, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 1024
+                    speed: 1024,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -365,7 +390,9 @@ public extension RecipeRegistry {
                     flags: [.isModifier],
                     footprint: SpellFootprint(id: "modifier_double_cast", cells: []),
                     gravityFactor: 0,
-                    speed: 0
+                    speed: 0,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -385,7 +412,9 @@ public extension RecipeRegistry {
                     flags: [.isModifier],
                     footprint: SpellFootprint(id: "modifier_speed_up", cells: []),
                     gravityFactor: 0,
-                    speed: 0
+                    speed: 0,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
 
@@ -405,7 +434,31 @@ public extension RecipeRegistry {
                     flags: [.isModifier],
                     footprint: SpellFootprint(id: "modifier_heavy_shot", cells: []),
                     gravityFactor: 0,
-                    speed: 0
+                    speed: 0,
+                    explosionRadius: 0,
+                    explosionPower: 0
+                )
+            ),
+
+            // dig_bolt: [.sand, .sand, .sand, nil, .ice, nil, nil, nil, .gunpowder] — gravityFactor=128 (0.5), speed=384 (1.5)
+            Recipe(
+                id: "dig_bolt",
+                pattern: [.sand, .sand, .sand, nil, .ice, nil, nil, nil, .gunpowder],
+                output: ProjectileBlueprint(
+                    id: "dig_bolt",
+                    name: "Digging Bolt",
+                    primaryMaterial: .empty,
+                    secondaryMaterial: nil,
+                    maxRange: 16,
+                    budgetPerTick: 2,
+                    cooldownTicks: 60,
+                    manaCost: 20,
+                    flags: [.digging],
+                    footprint: SpellFootprint(id: "dig_bolt_impact", cells: []),
+                    gravityFactor: 128,
+                    speed: 384,
+                    explosionRadius: 0,
+                    explosionPower: 0
                 )
             ),
         ]

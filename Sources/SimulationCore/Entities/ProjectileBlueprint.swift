@@ -12,6 +12,8 @@ public struct ProjectileBlueprint: Equatable, Sendable {
     public let footprint: SpellFootprint     // deterministic impact footprint
     public let gravityFactor: GravityFactor  // Q8 gravity per tick² (0 = none)
     public let speed: ProjectileSpeed        // Q8 cells per tick (256 = 1.0)
+    public let explosionRadius: Int          // blast radius in cells (0 = no explosion), max 16
+    public let explosionPower: Int           // blast power vs hardness (0 = none), max 500
 
     public init(id: String,
                 name: String,
@@ -24,11 +26,15 @@ public struct ProjectileBlueprint: Equatable, Sendable {
                 flags: Flags = [],
                 footprint: SpellFootprint,
                 gravityFactor: GravityFactor = 0,
-                speed: ProjectileSpeed = 0) {
+                speed: ProjectileSpeed = 0,
+                explosionRadius: Int = 0,
+                explosionPower: Int = 0) {
         precondition(maxRange >= 1 && maxRange <= 32, "maxRange must be 1…32")
         precondition(budgetPerTick >= 1 && budgetPerTick <= 8, "budgetPerTick must be 1…8")
         precondition(cooldownTicks <= UInt16.max, "cooldownTicks must fit in UInt16")
         precondition(manaCost <= UInt8.max, "manaCost must fit in UInt8")
+        precondition(explosionRadius >= 0 && explosionRadius <= 16, "explosionRadius must be 0…16")
+        precondition(explosionPower >= 0 && explosionPower <= 500, "explosionPower must be 0…500")
         if secondaryMaterial != nil {
             precondition(flags.contains(.leavesTrail), "secondaryMaterial requires .leavesTrail flag")
         }
@@ -44,6 +50,8 @@ public struct ProjectileBlueprint: Equatable, Sendable {
         self.footprint = footprint
         self.gravityFactor = gravityFactor
         self.speed = speed
+        self.explosionRadius = explosionRadius
+        self.explosionPower = explosionPower
     }
 
     public struct Flags: OptionSet, Sendable {
@@ -54,5 +62,6 @@ public struct ProjectileBlueprint: Equatable, Sendable {
         public static let leavesTrail   = Flags(rawValue: 1 << 2)  // places secondaryMaterial along path
         public static let homing        = Flags(rawValue: 1 << 3)  // future: adjusts ray toward nearest target
         public static let isModifier    = Flags(rawValue: 1 << 4)  // marks modifier spells (double cast, speed up, heavy shot)
+        public static let digging       = Flags(rawValue: 1 << 5)  // removes soft materials along path, stops at rock
     }
 }

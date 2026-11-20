@@ -89,7 +89,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 60 --out /tmp/test.mp4` produces an MP4 where frames are production resolution (e.g., 800x450+), lighting and darkness visible, HUD elements (health, depth, seed, material pill) readable.
   - Screenshot of frame 30 shows light radius around player, darkness beyond, and crisp HUD.
   - Telegram report pipeline receives the higher-res source and encodes it appropriately.
-- result: CaptureComparison renders at 800x450 production resolution with lightMap/applyLightMap wiring, nearest-neighbor upscale, HUD-over-lit composition, and ffmpeg MP4 output; CapturePipelineLightingTests 4/4 pass; pre-existing test failures unrelated.
+- result: Fixed HUD rendering in CaptureComparison: now composites HUD at output resolution (800x450) instead of cell resolution (200x112). HUD text/elements are now sized for readable output pixels. Game view upscaled first with nearest-neighbor, then HUD overlaid at full resolution. Verified: `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 10 --out /tmp/test.png` produces PNG with crisp HUD; MP4 output works. Lighting/darkness visible via lightMap/applyLightMap wiring. CapturePipelineLightingTests 4/4 pass.
 
 
 

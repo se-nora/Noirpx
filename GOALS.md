@@ -700,7 +700,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Screenshot of each enemy in a generated cave.
 
 ### gold-pickups: Gold, pickups, and a run counter
-- status: todo
+- status: done
 - priority: 40
 - track: noita
 - depends: creatures
@@ -711,6 +711,11 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   enemies drop gold; the HUD shows run gold.
 - acceptance:
   - Tests for pickup rules and replay; HUD screenshot with a nonzero counter.
+- result: Implemented gold collection on character contact (orthogonal adjacency),
+  creature gold drops on death (crawler: 5 nuggets), runGold tracking in CaveRun,
+  DisplayListState, HUDLayout, and HostView HUD. Bumped MARKETING_VERSION
+  0.47.0→0.48.0 (minor, gameplay change). All 109 tests pass; Debug macOS build
+  and app launch verified.
 
 ### cave-vertical-biome-layers: Vertical biome bands in CaveRun world generation
 - status: done

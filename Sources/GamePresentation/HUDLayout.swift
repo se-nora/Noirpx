@@ -94,6 +94,7 @@ public enum HUDLayout {
         if let depth = state.depth {
             lines.append(HUDLine(text: "Depth \(depth)"))
         }
+        lines.append(HUDLine(text: "Gold \(state.runGold)"))
         // Outcome / objective
         lines.append(contentsOf: statusLines(state: state))
         lines.append(buildWandLine(state: state, fs: fs))

@@ -81,6 +81,7 @@ struct HostView: View {
                     Text("Tick \(run.simulation.snapshot.tick)")
                     let depth = run.world.spawn.y - run.character.position.y
                     Text("Depth \(depth)")
+                    Text("Gold \(run.runGold)")
                     if run.outcome == .died {
                         Text("You died!").foregroundStyle(.red).fontWeight(.bold)
                     } else {

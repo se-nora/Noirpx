@@ -17,6 +17,8 @@ public struct CaveRun {
     public let maxHealth: Int = 3
     public private(set) var health: Int = 3
     public private(set) var damageProtectionTimer: Int = 0
+    /// Gold collected this run (picked up from gold cells and creature drops).
+    public private(set) var runGold: Int = 0
 
     internal private(set) var fallLimit: Int
 
@@ -152,6 +154,7 @@ public struct CaveRun {
         let explosion = simulation.lastExplosionDamage
         var contactDamage = 0
         var blood: [CellPosition] = []
+        var gold: [CellPosition] = []
 
         for index in creatures.indices where creatures[index].alive {
             var creature = creatures[index]
@@ -184,6 +187,7 @@ public struct CaveRun {
 
             if !creature.alive {
                 blood.append(contentsOf: creature.bloodCells())
+                gold.append(contentsOf: creature.goldCells())
             }
 
             creatures[index] = creature
@@ -191,6 +195,9 @@ public struct CaveRun {
 
         if !blood.isEmpty {
             enqueueBlood(at: blood)
+        }
+        if !gold.isEmpty {
+            enqueueGold(at: gold)
         }
 
         // Contact damage is applied once per tick regardless of how many creatures touch.
@@ -212,13 +219,66 @@ public struct CaveRun {
         }
     }
 
-    /// Advances one tick. Order: material tick → capture pre-advance grounded →
-    /// character advance → protection-timer decrement → creature pass → material damage →
-    /// fall damage → fall-limit check. Terminal outcomes freeze further input and paint.
+    /// Writes a creature's dropped gold nuggets through the ordinary material command path.
+    private mutating func enqueueGold(at cells: [CellPosition]) {
+        let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return }
+        for cell in cells {
+            try? simulation.enqueue(SimulationCommand(tick: tick, position: cell, material: .gold))
+        }
+    }
+
+    /// Collects gold cells touched by the character's body. Gold blocks the
+    /// character, so contact means orthogonal adjacency between a character
+    /// body cell and a gold cell. Collected cells are removed (enqueued as
+    /// `.empty` for the next tick) and `runGold` is incremented once per cell.
+    private mutating func collectGold() {
+        func materialAt(_ pos: CellPosition) -> Material {
+            simulation.materialForGameplay(at: pos)
+        }
+        let body = character.bodyCells
+        var goldToCollect: [CellPosition] = []
+
+        for cell in body {
+            let neighbors = [
+                CellPosition(x: cell.x - 1, y: cell.y),
+                CellPosition(x: cell.x + 1, y: cell.y),
+                CellPosition(x: cell.x, y: cell.y - 1),
+                CellPosition(x: cell.x, y: cell.y + 1),
+            ]
+            for neighbor in neighbors {
+                guard Simulation.coordinateBounds.contains(neighbor.x),
+                      Simulation.coordinateBounds.contains(neighbor.y) else { continue }
+                if materialAt(neighbor) == .gold {
+                    goldToCollect.append(neighbor)
+                }
+            }
+        }
+
+        let uniqueGold = Set(goldToCollect)
+        guard !uniqueGold.isEmpty else { return }
+
+        runGold += uniqueGold.count
+
+        let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return }
+        for cell in uniqueGold {
+            try? simulation.enqueue(SimulationCommand(tick: tick, position: cell, material: .empty))
+        }
+    }
+
+    /// Advances one tick. Order: collect gold on current snapshot → material tick →
+    /// capture pre-advance grounded → character advance → protection-timer decrement →
+    /// creature pass → material damage → fall damage → fall-limit check.
+    /// Terminal outcomes freeze further input and paint.
     public mutating func advance(horizontal: Int, jump: Bool, heldJump: Bool = false, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
 
-        // 1. Material tick
+        // 1. Collect gold touched by the character's body on the current snapshot,
+        //     before material physics can move gold cells (e.g. falling).
+        collectGold()
+
+        // 2. Material tick
         try simulation.advance(activeChunks: activeChunks)
 
         // 2. Capture pre-advance grounded state for fall-damage transition detection
@@ -355,6 +415,12 @@ public struct CaveRun {
     /// Test-only: advances the simulation by one tick without advancing the character.
     mutating func testAdvanceSimulation() throws {
         try simulation.advance()
+    }
+
+    /// Test-only: enqueues a material at a position for the next simulation tick.
+    mutating func testEnqueueMaterial(_ material: Material, at position: CellPosition) throws {
+        let tick = simulation.snapshot.tick + 1
+        try simulation.enqueue(SimulationCommand(tick: tick, position: position, material: material))
     }
 
     /// Test-only restoring initializer for mutation/replay tests.

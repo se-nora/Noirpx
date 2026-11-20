@@ -66,6 +66,8 @@ public struct Creature: Equatable, Sendable {
     public var projectileDamage: Int { Self.projectileDamage(for: kind) }
     /// Number of blood cells to emit on death.
     public var bloodCellCount: Int { Self.bloodCellCount(for: kind) }
+    /// Number of gold nugget cells to drop on death.
+    public var goldDropCount: Int { Self.goldDropCount(for: kind) }
 
     // MARK: - Per-kind metadata
 
@@ -102,6 +104,10 @@ public struct Creature: Equatable, Sendable {
     private static func bloodCellCount(for kind: Kind) -> Int {
         switch kind { case .crawler: return 3 }
     }
+    /// Number of gold nugget cells dropped on death.
+    private static func goldDropCount(for kind: Kind) -> Int {
+        switch kind { case .crawler: return 5 }
+    }
 
     // MARK: - Collision queries
 
@@ -128,6 +134,12 @@ public struct Creature: Equatable, Sendable {
     /// Cells for the blood pool emitted on death (feet row).
     public func bloodCells() -> [CellPosition] {
         (0..<bloodCellCount).map { CellPosition(x: position.x + $0, y: position.y) }
+    }
+
+    /// Cells where gold nuggets are dropped on death.
+    public func goldCells() -> [CellPosition] {
+        // Drop gold one cell above the feet row to avoid overwriting blood.
+        (0..<goldDropCount).map { CellPosition(x: position.x + $0, y: position.y + 1) }
     }
 
     /// Marks the creature as dead.

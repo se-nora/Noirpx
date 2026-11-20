@@ -1,5 +1,6 @@
 #if os(iOS)
 import MetalKit
+import GamePresentation
 import SimulationCore
 import SwiftUI
 import UIKit
@@ -85,6 +86,7 @@ extension MetalSurface: UIViewRepresentable {
     func updateUIView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.creatures = creatures
         context.coordinator.worldBounds = worldBounds
         view.onPaint = onPaint
         view.onAim = onAim

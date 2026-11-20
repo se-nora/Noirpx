@@ -59,8 +59,8 @@ guarantee, and no app integration; a future format for it would be separate.
 ### Ownership and module boundary
 
 The codec is a stateless value type, `SaveCodec`, in
-`Sources/SimulationCore/SaveCodec.swift`, with `SaveError` in
-`Sources/SimulationCore/SaveError.swift`. The type imports nothing: no
+`Sources/SimulationCore/Persistence/SaveCodec.swift`, with `SaveError` in
+`Sources/SimulationCore/Persistence/SaveError.swift`. The type imports nothing: no
 Foundation, Metal, SwiftUI, UIKit, AppKit, `Data`, `Date`, or file APIs, and no
 clock reads. It converts between a `BeaconRun` and `[UInt8]`; every byte is
 written and read explicitly, without `withUnsafeBytes` or `MemoryLayout`

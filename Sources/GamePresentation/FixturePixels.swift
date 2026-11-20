@@ -151,9 +151,33 @@ public enum FixturePixels {
         light[idx] = UInt32(nr) << 16 | UInt32(ng) << 8 | UInt32(nb)
     }
 
+    /// Single authoritative Material -> UInt32 RGBA palette for the projectile overlay.
+    /// Source of truth for all projectile tint colors; AppleHost has no duplicate palette.
+    public static func materialColor(_ material: Material) -> UInt32 {
+        switch material {
+        case .empty:    return 0xffffffff
+        case .solid:    return 0xff808080
+        case .sand:     return 0xfff4d03f
+        case .water:    return 0xff3498db
+        case .fire:     return 0xffe74c3c
+        case .pitch:    return 0xff2c2c2c
+        case .oil:      return 0xff438c9b
+        case .steam:    return 0xffe8e8ff
+        case .lava:     return 0xff3344ff
+        case .acid:     return 0xff33cc55
+        case .blood:    return 0xff332288
+        case .slime:    return 0xff55dd88
+        case .ice:      return 0xffeeddaa
+        case .gunpowder: return 0xff555555
+        case .gold:     return 0xff33ccff
+        case .magicLiquid: return 0xffcc3399
+        }
+    }
+
     /// Counts chunks with at least one nonempty cell in the camera.
     public static func rasterize(snapshot: SimulationSnapshot, viewport: FixtureViewport,
-                                 character: FixtureCharacter? = nil, frame: UInt64 = 0)
+                                 character: FixtureCharacter? = nil,
+                                 creatures: [Creature] = [], frame: UInt64 = 0)
         -> (pixels: [UInt8], renderedChunks: Int) {
         let width = viewport.columns
         let height = viewport.rows
@@ -262,26 +286,21 @@ public enum FixturePixels {
             let y = height / 2 - 1 - cell.y + viewport.center.y
             guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
             let material = RecipeRegistry.blueprintById[projectile.blueprintId]?.primaryMaterial ?? .empty
-            let color: UInt32
-            switch material {
-            case .empty:    color = 0xffffffff
-            case .solid:    color = 0xff808080
-            case .sand:     color = 0xfff4d03f
-            case .water:    color = 0xff3498db
-            case .fire:     color = 0xffe74c3c
-            case .pitch:    color = 0xff2c2c2c
-            case .oil:      color = 0xff438c9b
-            case .steam:    color = 0xffe8e8ff
-            case .lava:     color = 0xff3344ff
-            case .acid:     color = 0xff33cc55
-            case .blood:    color = 0xff332288
-            case .slime:    color = 0xff55dd88
-            case .ice:      color = 0xffeeddaa
-            case .gunpowder: color = 0xff555555
-            case .gold:     color = 0xff33ccff
-            case .magicLiquid: color = 0xffcc3399
-            }
+            let color = materialColor(material)
             pixels[y * width + x] = color.littleEndian
+        }
+
+        // Draw creatures as colored rects (crawler = dark red, brighter when attacking).
+        for creature in creatures where creature.alive {
+            let color: UInt32 = creature.state == .attack ? 0xffcc4444 : 0xffaa3333
+            for dy in 0..<creature.height {
+                for dx in 0..<creature.width {
+                    let x = creature.position.x + dx - viewport.center.x + width / 2
+                    let y = height / 2 - 1 - creature.position.y - dy + viewport.center.y
+                    guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+                    pixels[y * width + x] = color.littleEndian
+                }
+            }
         }
 
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)
@@ -291,6 +310,24 @@ public enum FixturePixels {
     public static func rgba(snapshot: SimulationSnapshot, viewport: FixtureViewport, frame: UInt64 = 0) -> [UInt8] {
         rasterize(snapshot: snapshot, viewport: viewport, character: nil, frame: frame).pixels
     }
+
+    /// Precomputed player light offsets for radius 110, white intensity 0.6.
+    /// Each entry: (dx, dy, factor) where factor = 1 - dist/radius, dist <= radius.
+    private static let playerLightOffsets: [(dx: Int, dy: Int, factor: Float)] = {
+        let radius: Float = 110
+        let rInt = Int(radius.rounded())
+        var offsets: [(Int, Int, Float)] = []
+        offsets.reserveCapacity(38000) // ~π·110²
+        for dy in -rInt...rInt {
+            for dx in -rInt...rInt {
+                let dist = hypot(Float(dx), Float(dy))
+                guard dist <= radius else { continue }
+                let factor = 1.0 - dist / radius
+                offsets.append((dx, dy, factor))
+            }
+        }
+        return offsets
+    }()
 
     /// Emissive+player light map with smooth radial falloff, same dimensions as
     /// the rasterized frame. Each texel holds accumulated light color (RGB, 0..255)
@@ -337,18 +374,11 @@ public enum FixturePixels {
             let p = character.cameraCenter
             let cx = p.x - viewport.center.x + width / 2
             let cy = height / 2 - 1 - p.y + viewport.center.y
-            let radius: Float = 110
             let intensity: Float = 0.6
             let r = intensity * 255, g = intensity * 255, b = intensity * 255
-            let rInt = Int(radius.rounded())
-            for dy in -rInt...rInt {
-                for dx in -rInt...rInt {
-                    let dist = hypot(Float(dx), Float(dy))
-                    guard dist <= radius else { continue }
-                    let factor = 1.0 - dist / radius
-                    addLight(into: &light, width: width, px: cx + dx, py: cy + dy,
-                             r: r * factor, g: g * factor, b: b * factor)
-                }
+            for offset in playerLightOffsets {
+                addLight(into: &light, width: width, px: cx + offset.dx, py: cy + offset.dy,
+                         r: r * offset.factor, g: g * offset.factor, b: b * offset.factor)
             }
         }
 
@@ -362,5 +392,33 @@ public enum FixturePixels {
             bytes.append(value == 0 ? 0 : 255)
         }
         return bytes
+    }
+
+    /// Applies a precomputed light map onto base RGBA pixels in place.
+    /// Formula per channel: out = clamp(base * ambient + light, 0, 1) * 255.
+    /// Alpha is taken from the base pixels (unchanged).
+    /// Matches the MetalRenderer fragment shader: `base * ambient + light` clamped to [0,1].
+    public static func applyLightMap(to basePixels: inout [UInt8],
+                                     lightMap: [UInt8],
+                                     width: Int,
+                                     height: Int,
+                                     ambient: Float = 0.15) {
+        precondition(basePixels.count >= width * height * 4)
+        precondition(lightMap.count >= width * height * 4)
+        let pixelCount = width * height
+        for i in 0..<pixelCount {
+            let baseIdx = i * 4
+            let lightIdx = i * 4
+            let br = Float(basePixels[baseIdx]) / 255.0
+            let bg = Float(basePixels[baseIdx + 1]) / 255.0
+            let bb = Float(basePixels[baseIdx + 2]) / 255.0
+            let lr = Float(lightMap[lightIdx]) / 255.0
+            let lg = Float(lightMap[lightIdx + 1]) / 255.0
+            let lb = Float(lightMap[lightIdx + 2]) / 255.0
+            basePixels[baseIdx] = UInt8(min(255, max(0, Int((br * ambient + lr) * 255))))
+            basePixels[baseIdx + 1] = UInt8(min(255, max(0, Int((bg * ambient + lg) * 255))))
+            basePixels[baseIdx + 2] = UInt8(min(255, max(0, Int((bb * ambient + lb) * 255))))
+            // alpha unchanged
+        }
     }
 }

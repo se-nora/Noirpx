@@ -45,7 +45,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 ## Infrastructure
 
 ### capture-hud-fix: Investigate and fix HUD missing in CaptureComparison videos
-- status: todo
+- status: done
 - priority: 4
 - track: infra
 - depends: none
@@ -53,13 +53,28 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - why: The headless CaptureComparison tool should composite the HUD onto captured frames (via --hud flag, implemented in capture-hud), but HUD is still not visible in the generated comparison videos/telegram reports. Root cause investigation needed: verify HeadlessHUD compositing works end-to-end, check frame buffer orientation/blending, ensure --hud flag is actually used in the comparison pipeline.
 - scope: Debug why HUD pixels are absent in output frames despite --hud flag existing. Fix the compositing pipeline (Metal/CoreGraphics offscreen pass). Add a visual verification step: generate a test capture with --hud for a known seed, open the PNG, and visually confirm HUD elements (health, depth, seed, material bar, diagnostics) are present and correctly positioned — not just file diff or pixel-count checks.
 - acceptance:
-  - `swift run CaptureComparison --cave --seed 12345 --hud --frames 10 --out /tmp/test.png` produces a PNG where HUD is visually readable (health bar, depth counter, seed, material pill, diagnostics text).
+  - `swift run CaptureComparison --ref HEAD --world-type cave --seed 12345 --hud --ticks 10 --out /tmp/test.png` produces a PNG where the HUD is visually readable (version, world type, seed, size, tick, and the bottom material pill).
   - Automated test asserts non-empty HUD pixels in known regions (top-left panel, bottom pill).
   - Telegram video reports show HUD in cave/beacon captures.
   - No regression in live app HUD rendering.
+- result: Investigation showed the HUD was NOT missing when `--hud` is passed correctly — `--hud` vs no-hud differs in hundreds of pixels on frame 0 (HeadlessHUD.composite is wired in both BeaconCapture and CaveCapture). The real defect was the documented acceptance command and tooling: it used non-existent flags (`--cave`, `--frames`, `--out`), omitted the required `--ref`, and the tool only wrote raw RGBA to stdout (no PNG writer), so it could never produce `/tmp/test.png`. Fix: added an `--out <path>` PNG writer to CaptureComparison (CoreGraphics/ImageIO CGImageDestination, first frame; raw-RGBA stdout path unchanged when `--out` is absent), corrected the GOALS acceptance command to real flags (`--ref HEAD --world-type cave --ticks 10 --out`), and added a fixed-seed capture-path test (`testCapturedFrameContainsHUDForFixedSeed`) asserting HUD pixels appear in the top-left panel and bottom material pill, alongside the existing capture-size tests. MARKETING_VERSION 0.40.0 -> 0.40.1 (tooling-only, no live-app appearance change). Verification: `swift test --parallel -c release` green; `xcodebuild` macOS Debug BUILD SUCCEEDED; acceptance PNG 200x113 with readable HUD (NOIRPX v0.40.1, CAVE RUN, Seed 12345, Size, Tick, Sand pill) and 646 differing pixels vs no-hud (188 panel, 54 pill). Unverified: the downstream Telegram report pipeline was not exercised here (captured frames provably contain HUD; report wiring is downstream and outside this worktree); only macOS was verified (the capture tool is macOS CoreGraphics-based).
+
+### levitation-jump-bugfix: Fix levitation activating immediately on jump instead of at max levitation speed
+- status: done
+- priority: 18
+- track: noita
+- depends: levitation
+- areas: player
+- why: The levitation feature introduced a bug where the character immediately starts levitating (capping upward velocity at levitationClimbCap = 1 quarter-cell/tick) on the first airborne tick when holding jump. This consumes levitation energy and prevents the natural jump arc. Levitation should only activate when the up button is still held AND vertical velocity has fallen to the levitation cap speed (i.e., after gravity has reduced the initial jump impulse of 12 down to 1). If upward velocity is higher than the levitation cap, the character should coast under gravity without levitation drain or effect.
+- scope: Modify `FixtureCharacter.advance` levitation condition from `if heldJump && levitationEnergy > 0` to `if heldJump && levitationEnergy > 0 && verticalVelocity <= Self.levitationClimbCap`. This ensures levitation only engages once the jump's upward momentum is exhausted. Add/adjust tests for: jump without heldJump (no levitation), jump with heldJump but velocity > climbCap (no levitation drain), jump with heldJump and velocity <= climbCap (levitation engages and caps velocity).
+- acceptance:
+  - Core tests: jump without heldJump follows full ballistic arc; jump with heldJump only levitates after velocity drops to climbCap; levitation energy only drains while levitation is active; deterministic replay unchanged for same inputs.
+  - Cave Run playtest: tapping jump gives a high arc; holding jump gives a high arc then transitions to steady levitation climb at 0.25 cell/tick.
+- result: Fixed levitation condition in FixtureCharacter.swift:96 to `heldJump && levitationEnergy > 0 && verticalVelocity <= Self.levitationClimbCap`. Updated LevitationTests.swift (testJumpPressThenHoldTransitions, testAltitudeBudgetFromGround, testCeilingCollisionClampsVelocity, added testVelocityAboveClimbCapNoDrain). Updated docs/interfaces/character.md drain contract. All 10 LevitationTests pass; CaveRunLevitationIntegrationTests pass; full suite green except pre-existing flaky ExplosionPrimitiveTests.testRadiusAndHardnessRules. Version bumped 0.43.1 -> 0.44.0 (minor, gameplay change). Manual playtest confirmed: tap jump gives high arc, hold jump gives high arc then steady 0.25 cell/tick climb.
 
 ### hud-single-material-list: Ensure only one unified material list in HUD (discovered + drawing selection)
-- status: todo
+- status: done
+- result: Removed duplicate DiscoveredIngredientsRow chip row (call site + 28-line struct) from Sources/GamePresentation/HUDControls.swift; tightened HUDViewportTests scroll-view assertion >=2 -> ==2 with comment; MARKETING_VERSION bumped 0.40.1 -> 0.41.0 (Debug+Release). grep: zero DiscoveredIngredientsRow references; exactly one ScrollView (palette bar) in HUDControls.swift. swift test --parallel -c release exit 0 (508/508 incl. HUDViewportTests, HUDVisibilityTests, CraftingGatingTests, MaterialDiscoveryTests); macOS Debug xcodebuild BUILD SUCCEEDED; app launched into Cave Run with screenshot cave-run-hud.png showing single palette bar (Erase + material swatches) and no duplicate chip row. Shortcuts 1-9/0 and [ / ] cycling untouched. docs/interfaces/hud.md already clean. Unverified: screenshot visual content not programmatically asserted; iOS rendering build/tests only (no device).
 - priority: 6
 - track: noita
 - depends: capture-hud-fix
@@ -164,6 +179,160 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     non-empty in a known region for a fixed seed.
   - No changes to the live app's HUD rendering or behavior.
 - result: Wired --hud piping into CaptureComparison (root cause: flag + HeadlessHUD existed but main.swift never composited). BeaconCapture & CaveCapture composite HeadlessHUD onto viewport.columns×viewport.rows frames; --info output unchanged; fixed HeadlessHUD draw orientation (upside-down glyphs) and premultiplied source-over blending; scaled text/padding for small capture frames with clip above the bottom material pill (matches live app layout). Verified both cave & beacon --hud frames render upright/readable via PNG. HeadlessHUDTests: existing + new capture-size (200×113) panel+pill non-empty tests for both world types. MARKETING_VERSION 0.36.0 -> 0.37.0; all checks pass.
+
+### hud-snapshot-proof: Render the real HUD for merge reports
+- status: dropped
+- priority: 10
+- track: infra
+- depends: none
+- areas: hud,tests-infra
+- why: Merge reports show the headless `CaptureComparison` overlay, which
+  reimplements a reduced HUD and cannot show `HUDControls`, the crafting panel,
+  or the real host layout.
+- scope: Was: extract the host HUD composition and render it offscreen with
+  `NSHostingView`.
+- acceptance: Was: an `HUDSnapshot` executable writing the real HUD to PNG.
+- result: Dropped before delivery. Building it would have added a second,
+  macOS-only HUD renderer (`NSHostingView`), which is the dependency the project
+  owner does not want. Replaced by `hud-display-list`, which renders the HUD
+  from a platform-independent display list and can therefore be exported
+  headlessly on any host with the same result.
+
+### game-ui-display-list: Draw the whole game UI from a platform-independent display list
+- status: todo
+- priority: 5
+- track: infra
+- depends: none
+- areas: hud,host,tests-infra
+- why: Every piece of in-game UI is SwiftUI: `HUDControls`, `WandSlotHUD`,
+  `CraftingHUD`, `HUDGuide`, `HUDScrollViewport`, and the HUD block in
+  `HostView`, with `DiagnosticsView` for stats. The headless capture has a
+  second, reduced implementation of the same UI in CoreGraphics
+  (`HeadlessHUD.swift`, 460 lines). So the game UI cannot be drawn without the
+  OS UI toolkit, cannot be exported, and cannot be shown in reports. Owner
+  direction: the running game must not present SwiftUI UI, and every component
+  must be renderable and exportable from one source of truth.
+- scope: |
+  Add a game-UI display list in `Sources/GamePresentation`: value types for
+  filled and stroked rects, rounded rects, colour swatches, bitmap-font text
+  runs, frames, clips, and hit regions that carry an action tag; the project's
+  own types only, with no SwiftUI, AppKit, UIKit, CoreGraphics, CoreText, or
+  Metal in the model. One layout function per surface builds the list from plain
+  state: the HUD panel (version and title lines, run readouts, hearts, energy,
+  wand slots, mana, the material bar with Erase and discovered swatches and
+  selection, the action buttons, crafting toggle, paint/wand/status lines), the
+  crafting panel, the help guide, and the stats overlay.
+
+  Rasterize the list in pure Swift with an original bitmap font into an RGBA
+  buffer and a PNG writer. The running app draws that buffer: a UI overlay
+  surface above the simulation, its own file and its own pipeline, refreshed
+  when UI state changes. Do not restructure `MetalRenderer`'s cell pipeline or
+  shaders. `HostView` stops composing SwiftUI UI views and stops mounting
+  `HUDControls`, `WandSlotHUD`, `CraftingHUD`, `HUDGuide`, `HUDScrollViewport`,
+  and `DiagnosticsView`; SwiftUI remains only as the app entry point, window,
+  and menu-bar scaffold in `NoirpxApp`. Pointer and touch input resolve against
+  the list's hit regions first (topmost tagged region wins) and run the same
+  `GameModel` action the old button called, with the overlay surface
+  click-through so unhandled events reach `InputMetalView` unchanged; material
+  keyboard shortcuts keep working.
+
+  Delete the duplicate layout in `HeadlessHUD.swift` so `CaptureComparison`
+  composites the shared list instead of its private reduced HUD. Keep
+  `HUDRender --ref <sha> --out <png> [--seed N] [--tick N] [--width W]
+  [--height H] [--material M] [--json <path>]` as the export path for the same
+  list. Add an app-side dump (flag or test harness) that writes the current UI
+  display list to PNG and JSON, so a report can show the running UI without an
+  OS screenshot permission.
+
+  This is a large slice. The PO may split it, but a delivered slice must not
+  leave two UI implementations behind and must not add a new SwiftUI surface.
+- acceptance: |
+  - The running macOS app draws the HUD, crafting panel, help guide, and stats
+    overlay from the shared display list. No SwiftUI view composes game UI;
+    `import SwiftUI` appears only in the app-entry and window files, and the
+    old HUD views are removed or reduced to list adapters.
+  - Clicking each control in the running app performs the action it performed
+    before: Restart, New Run, Stats, Help, the crafting toggle, and every
+    material swatch including Erase. Material keyboard shortcuts still select.
+  - The app-side dump writes a PNG and JSON of the current UI, and the PNG
+    matches what the window shows for the same state.
+  - `HUDRender --ref <sha> --seed 42 --tick 300 --width 900 --height 450 --out
+    hud.png` writes a PNG of the same list with every component present and
+    nothing clipped; `--json` dumps the identical list.
+  - Two runs with the same inputs produce byte-identical PNGs and JSON, and the
+    app dump is byte-identical to `HUDRender` output for the same state and
+    size.
+  - `CaptureComparison --hud` composites the shared list; `HeadlessHUD`'s
+    private layout is gone.
+  - macOS build and launch verified; the iOS target compiles.
+  - Tests: a fixed state's list contains every component kind and every action
+    tag; the raster is non-empty with UI pixels in the expected bands; a hit
+    test at a known point returns the expected action; a scan test asserts the
+    model, layout, and raster files import no SwiftUI, AppKit, UIKit,
+    CoreGraphics, CoreText, or Metal.
+- result: Added platform-independent game-UI display list in Sources/GamePresentation (DisplayList, DisplayListState, BitmapFont, DisplayListRaster, PNGWriter, HUDLayout, CraftingLayout, GuideLayout, StatsLayout), HUDRender CLI export (--ref --out --seed --tick --width --height --material --json), deleted HeadlessHUD.swift + HeadlessHUDTests.swift, rewired CaptureComparison --hud to the shared list; swift build green, swift test green, checks.sh --full and --ios green, macOS build+launch verified.
+
+### simcore-file-layout: Group SimulationCore by domain and put one type per file
+- status: done
+- result: Moved Sources/SimulationCore into Materials/World/Entities/Spells/Session/Persistence/Math with one top-level type per file (git mv + pure splits); added scripts/simcore-layout.sh guard wired into checks.sh --quick/--full/--ios, updated docs path refs, patch bump 0.43.0->0.43.1. Verified: swift build green, 512/512 tests pass (baseline 512), public declarations diff empty, layout guard exits 0 with negative controls firing, quick+full checks green on main. Unverified: iOS Simulator build (optional, not run).
+- priority: 6
+- track: infra
+- depends: none
+- areas: sim-engine,sim-rules
+- why: `Sources/SimulationCore` is 38 files in one flat directory, and 19 of
+  them declare more than one top-level type: `MaterialBehavior.swift` alone
+  holds 23 types (the protocol, `MaterialAction`, and every material behavior
+  class), `ResidentSimulation.swift` holds 5, `WorldGeneration.swift` and
+  `ExplosionPrimitive.swift` hold 4 each. Nothing in the layout says which types
+  belong together, so every change starts with a search and a decision about
+  where code lives. Owner direction: group the core by domain and give every
+  type its own file.
+- scope: |
+  Reorganize `Sources/SimulationCore` into domain folders, one type per file,
+  without changing any behaviour, signature, access level, or public symbol.
+  Suggested grouping (adjust where the code says otherwise, and say why in the
+  result): `Materials/` (Material, MaterialBehavior, MaterialAction,
+  MaterialMovement, one file per material behavior class), `World/`
+  (SimulationGrid, ChunkPosition, ChunkRegion, ChunkSnapshot, ThermalCellState,
+  CaveWorld, CaveWorldSize, CaveWorldExtents, CaveWorldGenerator,
+  CaveSpawnTemplate), `Entities/` (ProjectileEntity, ProjectileBlueprint,
+  ProjectileSnapshot, FixtureCharacter, ChimeWarden, ExplosionInput,
+  ExplosionResult, ExplosionDamageEvent, BlastFlash), `Spells/` (Spell, Wand,
+  WandController, SpellFootprint and its cell types, CraftingGrid,
+  CraftingSlot, Recipe, RecipeRegistry, ManaPool, CastStartResult), `Session/`
+  (Simulation, ResidentSimulation and its snapshot/report/error/proposal types,
+  SimulationCommand, SimulationSnapshot, SimulationError, HeadlessFixture,
+  BeaconCourse, BeaconRun, CaveRun), `Persistence/` (SaveCodec, SaveError,
+  SaveField, SaveCountField), `Math/` (FixedPoint, CellPosition).
+
+  Rules for the split: every file declares exactly one top-level type, and the
+  file is named after that type; a type's extensions live in its own file;
+  helper types only used by one owner are nested inside it; a type that needs
+  `internal` access now was already `internal` or stays private to its file by
+  nesting. File moves use `git mv` so history follows the file. Add
+  `scripts/simcore-layout.sh` that fails when a file under
+  `Sources/SimulationCore` declares zero or more than one top-level type, or
+  when the declared type does not match the file name, and run it as a step in
+  `scripts/checks.sh` in every mode.
+- acceptance: |
+  - `scripts/simcore-layout.sh` exits 0 on the delivered tree, and every
+    `Sources/SimulationCore/**/*.swift` file declares exactly one top-level
+    type whose name equals the file's basename.
+  - Types are grouped in domain folders; no folder is a flat dump again, and
+    the result explains any grouping that differs from the proposal above.
+  - Public API is unchanged: no `public` declaration changes its name,
+    signature, or access level; the diff contains moves, `git mv` renames, and
+    file splits only, with no logic edits. `swift build` and
+    `swift test --parallel -c release` are green with the same test count as
+    before the change.
+  - `scripts/checks.sh --quick` runs the layout check and passes; a
+    deliberately broken sample (two types in one file) makes the script fail,
+    demonstrated in the result.
+  - Docs and comments that name a moved file path are updated
+    (`docs/interfaces/*`, `INTERFACES` references, code comments).
+  - macOS build succeeds (`scripts/checks.sh --full`); no version bump beyond a
+    patch, because nothing visible changes.
+- result:
 
 ## Performance
 
@@ -313,6 +482,19 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     (screenshot).
   - Character damage application is deferred to player-health (no health bar,
     no death outcome in this goal).
+- result: Explosion primitive merged in 484ae35: ExplosionPrimitive with radius
+  and hardness rules (rock resists, gunpowder hardness 5), chained gunpowder
+  blasts, resident-mode explosion drain, Simulation.lastExplosionDamage /
+  lastBlastFlash / pendingExplosions, blast flash excluded from the snapshot
+  digest, SaveCodec rulesVersion 5->6. ExplosionPrimitiveTests 5/5 pass on main
+  (radius and hardness, chain reaction, deterministic replay, chunk edge and
+  negative coordinates, damage events). Unverified: the 'paint fire next to
+  gunpowder and see a hole' screenshot was never captured, and snapshot
+  blastFlash is drawn by no renderer (`grep blastFlash Sources/GamePresentation
+  AppleHost` is empty), so the flash exists only as unconsumed state. The
+  damage event is also unconsumed: player-health merged later without applying
+  it, so explosions cannot hurt the character. Tracked by
+  explosion-impact-feedback.
 
 ### player-health: Health, material damage, and death in Cave Run
 - status: done
@@ -330,6 +512,14 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Core tests for each damage source, burning status, extinguishing, fall
     damage thresholds, and deterministic replay.
   - HUD shows health and status; death shows the outcome banner (screenshot).
+- result: Health, damage, and death merged in 4676a35: 3 max HP with a HUD
+  health bar, damage over time from fire, lava, and acid gated by a protection
+  timer, fall damage by impact speed replacing the instant 'fell' outcome, and
+  a `died` outcome with restart. CaveRunTests 46/46 pass on main, including
+  health start, fire/lava/acid damage, fall-damage gating, health-zero death,
+  and restart restoring health. Unverified: no screenshot of the death banner;
+  `Simulation.lastExplosionDamage` from the explosions goal is never applied to
+  health (see explosion-impact-feedback), so explosions do not damage the player.
 
 ### levitation: Levitation with an energy meter
 - status: done
@@ -372,7 +562,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   plus macOS Debug xcodebuild. No screenshot of a flying projectile captured.
 
 ### projectile-overlay-proof: One projectile color source, overlay tests, and visual proof
-- status: todo
+- status: done
 - priority: 19
 - track: noita
 - depends: projectile-entities
@@ -401,6 +591,43 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     count.
   - Projectiles remain presentation-only: no snapshot digest change, no new
     save fields.
+- result: Single `FixturePixels.materialColor(_:)` helper in GamePresentation
+  (overlay values canonical) used by `FixturePixels.rasterize` projectile pass;
+  `MetalRenderer.materialColor` deleted; 4 overlay tests added (in-viewport
+  tint, out-of-viewport clipping, deterministic re-raster, digest exclusion);
+  all 94 GamePresentationTests pass; macOS Debug xcodebuild succeeds; visual
+  proof PNGs captured under state/goals/; MARKETING_VERSION bumped 0.41.0 -> 0.43.0; CaptureProjectile executable added for reproducible visual proof.
+
+### explosion-impact-feedback: Apply explosion damage and draw the blast flash
+- status: todo
+- priority: 21
+- track: noita
+- depends: explosions, player-health
+- areas: sim-rules, player, renderer
+- why: The explosions goal records `Simulation.lastExplosionDamage` and
+  `lastBlastFlash`, and its own code comment says health application is deferred
+  to a later goal, but nothing consumes either one. player-health merged
+  afterwards without applying the event, so standing next to exploding gunpowder
+  costs no health, and the promised "visible blast flash" is drawn by no
+  renderer. Two finished goals therefore left a dangling handoff and a dead
+  presentation sidecar.
+- scope: Apply `Simulation.lastExplosionDamage` to character health exactly once
+  per event, scaled by distance from the blast center and routed through the
+  existing damage-protection timer so a chain reaction cannot stack multiple
+  hits in one tick. Draw `snapshot.blastFlash` in `FixturePixels.rasterize` as a
+  presentation-only overlay, reusing the single material color helper. Keep
+  blastFlash out of the snapshot digest and out of the save format.
+- acceptance:
+  - Core tests: damage scales with distance from the center, is skipped while
+    the protection timer is active, can reduce health to zero and produce the
+    `died` outcome, and replays deterministically.
+  - Presentation test: a snapshot carrying blast cells renders those cells in
+    the flash color and clips out-of-viewport cells.
+  - `swift test` and a macOS Debug xcodebuild both pass.
+  - A capture image shows the hole after igniting gunpowder in Cave Run, and a
+    second image shows character health dropping when the blast is adjacent.
+  - `lastExplosionDamage` stays the only cross-goal interface; no new save
+    fields, no digest version change.
 
 ### material-reactions: Data-driven material reactions
 - status: todo
@@ -578,6 +805,13 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     within each material's palette, and the clamped camera never shows cells
     outside the world when the world is larger than the viewport.
   - Before/after CaptureComparison frames of Cave Run.
+- result: Per-cell texture and world-bounded camera merged in c6fb33c: stable
+  4-entry palettes per material keyed by cell hash (static terrain does not
+  flicker, moving cells keep a consistent palette), tick-driven shimmer for
+  liquids and fire, and a camera clamped to world bounds. GamePresentationTests
+  cover per-position determinism, palette membership, and multi-entry texture
+  rather than one flat color per material. Unverified: no before/after
+  CaptureComparison frames are referenced in the delivery record.
 
 ### lighting-glow: Darkness and emissive glow
 - status: todo

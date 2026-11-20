@@ -210,6 +210,7 @@ extension MetalSurface: NSViewRepresentable {
     func updateNSView(_ view: InputMetalView, context: Context) {
         context.coordinator.snapshot = snapshot
         context.coordinator.character = character
+        context.coordinator.creatures = creatures
         context.coordinator.worldBounds = worldBounds
         view.onPaint = onPaint
         view.onAim = onAim

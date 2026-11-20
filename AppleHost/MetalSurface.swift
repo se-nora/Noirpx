@@ -6,6 +6,7 @@ struct MetalSurface {
     let device: MTLDevice
     let snapshot: SimulationSnapshot
     let character: FixtureCharacter
+    let creatures: [Creature]
     let worldBounds: FixtureViewport.CellRange?
     let onFPS: (Double) -> Void
     let onRenderedChunks: (Int) -> Void
@@ -28,10 +29,12 @@ struct MetalSurface {
     let onToggleHUD: (() -> Void)?
 
     func makeCoordinator() -> MetalRenderer {
-        MetalRenderer(device: device, snapshot: snapshot, character: character,
+        let renderer = MetalRenderer(device: device, snapshot: snapshot, character: character,
                       onFPS: onFPS,
                       onRenderedChunks: onRenderedChunks, onError: onError, onViewport: onViewport,
                       worldBounds: worldBounds)
+        renderer.creatures = creatures
+        return renderer
     }
 
     func configure(_ view: MTKView, coordinator: MetalRenderer) {

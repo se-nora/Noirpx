@@ -815,4 +815,113 @@ final class GamePresentationTests: XCTestCase {
         XCTAssertEqual(leftmost.x, worldBounds.x.lowerBound)
         XCTAssertEqual(bottom.y, worldBounds.y.lowerBound)
     }
+
+    // MARK: - Projectile overlay tests
+
+    func testProjectileOverlayTintsCellInViewport() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        let projectile = ProjectileSnapshot(
+            id: 1,
+            blueprintId: "firebolt",
+            position: FixedPoint.fromCells(x: 0, y: 0),
+            velocity: FixedPoint.fromCells(x: 0, y: 0),
+            gravityFactor: 0,
+            maxSpeed: 768,
+            lifetimeTicks: 100,
+            age: 0,
+            hasImpacted: false
+        )
+        let snapshot = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: [projectile]
+        )
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+
+        let x = 0 - viewport.center.x + viewport.columns / 2
+        let y = viewport.rows / 2 - 1 - 0 + viewport.center.y
+        let offset = (y * viewport.columns + x) * 4
+        let pixel = Array(frame.pixels[offset..<offset + 4])
+
+        let expected = FixturePixels.materialColor(.fire).littleEndian
+        let expectedBytes = [UInt8(expected & 0xff), UInt8((expected >> 8) & 0xff), UInt8((expected >> 16) & 0xff), UInt8((expected >> 24) & 0xff)]
+        XCTAssertEqual(pixel, expectedBytes, "Projectile cell should tint with primary material color")
+    }
+
+    func testProjectileOverlayClipsOutOfViewport() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        let farOutside = CellPosition(x: 10_000, y: 10_000)
+        let projectile = ProjectileSnapshot(
+            id: 1,
+            blueprintId: "firebolt",
+            position: FixedPoint.fromCells(x: farOutside.x, y: farOutside.y),
+            velocity: FixedPoint.fromCells(x: 0, y: 0),
+            gravityFactor: 0,
+            maxSpeed: 768,
+            lifetimeTicks: 100,
+            age: 0,
+            hasImpacted: false
+        )
+        let snapshotWithProjectile = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: [projectile]
+        )
+        let snapshotWithoutProjectile = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: []
+        )
+        let frameWith = FixturePixels.rasterize(snapshot: snapshotWithProjectile, viewport: viewport)
+        let frameWithout = FixturePixels.rasterize(snapshot: snapshotWithoutProjectile, viewport: viewport)
+        XCTAssertEqual(frameWith.pixels, frameWithout.pixels, "Out-of-viewport projectile must not change frame bytes")
+    }
+
+    func testProjectileOverlayDeterministicReRaster() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        let projectile = ProjectileSnapshot(
+            id: 1,
+            blueprintId: "firebolt",
+            position: FixedPoint.fromCells(x: 0, y: 0),
+            velocity: FixedPoint.fromCells(x: 0, y: 0),
+            gravityFactor: 0,
+            maxSpeed: 768,
+            lifetimeTicks: 100,
+            age: 0,
+            hasImpacted: false
+        )
+        let snapshot = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: [projectile]
+        )
+        let frame1 = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+        let frame2 = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+        XCTAssertEqual(frame1.pixels, frame2.pixels, "Same snapshot must rasterize byte-identically")
+    }
+
+    func testProjectileExcludedFromDigest() throws {
+        let projectile = ProjectileSnapshot(
+            id: 1,
+            blueprintId: "firebolt",
+            position: FixedPoint.fromCells(x: 0, y: 0),
+            velocity: FixedPoint.fromCells(x: 0, y: 0),
+            gravityFactor: 0,
+            maxSpeed: 768,
+            lifetimeTicks: 100,
+            age: 0,
+            hasImpacted: false
+        )
+        let baseline = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: []
+        )
+        let withProjectile = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: [projectile]
+        )
+        XCTAssertEqual(baseline.digest, withProjectile.digest, "Projectiles are presentation-only and must not affect digest")
+    }
 }

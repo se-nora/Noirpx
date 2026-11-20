@@ -1,7 +1,7 @@
 /// CaptureComparison - Headless video frame capture for Noirpx simulation.
 /// Outputs raw RGBA frames to stdout for ffmpeg consumption.
 ///
-/// Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--info]
+/// Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--out <path>] [--info]
 
 import Foundation
 import SimulationCore
@@ -22,6 +22,7 @@ struct Args {
     let worktreePath: String
     let worldType: WorldType
     let hudEnabled: Bool
+    let outPath: String?
 }
 
 struct ParsedArgs {
@@ -41,6 +42,7 @@ func parseArgs() -> ParsedArgs? {
     var worldType: WorldType = .beacon
     var hudEnabled = false
     var showInfo = false
+    var outPath: String?
 
     var i = args.startIndex
     while i < args.endIndex {
@@ -56,12 +58,13 @@ func parseArgs() -> ParsedArgs? {
         case "--world-type": i += 1; worldType = WorldType(rawValue: args[i]) ?? .beacon
         case "--hud": hudEnabled = true
         case "--info": showInfo = true
+        case "--out": i += 1; outPath = args[i]
         default: break
         }
         i += 1
     }
     guard let ref else { return nil }
-    return ParsedArgs(args: Args(ref: ref, seed: seed, ticks: ticks, fps: fps, width: width, height: height, worktreePath: worktreePath, worldType: worldType, hudEnabled: hudEnabled), showInfo: showInfo)
+    return ParsedArgs(args: Args(ref: ref, seed: seed, ticks: ticks, fps: fps, width: width, height: height, worktreePath: worktreePath, worldType: worldType, hudEnabled: hudEnabled, outPath: outPath), showInfo: showInfo)
 }
 
 func runGit(_ args: [String], at path: String) throws -> String {
@@ -80,14 +83,24 @@ func runGit(_ args: [String], at path: String) throws -> String {
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 }
 
-/// Maps a `BeaconRun` outcome onto the headless HUD's outcome enum.
-func hudOutcome(_ outcome: BeaconRun.Outcome) -> HeadlessHUDState.Outcome {
+/// Maps a `BeaconRun` outcome onto the display list outcome enum.
+func displayOutcome(_ outcome: BeaconRun.Outcome) -> DisplayOutcome {
     switch outcome {
     case .playing: return .playing
     case .won: return .won
     case .fell: return .fell
     case .exhausted: return .exhausted
     }
+}
+
+/// Maps a `ChimeWarden` to `DisplayWarden`.
+func displayWarden(_ warden: ChimeWarden) -> DisplayWarden {
+    DisplayWarden(
+        alive: warden.alive,
+        shield: warden.shield,
+        burning: warden.burning,
+        lastHazardName: warden.lastHazard?.rawValue
+    )
 }
 
 // MARK: - BeaconRun Capture
@@ -127,20 +140,42 @@ struct BeaconCapture {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: character)
         guard hudEnabled else { return pixels }
         var hudPixels = pixels
-        let state = HeadlessHUDState(
+        guard let run = challenge else { return hudPixels }
+        let collectedBeacons = run.collected.filter { $0 }.count
+        let state = DisplayListState(
             version: version,
-            worldType: .beacon,
+            worldKind: .beacon,
             seed: seed,
             worldWidth: viewport.columns,
             worldHeight: viewport.rows,
             position: character.position,
             tick: simulation.snapshot.tick,
-            outcome: hudOutcome(challenge?.outcome ?? .playing),
+            depth: nil,
+            outcome: displayOutcome(run.outcome),
+            health: nil,
+            maxHealth: nil,
+            energy: nil,
+            maxEnergy: nil,
+            collectedBeacons: collectedBeacons,
+            warden: displayWarden(run.warden),
             selectedMaterial: .sand,
             isCasting: false,
-            renderedChunks: renderedChunks
+            discoveredMaterials: [],
+            wand: Wand(),
+            manaPool: ManaPool(),
+            showCraftingGrid: false,
+            craftingAllowed: false,
+            craftingGrid: CraftingGrid(),
+            framesPerSecond: nil,
+            renderedChunks: renderedChunks,
+            errorMessage: nil,
+            hoveredMaterialName: nil,
+            hudVisible: true,
+            controls: .keyboard,
+            overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        HeadlessHUD.composite(onto: &hudPixels, width: viewport.columns, height: viewport.rows, state: state)
+        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
+        DisplayListRaster.composite(onto: &hudPixels, list)
         return hudPixels
     }
 
@@ -208,20 +243,40 @@ struct CaveCapture {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: nil, frame: frame)
         guard hudEnabled else { return pixels }
         var hudPixels = pixels
-        let state = HeadlessHUDState(
+        let state = DisplayListState(
             version: version,
-            worldType: .cave,
+            worldKind: .cave,
             seed: seed,
-            worldWidth: 256,
-            worldHeight: 128,
+            worldWidth: viewport.columns,
+            worldHeight: viewport.rows,
             position: nil,
             tick: simulation.snapshot.tick,
+            depth: nil,
             outcome: .playing,
+            health: nil,
+            maxHealth: nil,
+            energy: nil,
+            maxEnergy: nil,
+            collectedBeacons: 0,
+            warden: nil,
             selectedMaterial: .sand,
             isCasting: false,
-            renderedChunks: renderedChunks
+            discoveredMaterials: [],
+            wand: Wand(),
+            manaPool: ManaPool(),
+            showCraftingGrid: false,
+            craftingAllowed: false,
+            craftingGrid: CraftingGrid(),
+            framesPerSecond: nil,
+            renderedChunks: renderedChunks,
+            errorMessage: nil,
+            hoveredMaterialName: nil,
+            hudVisible: true,
+            controls: .keyboard,
+            overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        HeadlessHUD.composite(onto: &hudPixels, width: viewport.columns, height: viewport.rows, state: state)
+        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
+        DisplayListRaster.composite(onto: &hudPixels, list)
         return hudPixels
     }
 
@@ -252,10 +307,24 @@ func writeFramesToStdout(_ frames: [[UInt8]]) {
     }
 }
 
+/// Emits captured frames. With `--out`, writes the first frame as a PNG for a
+/// visual HUD spot-check; otherwise streams raw RGBA frames to stdout for ffmpeg.
+func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, outPath: String?) throws {
+    if let outPath {
+        guard let first = frames.first else {
+            throw NSError(domain: "capture", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "No frames captured"])
+        }
+        try PNGWriter.write(first, width: width, height: height, to: outPath)
+    } else {
+        writeFramesToStdout(frames)
+    }
+}
+
 func printUsage() {
     let stderr = FileHandle.standardError
     let msg = """
-Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--info]
+Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <int> --width <int> --height <int> [--worktree <path>] [--world-type beacon|cave] [--hud] [--out <path>] [--info]
   --ref           Git ref to checkout (branch, tag, commit)
   --seed          Simulation seed (default: 42)
   --ticks         Ticks to simulate (default: 300)
@@ -265,6 +334,7 @@ Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <in
   --worktree      Path to git worktree (default: current directory)
   --world-type    World type: beacon or cave (default: beacon)
   --hud           Composite the headless HUD overlay onto captured frames (default: off)
+  --out           Write the first captured frame as a PNG to <path> instead of raw RGBA to stdout
   --info          Print viewport info and exit
 """
     stderr.write(msg.data(using: .utf8)!)
@@ -313,7 +383,7 @@ func main() throws {
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        writeFramesToStdout(frames)
+        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
 
     case .cave:
         let capture = try CaveCapture(width: args.width, height: args.height, seed: args.seed,
@@ -326,7 +396,7 @@ func main() throws {
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        writeFramesToStdout(frames)
+        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
     }
 }
 

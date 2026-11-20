@@ -25,6 +25,7 @@ struct HostView: View {
                     device: device,
                     snapshot: snapshot,
                     character: model.caveRun?.character ?? FixtureCharacter(),
+                    creatures: model.caveRun?.creatures ?? [],
                     worldBounds: model.worldBounds,
                     onFPS: { model.framesPerSecond = $0 },
                     onRenderedChunks: { model.renderedChunks = $0 },

@@ -18,6 +18,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     private var frameCount = 0
     var snapshot: SimulationSnapshot
     var character: FixtureCharacter
+    var creatures: [Creature] = []
     var worldBounds: FixtureViewport.CellRange? = nil
 
     init(device: MTLDevice, snapshot: SimulationSnapshot, character: FixtureCharacter,
@@ -69,6 +70,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         )
         textureDescriptor.usage = .shaderRead
         guard let texture = device.makeTexture(descriptor: textureDescriptor),
+              let lightTexture = device.makeTexture(descriptor: textureDescriptor),
               let buffer = queue.makeCommandBuffer(),
               let encoder = buffer.makeRenderCommandEncoder(descriptor: descriptor) else {
             report("Could not create Metal frame resources.")
@@ -77,24 +79,22 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         // Drive shimmer from the simulation tick so the same snapshot always
         // rasterizes to the same pixels, independent of display callback count.
         let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport, character: character,
-                                            frame: snapshot.tick)
-        // Emissive+player light map with radial falloff (deterministic, snapshot-only).
-        let lightPixels = FixturePixels.lightMap(snapshot: snapshot, viewport: viewport, character: character)
-        guard let lightTexture = device.makeTexture(descriptor: textureDescriptor) else {
-            report("Could not create light map texture.")
-            return
-        }
-        lightPixels.withUnsafeBytes { bytes in
-            lightTexture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
-                                 mipmapLevel: 0, withBytes: bytes.baseAddress!,
-                                 bytesPerRow: viewport.columns * 4)
-        }
+                                            creatures: creatures, frame: snapshot.tick)
         var mutablePixels = frame.pixels
         mutablePixels.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
                             mipmapLevel: 0, withBytes: bytes.baseAddress!,
                             bytesPerRow: viewport.columns * 4)
         }
+
+        // Emissive+player light map with radial falloff (deterministic, snapshot-only).
+        let lightPixels = FixturePixels.lightMap(snapshot: snapshot, viewport: viewport, character: character)
+        lightPixels.withUnsafeBytes { bytes in
+            lightTexture.replace(region: MTLRegionMake2D(0, 0, viewport.columns, viewport.rows),
+                                 mipmapLevel: 0, withBytes: bytes.baseAddress!,
+                                 bytesPerRow: viewport.columns * 4)
+        }
+
         encoder.setViewport(MTLViewport(originX: viewport.x, originY: viewport.y,
                                         width: viewport.width, height: viewport.height, znear: 0, zfar: 1))
         encoder.setRenderPipelineState(pipeline)
@@ -164,26 +164,4 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
         return float4(clamp(lit, 0.0, 1.0), 1.0);
     }
     """
-
-    /// Returns an opaque ARGB color for the given material.
-    private func materialColor(_ material: Material) -> UInt32 {
-        switch material {
-        case .empty:    return 0x00000000
-        case .solid:    return 0xff808080
-        case .sand:     return 0xfff4d03f
-        case .water:    return 0xff3498db
-        case .fire:     return 0xffe74c3c
-        case .pitch:    return 0xff2c2c2c
-        case .oil:      return 0xff4a4a4a
-        case .steam:    return 0xffbdc3c7
-        case .lava:     return 0xffe67e22
-        case .acid:     return 0xff2ecc71
-        case .blood:    return 0xffc0392b
-        case .slime:    return 0xff8e44ad
-        case .ice:      return 0xffaed6f1
-        case .gunpowder:return 0xff4a4a4a
-        case .gold:     return 0xfff1c40f
-        case .magicLiquid: return 0xff9b59b6
-        }
-    }
 }

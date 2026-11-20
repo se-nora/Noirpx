@@ -757,7 +757,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     fields, no digest version change.
 
 ### material-reactions: Data-driven material reactions
-- status: todo
+- status: done
+- result: Blood+slime mixing implemented (gate direction==1 && (x&3)==0, both → empty, thermal zeroed); acid self-dissolution added; 12 new focused tests (blood/slime mixing 4, acid self/solid 3, ice freeze 3, lava+water conservation/replay 2); interface contract documented in docs/interfaces/materials-reactions.md; lava+water rock+steam screenshot captured at docs/screenshots/lava-water-rock-steam.png; all 587 tests pass. Version 0.51.0 → 0.52.0.
 - priority: 22
 - track: noita
 - depends: none

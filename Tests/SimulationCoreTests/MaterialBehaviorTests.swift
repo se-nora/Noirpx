@@ -59,6 +59,70 @@ final class MaterialBehaviorTests: XCTestCase {
         XCTAssertEqual(action.thermalWrites[0].1.fireElapsed, 1)
     }
 
+    func testBloodSlimeMixingConsumesBoth() {
+        let source = CellPosition(x: 0, y: 0)
+        let slime = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [slime: .slime]
+        let blood = MaterialBehavior.forMaterial(.blood)
+        // direction == 1 and (source.x & 3) == 0 → reaction fires
+        let action = blood.resolve(source: source, current: .blood, destinations: [],
+                                   direction: 1, maximumY: 10, canVisit: { _ in true },
+                                   material: { world[$0] ?? .empty }, moved: [],
+                                   secondary: [], thermal: { _ in .zero })
+        XCTAssertEqual(action.writes.map(\.1), [.empty, .empty])
+        XCTAssertEqual(action.moved, [source, slime])
+        XCTAssertEqual(action.thermalWrites.map(\.1), [.zero, .zero])
+    }
+
+    func testBloodSlimeNoSlimeNeighborNoReaction() {
+        let source = CellPosition(x: 0, y: 0)
+        let world: [CellPosition: Material] = [:]
+        let blood = MaterialBehavior.forMaterial(.blood)
+        let action = blood.resolve(source: source, current: .blood, destinations: [],
+                                   direction: 1, maximumY: 10, canVisit: { _ in true },
+                                   material: { world[$0] ?? .empty }, moved: [],
+                                   secondary: [], thermal: { _ in .zero })
+        XCTAssertTrue(action.writes.isEmpty)
+    }
+
+    func testBloodSlimeDirectionGateBlocksReaction() {
+        let source = CellPosition(x: 0, y: 0)
+        let slime = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [slime: .slime]
+        let blood = MaterialBehavior.forMaterial(.blood)
+        // direction == -1 → gate blocks, no reaction
+        let action = blood.resolve(source: source, current: .blood, destinations: [],
+                                   direction: -1, maximumY: 10, canVisit: { _ in true },
+                                   material: { world[$0] ?? .empty }, moved: [],
+                                   secondary: [], thermal: { _ in .zero })
+        XCTAssertTrue(action.writes.isEmpty)
+    }
+
+    func testBloodSlimeCoordinateGateBlocksReaction() {
+        let source = CellPosition(x: 1, y: 0) // (source.x & 3) == 1, gate blocks
+        let slime = CellPosition(x: 2, y: 0)
+        let world: [CellPosition: Material] = [slime: .slime]
+        let blood = MaterialBehavior.forMaterial(.blood)
+        let action = blood.resolve(source: source, current: .blood, destinations: [],
+                                   direction: 1, maximumY: 10, canVisit: { _ in true },
+                                   material: { world[$0] ?? .empty }, moved: [],
+                                   secondary: [], thermal: { _ in .zero })
+        XCTAssertTrue(action.writes.isEmpty)
+    }
+
+    func testAcidDissolvesItself() {
+        let source = CellPosition(x: 0, y: 0)
+        let otherAcid = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [otherAcid: .acid]
+        let acid = MaterialBehavior.forMaterial(.acid)
+        let action = acid.resolve(source: source, current: .acid, destinations: [],
+                                  direction: 1, maximumY: 10, canVisit: { _ in true },
+                                  material: { world[$0] ?? .empty }, moved: [],
+                                  secondary: [], thermal: { _ in .zero })
+        XCTAssertEqual(action.writes.map(\.1), [.empty, .empty])
+        XCTAssertEqual(action.moved, [source, otherAcid])
+    }
+
     func testCommitRechecksSideAndFirePrioritizesWater() {
         let sand = MaterialBehavior.forMaterial(.sand)
         let diagonal = CellPosition(x: 1, y: -1)

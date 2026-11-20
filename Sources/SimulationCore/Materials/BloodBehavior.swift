@@ -28,6 +28,23 @@ final class BloodBehavior: FlammableBehavior, @unchecked Sendable {
                           moved: Set<CellPosition>,
                           secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
+        // Blood + slime mixing: adjacent blood and slime consume each other
+        // with seeded probability (direction gate + coordinate hash).
+        // Both become empty; no new material IDs; no digest drift.
+        let bloodSlimeNeighbors = [(0, -1), (-1, 0), (1, 0), (0, 1)]
+            .map { CellPosition(x: source.x + $0.0, y: source.y + $0.1) }
+            .filter { canVisit($0) && material($0) == .slime }
+        if let target = bloodSlimeNeighbors.first,
+           direction == 1, (source.x & 3) == 0 {
+            var action = MaterialAction()
+            action.writes.append((source, .empty))
+            action.writes.append((target, .empty))
+            action.moved.append(source)
+            action.moved.append(target)
+            action.thermalWrites.append((source, .zero))
+            action.thermalWrites.append((target, .zero))
+            return action
+        }
         var reaction = super.resolve(source: source, current: .blood,
                                      destinations: secondary, direction: direction,
                                      maximumY: maximumY, canVisit: canVisit, material: material,

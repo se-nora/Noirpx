@@ -46,6 +46,16 @@ added.
   pitch->fire->steam->empty. Consumed (becomes empty) after 8 transformations,
   counted in the heat field.
 
+## Blood + slime mixing
+
+- Trigger: a `.blood` cell with a cardinal-adjacent `.slime` cell (up, down, left, right).
+- Probability: seeded RNG via the per-cell direction draw plus coordinate hash — `direction == 1 && ((source.x & 3) == 0)`, roughly 12.5% per processed tick when adjacent.
+- Products: both cells become `.empty` (mutual consumption, 2 cells → 2 empty cells; cell count conserved).
+- Heat: both cells' thermal state set to `.zero`.
+- Conservation: no material created or destroyed beyond the 2→2 conversion; no digest drift.
+- Ordering: both positions are added to the `moved` set so neither cell acts again this tick; the source blood cell is the active consumer (checked at the start of `BloodBehavior.resolve()`).
+- No new material IDs; no renderer changes.
+
 ## Enemy material reactions
 
 `ChimeWarden` reacts to surrounding materials across its 5x6 area and feet:

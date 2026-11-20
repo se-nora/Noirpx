@@ -41,6 +41,7 @@ case "$mode" in
   --quick)
     run_step "swift test" swift test --parallel -c release --scratch-path "$SCRATCH"
     run_step "simcore-layout" sh scripts/simcore-layout.sh
+    run_step "edit-convention" sh scripts/edit-convention-check.sh
     ;;
   --full)
     run_step "swift test" swift test --parallel -c release --scratch-path "$SCRATCH"
@@ -49,6 +50,7 @@ case "$mode" in
         -configuration Debug -destination 'platform=macOS,arch=arm64' \
         -derivedDataPath DerivedData/mac CODE_SIGNING_ALLOWED=NO build
     run_step "simcore-layout" sh scripts/simcore-layout.sh
+    run_step "edit-convention" sh scripts/edit-convention-check.sh
     ;;
   --ios)
     run_step "swift test" swift test --parallel --scratch-path "$SCRATCH"
@@ -57,6 +59,7 @@ case "$mode" in
         -configuration Debug -destination 'generic/platform=iOS Simulator' \
         -derivedDataPath DerivedData/ios-simulator CODE_SIGNING_ALLOWED=NO build
     run_step "simcore-layout" sh scripts/simcore-layout.sh
+    run_step "edit-convention" sh scripts/edit-convention-check.sh
     ;;
   *)
     echo "error: unknown mode $mode (use --quick, --full, or --ios)" >&2

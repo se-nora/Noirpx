@@ -347,7 +347,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Created /Users/nora/Noirpx-worktrees/main.git as a bare mirror and re-registered the integration worktree .git to point to main.git/worktrees/integration-main. Verified rev-parse, worktree list, merge-base, and rev-list calls succeed with no "(null)" errors.
 
 ### fix-goal-pass-edit-failures: Stabilize implementer edit/write calls inside goal passes
-- status: todo
+- status: done
+- result: Added File Editing Conventions to AGENTS.md, docs/agent-editing-conventions.md runbook, and scripts/edit-convention-check.sh guard wired into checks.sh; MARKETING_VERSION bumped 0.49.0 -> 0.49.1.
 - priority: 4
 - track: infra
 - depends: none

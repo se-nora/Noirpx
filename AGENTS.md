@@ -73,3 +73,54 @@
 - Do not add a dependency, platform requirement, generated asset, or new
   architecture solely on speculation; record consequential decisions and
   tradeoffs in the plan.
+
+## File Editing Conventions (mandatory for all passes)
+
+Every read/write/edit/glob/grep call in a goal pass MUST follow this pre-flight
+checklist. Violations cause tool failures that stall the pass and burn pass time.
+
+### Before ANY edit/write/read call:
+
+1. **PRE-READ the target file** (or its parent directory for glob) to get current
+   content.
+   - Never assume file content matches the spec, brief, or a previous read.
+   - If the file might not exist, glob/read the parent directory first.
+
+2. **For `write`: ALWAYS include `path` key.**
+   - `path` is required; `content` alone is invalid.
+   - Path must be absolute or relative to the current worktree root.
+
+3. **For `edit`: oldString must be an EXACT, UNIQUE match.**
+   - Copy oldString directly from the pre-read output (including exact
+     whitespace, indentation, line endings).
+   - oldString must match exactly ONE occurrence. If multiple, extend context or
+     use `replaceAll: true`.
+   - Verify newString is NOT already present in the file (search pre-read
+     output).
+   - If oldString == newString, the edit is a no-op — do not call edit.
+
+4. **Target the CORRECT worktree.**
+   - Goal passes run in `/Users/nora/Noirpx-worktrees/<goal-id>/`.
+   - Never read/write `/Users/nora/Noirpx-worktrees/integration-main/...` or
+     `~/.config/opencode/state/...` from a goal pass.
+   - Use relative paths from the worktree root or the absolute goal-worktree
+     path.
+
+5. **After a failed edit: RE-READ the file before retrying.**
+   - The file may have changed (edit partially applied, concurrent change, or
+     error was "already applied").
+   - Do not retry with the same oldString without a fresh read.
+
+### Quick Reference Card
+
+| Tool | Must Do | Must Not Do |
+|---|---|---|
+| `read` | Read parent dir first if file may not exist | Assume path exists; read stale cached content |
+| `write` | Provide `path` + `content` | Omit `path`; write to state/ or integration-main |
+| `edit` | Pre-read → exact unique oldString → verify newString absent | Use spec/brief text as oldString; retry same oldString on failure |
+| `glob` | Use specific pattern under worktree root | `**/*` from `/Users/nora` (times out) |
+
+The repo copy of this file (`AGENTS.md` in this worktree) is the single
+authoritative source for these conventions. A separate copy exists at
+`/Users/nora/Noirpx-worktrees/AGENTS.md` outside repo scope; it is not part of
+this repository and must not be edited to fix convention drift.

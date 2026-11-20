@@ -924,4 +924,56 @@ final class GamePresentationTests: XCTestCase {
         )
         XCTAssertEqual(baseline.digest, withProjectile.digest, "Projectiles are presentation-only and must not affect digest")
     }
+
+    func testBlastFlashExcludedFromDigest() throws {
+        let baseline = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: []
+        )
+        let withFlash = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: [CellPosition(x: 5, y: 5)]),
+            projectiles: []
+        )
+        XCTAssertEqual(baseline.digest, withFlash.digest, "Blast flash is presentation-only and must not affect digest")
+    }
+
+    func testBlastFlashOverlayRendersFlashCells() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        let flashCell = CellPosition(x: 0, y: 0)
+        let snapshot = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: [flashCell]),
+            projectiles: []
+        )
+        let frame = FixturePixels.rasterize(snapshot: snapshot, viewport: viewport)
+
+        let x = flashCell.x - viewport.center.x + viewport.columns / 2
+        let y = viewport.rows / 2 - 1 - flashCell.y + viewport.center.y
+        let offset = (y * viewport.columns + x) * 4
+        let pixel = Array(frame.pixels[offset..<offset + 4])
+
+        let expected = FixturePixels.materialColor(.fire).littleEndian
+        let expectedBytes = [UInt8(expected & 0xff), UInt8((expected >> 8) & 0xff), UInt8((expected >> 16) & 0xff), UInt8((expected >> 24) & 0xff)]
+        XCTAssertEqual(pixel, expectedBytes, "Flash cell should tint with flash color")
+    }
+
+    func testBlastFlashOverlayClipsOutOfViewport() throws {
+        let viewport = try XCTUnwrap(FixtureViewport(drawableWidth: 200, drawableHeight: 200, center: .init(x: 0, y: 0)))
+        let farOutside = CellPosition(x: 10_000, y: 10_000)
+        let snapshotWithFlash = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: [farOutside]),
+            projectiles: []
+        )
+        let snapshotWithoutFlash = SimulationSnapshot(
+            tick: 1, seed: 42, randomState: 42,
+            chunks: [], blastFlash: BlastFlash(cells: []),
+            projectiles: []
+        )
+        let frameWith = FixturePixels.rasterize(snapshot: snapshotWithFlash, viewport: viewport)
+        let frameWithout = FixturePixels.rasterize(snapshot: snapshotWithoutFlash, viewport: viewport)
+        XCTAssertEqual(frameWith.pixels, frameWithout.pixels, "Out-of-viewport flash must not change frame bytes")
+    }
 }

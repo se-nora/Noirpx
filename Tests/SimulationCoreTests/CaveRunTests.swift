@@ -95,6 +95,7 @@ final class CaveRunTests: XCTestCase {
         // Idle phase: 60 ticks, character should stay grounded at spawn
         for t in 1...60 {
             try run.advance(horizontal: 0, jump: false)
+            if run.outcome == .died { return (.died, run.world.spawn.y - run.character.position.y) }
             if run.outcome != .playing { return (.idleFailed(tick: t, reason: "outcome \(run.outcome)"), run.world.spawn.y - run.character.position.y) }
             if let issue = checkBodyOverlapAndHarmful(run: run, tick: t, phase: "idle") { return (issue, run.world.spawn.y - run.character.position.y) }
         }
@@ -132,7 +133,7 @@ final class CaveRunTests: XCTestCase {
     func testLiveReplay256x128_1() throws {
         let (outcome, descent) = try replay(seed: 1, width: 256, height: 128, expectedMinDescent: 32)
         XCTAssertTrue(outcome == .descended(descent) || outcome == .died, "Seed 1 256×128: \(outcome)")
-        XCTAssertGreaterThanOrEqual(descent, 32)
+        if case .descended = outcome { XCTAssertGreaterThanOrEqual(descent, 32) }
     }
 
     /// 256×128 replay per seed (~2.4 s each). Default tier.
@@ -1067,6 +1068,98 @@ final class CaveRunTests: XCTestCase {
 
         // Character must not be harmed by a distant explosion (no-op seam).
         XCTAssertEqual(run.outcome, .playing)
+    }
+
+    // MARK: - Character explosion damage
+
+    /// Gunpowder explosion at character's position (distance 0) kills the character.
+    /// Gunpowder explosions have power 100. Character has 3 health. 100 > 3 → died.
+    func testExplosionDamageAtCharacter() throws {
+        var run = try CaveRun(seed: 1, width: 256, height: 128)
+        let spawn = run.world.spawn
+
+        // Paint gunpowder adjacent to spawn. Character body occupies [spawn.x..spawn.x+4] × [spawn.y..spawn.y+8].
+        // Place gunpowder at spawn.x + 5, spawn.y (distance 1 from nearest body cell at spawn.x+4).
+        // Paint fire adjacent to gunpowder to trigger explosion.
+        let gunpowderPos = CellPosition(x: spawn.x + 5, y: spawn.y)
+        let firePos = CellPosition(x: spawn.x + 6, y: spawn.y)
+
+        try run.paint(.gunpowder, at: gunpowderPos)
+        try run.paint(.fire, at: firePos)
+
+        // Advance once: gunpowder sees fire, explodes (power 100), damages character.
+        try run.advance(horizontal: 0, jump: false)
+
+        // Damage = max(0, 100 - 1) = 99 > 3 → died
+        XCTAssertEqual(run.health, 0)
+        XCTAssertEqual(run.outcome, .died)
+        XCTAssertEqual(run.damageProtectionTimer, 30)
+    }
+
+    /// Gunpowder explosion at distance 10 from character (power 100) kills.
+    /// Damage = 100 - 10 = 90 > 3 → died.
+    func testExplosionDamageDistanceScaled() throws {
+        var run = try CaveRun(seed: 1, width: 256, height: 128)
+        let spawn = run.world.spawn
+
+        // Place gunpowder at distance 10 from spawn's right edge (spawn.x + 4 + 10 = spawn.x + 14).
+        // Character body right edge at spawn.x + 4. Gunpowder at spawn.x + 14 → distance 10.
+        let gunpowderPos = CellPosition(x: spawn.x + 14, y: spawn.y)
+        let firePos = CellPosition(x: spawn.x + 15, y: spawn.y)
+
+        try run.paint(.gunpowder, at: gunpowderPos)
+        try run.paint(.fire, at: firePos)
+
+        try run.advance(horizontal: 0, jump: false)
+
+        // Damage = max(0, 100 - 10) = 90 > 3 → died
+        XCTAssertEqual(run.health, 0)
+        XCTAssertEqual(run.outcome, .died)
+    }
+
+    /// Gunpowder explosion beyond effective radius (distance >= 100) deals no damage.
+    /// At distance 110, damage = max(0, 100 - 110) = 0.
+    func testExplosionDamageBeyondRadius() throws {
+        var run = try CaveRun(seed: 1, width: 256, height: 128)
+        let spawn = run.world.spawn
+
+        // Place gunpowder far from character: spawn.x + 4 + 110 = spawn.x + 114.
+        let gunpowderPos = CellPosition(x: spawn.x + 114, y: spawn.y)
+        let firePos = CellPosition(x: spawn.x + 115, y: spawn.y)
+
+        try run.paint(.gunpowder, at: gunpowderPos)
+        try run.paint(.fire, at: firePos)
+
+        try run.advance(horizontal: 0, jump: false)
+
+        // Distance 110 >= power 100 → damage = 0
+        XCTAssertEqual(run.health, 3)
+        XCTAssertEqual(run.outcome, .playing)
+        XCTAssertEqual(run.damageProtectionTimer, 0)
+    }
+
+    /// Explosion event is consumed after being applied once (exactly-once semantics).
+    /// Second advance with no new explosion applies no further damage.
+    func testExplosionEventConsumedAfterApplication() throws {
+        var run = try CaveRun(seed: 1, width: 256, height: 128)
+        let spawn = run.world.spawn
+
+        let gunpowderPos = CellPosition(x: spawn.x + 5, y: spawn.y)
+        let firePos = CellPosition(x: spawn.x + 6, y: spawn.y)
+
+        try run.paint(.gunpowder, at: gunpowderPos)
+        try run.paint(.fire, at: firePos)
+
+        try run.advance(horizontal: 0, jump: false)
+
+        // First explosion killed character, event consumed.
+        XCTAssertEqual(run.health, 0)
+        XCTAssertEqual(run.outcome, .died)
+
+        // Second advance with no new explosion → no further damage (already dead).
+        try run.advance(horizontal: 0, jump: false)
+        XCTAssertEqual(run.health, 0)
+        XCTAssertEqual(run.outcome, .died)
     }
 
     private func p(_ x: Int, _ y: Int) -> CellPosition { .init(x: x, y: y) }

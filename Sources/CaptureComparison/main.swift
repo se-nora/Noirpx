@@ -141,16 +141,18 @@ struct BeaconCapture {
         var lit = pixels
         let light = FixturePixels.lightMap(snapshot: simulation.snapshot, viewport: viewport, character: character)
         FixturePixels.applyLightMap(to: &lit, lightMap: light, width: viewport.columns, height: viewport.rows, ambient: 0.15)
-        guard hudEnabled else { return upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height) }
-        var hudPixels = lit
-        guard let run = challenge else { return hudPixels }
+        // Upscale the game view to output resolution FIRST, then composite HUD at output resolution
+        // so HUD text/elements are sized for readable output pixels, not tiny cell pixels.
+        var outPixels = upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
+        guard hudEnabled else { return outPixels }
+        guard let run = challenge else { return outPixels }
         let collectedBeacons = run.collected.filter { $0 }.count
         let state = DisplayListState(
             version: version,
             worldKind: .beacon,
             seed: seed,
-            worldWidth: viewport.columns,
-            worldHeight: viewport.rows,
+            worldWidth: 200,  // BeaconRun floor width
+            worldHeight: 40,  // BeaconRun floor height
             position: character.position,
             tick: simulation.snapshot.tick,
             depth: nil,
@@ -177,9 +179,9 @@ struct BeaconCapture {
             controls: .keyboard,
             overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
-        DisplayListRaster.composite(onto: &hudPixels, list)
-        return upscaleNearest(hudPixels, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
+        let list = HUDLayout.gameUI(width: width, height: height, state: state)
+        DisplayListRaster.composite(onto: &outPixels, list)
+        return outPixels
     }
 
     mutating func advanceTick(horizontal: Int, jump: Bool, pulse: Bool) throws {
@@ -247,14 +249,16 @@ struct CaveCapture {
         var lit = pixels
         let light = FixturePixels.lightMap(snapshot: simulation.snapshot, viewport: viewport, character: nil)
         FixturePixels.applyLightMap(to: &lit, lightMap: light, width: viewport.columns, height: viewport.rows, ambient: 0.15)
-        guard hudEnabled else { return upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height) }
-        var hudPixels = lit
+        // Upscale the game view to output resolution FIRST, then composite HUD at output resolution
+        // so HUD text/elements are sized for readable output pixels, not tiny cell pixels.
+        var outPixels = upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
+        guard hudEnabled else { return outPixels }
         let state = DisplayListState(
             version: version,
             worldKind: .cave,
             seed: seed,
-            worldWidth: viewport.columns,
-            worldHeight: viewport.rows,
+            worldWidth: 256,
+            worldHeight: 128,
             position: nil,
             tick: simulation.snapshot.tick,
             depth: nil,
@@ -281,9 +285,9 @@ struct CaveCapture {
             controls: .keyboard,
             overlays: DisplayOverlayVisibility(stats: false, help: false, crafting: false)
         )
-        let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
-        DisplayListRaster.composite(onto: &hudPixels, list)
-        return upscaleNearest(hudPixels, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
+        let list = HUDLayout.gameUI(width: width, height: height, state: state)
+        DisplayListRaster.composite(onto: &outPixels, list)
+        return outPixels
     }
 
     mutating func advanceTick() throws {

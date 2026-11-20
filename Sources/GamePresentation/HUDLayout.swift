@@ -91,6 +91,9 @@ public enum HUDLayout {
             lines.append(HUDLine(text: "Pos (\(pos.x), \(pos.y))"))
         }
         lines.append(HUDLine(text: "Tick \(state.tick)"))
+        if let level = state.level, let biomeName = state.biomeName {
+            lines.append(HUDLine(text: "Level \(level) • \(biomeName)"))
+        }
         if let depth = state.depth {
             lines.append(HUDLine(text: "Depth \(depth)"))
         }

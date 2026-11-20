@@ -59,13 +59,27 @@ final class GameModel: ObservableObject {
     private var caveRunSession = CaveRunSession()
 
     private struct CaveRunSession {
-        private(set) var seed: UInt64
-        private(set) var wands: [Wand] = []
+        var seed: UInt64
+        var wands: [Wand] = []
+        var level: Int = 1
         init(seed: UInt64 = 42) { self.seed = seed }
-        func restart() throws -> CaveRun { try CaveRun(seed: seed, width: 256, height: 128) }
+        func restart() throws -> CaveRun { 
+            let config = CaveBiomeConfig.defaultForHeight(128)
+            return try CaveRun(seed: seed, width: 256, height: 128, level: 1, biomeConfig: config)
+        }
         mutating func newRun() throws -> CaveRun {
             let next = seed &+ 0x9e3779b97f4a7c15
-            let run = try CaveRun(seed: next, width: 256, height: 128)
+            let config = CaveBiomeConfig.defaultForHeight(128)
+            let run = try CaveRun(seed: next, width: 256, height: 128, level: 1, biomeConfig: config)
+            seed = next
+            level = 1
+            return run
+        }
+        mutating func advanceLevel() throws -> CaveRun {
+            level += 1
+            let next = seed &+ 0x9e3779b97f4a7c15 &* UInt64(level)
+            let config = caveBiomeConfigForLevel(level, height: 128)
+            let run = try CaveRun(seed: next, width: 256, height: 128, level: level, biomeConfig: config)
             seed = next
             return run
         }
@@ -81,6 +95,30 @@ final class GameModel: ObservableObject {
 
     func newRun() {
         startCaveRun(newSeed: true)
+    }
+
+    /// Advances to the next cave level. Called when the character reaches the goal cell.
+    /// Requires `caveRun?.isLevelComplete == true`. Increments level, mixes seed,
+    /// regenerates world with new biome config, and preserves health, wands, mana.
+    func nextLevel() {
+        guard var run = caveRun, run.isLevelComplete else { return }
+        guard let next = run.nextLevel() else { return }
+        caveRun = next
+        caveRunSession.seed = next.seed
+        caveRunSession.wands = next.wands
+        caveRunSession.level = next.level
+        snapshot = next.simulation.snapshot
+        updateActiveChunks()
+        scanAndDiscover()
+        clearControls()
+
+        // Rewire wandController to this run's active wand and stats.
+        let activeWand = next.activeWand
+        wandController = WandController(wand: activeWand,
+                                        manaPool: ManaPool(
+                                            maximum: activeWand.manaMax,
+                                            regenerationPerTick: activeWand.manaRegenPerTick,
+                                            startingMana: activeWand.manaMax))
     }
 
     private func startCaveRun(newSeed: Bool) {

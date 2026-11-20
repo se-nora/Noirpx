@@ -887,5 +887,26 @@ final class CaveWorldGenTests: XCTestCase {
         XCTAssertNoThrow(try CaveRun(seed: 1, width: 128, height: 64,
                                      biomeConfig: CaveBiomeConfig.defaultForHeight(64)))
     }
+
+    /// Collapsed mine config generates a valid world with expected hazard materials present.
+    func testCollapsedMineGeneration() throws {
+        let gen = CaveWorldGenerator(seed: 11, width: 128, height: 64,
+                                     biomeConfig: .collapsedMine(height: 64))
+        let result = gen.generateInspected(stampSpawnTemplate: true, capturePrePass: false)
+        let world = result.world
+        let counts = world.materialCounts
+
+        // Collapsed mine should have significant hazard presence.
+        var hazardCount = 0
+        for mat in [Material.lava, Material.acid, Material.gunpowder] {
+            hazardCount += counts[mat, default: 0]
+        }
+        XCTAssertGreaterThan(hazardCount, 0, "collapsed mine should contain hazard materials")
+
+        // World should have a valid spawn and goal.
+        XCTAssertNotEqual(world.spawn, world.goal, "spawn and goal should differ")
+        XCTAssertEqual(world.material(at: world.spawn), Material.empty, "spawn should be empty")
+        XCTAssertEqual(world.material(at: world.goal), Material.empty, "goal should be empty")
+    }
 }
 

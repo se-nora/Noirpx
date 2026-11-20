@@ -36,8 +36,8 @@ func parseArgs() -> ParsedArgs? {
     var seed: UInt64 = 42
     var ticks: Int = 300
     var fps: Int = 30
-    var width: Int = 640
-    var height: Int = 360
+    var width: Int = 800
+    var height: Int = 450
     var worktreePath: String = FileManager.default.currentDirectoryPath
     var worldType: WorldType = .beacon
     var hudEnabled = false
@@ -52,8 +52,8 @@ func parseArgs() -> ParsedArgs? {
         case "--seed": i += 1; seed = UInt64(args[i]) ?? 42
         case "--ticks": i += 1; ticks = Int(args[i]) ?? 300
         case "--fps": i += 1; fps = Int(args[i]) ?? 30
-        case "--width": i += 1; width = Int(args[i]) ?? 640
-        case "--height": i += 1; height = Int(args[i]) ?? 360
+        case "--width": i += 1; width = Int(args[i]) ?? 800
+        case "--height": i += 1; height = Int(args[i]) ?? 450
         case "--worktree": i += 1; worktreePath = args[i]
         case "--world-type": i += 1; worldType = WorldType(rawValue: args[i]) ?? .beacon
         case "--hud": hudEnabled = true
@@ -138,8 +138,11 @@ struct BeaconCapture {
 
     mutating func captureFrame() -> [UInt8] {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: character)
-        guard hudEnabled else { return pixels }
-        var hudPixels = pixels
+        var lit = pixels
+        let light = FixturePixels.lightMap(snapshot: simulation.snapshot, viewport: viewport, character: character)
+        FixturePixels.applyLightMap(to: &lit, lightMap: light, width: viewport.columns, height: viewport.rows, ambient: 0.15)
+        guard hudEnabled else { return upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height) }
+        var hudPixels = lit
         guard let run = challenge else { return hudPixels }
         let collectedBeacons = run.collected.filter { $0 }.count
         let state = DisplayListState(
@@ -176,7 +179,7 @@ struct BeaconCapture {
         )
         let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
         DisplayListRaster.composite(onto: &hudPixels, list)
-        return hudPixels
+        return upscaleNearest(hudPixels, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
     }
 
     mutating func advanceTick(horizontal: Int, jump: Bool, pulse: Bool) throws {
@@ -241,8 +244,11 @@ struct CaveCapture {
 
     mutating func captureFrame(frame: UInt64 = 0) -> [UInt8] {
         let (pixels, renderedChunks) = FixturePixels.rasterize(snapshot: simulation.snapshot, viewport: viewport, character: nil, frame: frame)
-        guard hudEnabled else { return pixels }
-        var hudPixels = pixels
+        var lit = pixels
+        let light = FixturePixels.lightMap(snapshot: simulation.snapshot, viewport: viewport, character: nil)
+        FixturePixels.applyLightMap(to: &lit, lightMap: light, width: viewport.columns, height: viewport.rows, ambient: 0.15)
+        guard hudEnabled else { return upscaleNearest(lit, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height) }
+        var hudPixels = lit
         let state = DisplayListState(
             version: version,
             worldKind: .cave,
@@ -277,7 +283,7 @@ struct CaveCapture {
         )
         let list = HUDLayout.gameUI(width: viewport.columns, height: viewport.rows, state: state)
         DisplayListRaster.composite(onto: &hudPixels, list)
-        return hudPixels
+        return upscaleNearest(hudPixels, fromWidth: viewport.columns, fromHeight: viewport.rows, toWidth: width, toHeight: height)
     }
 
     mutating func advanceTick() throws {
@@ -307,17 +313,116 @@ func writeFramesToStdout(_ frames: [[UInt8]]) {
     }
 }
 
-/// Emits captured frames. With `--out`, writes the first frame as a PNG for a
-/// visual HUD spot-check; otherwise streams raw RGBA frames to stdout for ffmpeg.
-func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, outPath: String?) throws {
+/// Emits captured frames. With `--out <path.png>`, writes the first frame as a
+/// PNG for a visual HUD spot-check. With `--out <path.mp4>`, encodes all frames
+/// to an MP4 via ffmpeg at `fps`. Otherwise streams raw RGBA frames to stdout.
+func emitFrames(_ frames: [[UInt8]], width: Int, height: Int, fps: Int, outPath: String?) throws {
+    guard let first = frames.first else {
+        throw NSError(domain: "capture", code: 4,
+                      userInfo: [NSLocalizedDescriptionKey: "No frames captured"])
+    }
     if let outPath {
-        guard let first = frames.first else {
-            throw NSError(domain: "capture", code: 4,
-                          userInfo: [NSLocalizedDescriptionKey: "No frames captured"])
+        if outPath.lowercased().hasSuffix(".mp4") {
+            try encodeMP4(frames: frames, width: width, height: height, fps: fps, outputPath: outPath)
+            return
         }
         try PNGWriter.write(first, width: width, height: height, to: outPath)
     } else {
         writeFramesToStdout(frames)
+    }
+}
+
+/// Nearest-neighbor upscale of RGBA pixels from (fromW × fromH) to (toW × toH).
+/// Crisp (no interpolation), matching MetalRenderer's nearest sampling so the
+/// cell grid and HUD scale cleanly to production resolution.
+private func upscaleNearest(_ pixels: [UInt8], fromWidth: Int, fromHeight: Int,
+                            toWidth: Int, toHeight: Int) -> [UInt8] {
+    precondition(pixels.count == fromWidth * fromHeight * 4)
+    var out = [UInt8](repeating: 0, count: toWidth * toHeight * 4)
+    let xScale = Double(fromWidth) / Double(toWidth)
+    let yScale = Double(fromHeight) / Double(toHeight)
+    for y in 0..<toHeight {
+        let sy = Int(Double(y) * yScale)
+        let srcRow = sy * fromWidth
+        let dstRow = y * toWidth
+        for x in 0..<toWidth {
+            let sx = Int(Double(x) * xScale)
+            let srcIdx = (srcRow + sx) * 4
+            let dstIdx = (dstRow + x) * 4
+            out[dstIdx] = pixels[srcIdx]
+            out[dstIdx + 1] = pixels[srcIdx + 1]
+            out[dstIdx + 2] = pixels[srcIdx + 2]
+            out[dstIdx + 3] = pixels[srcIdx + 3]
+        }
+    }
+    return out
+}
+
+/// Encodes RGBA frames to MP4 via ffmpeg: writes temp PNGs, encodes, cleans up.
+private func encodeMP4(frames: [[UInt8]], width: Int, height: Int, fps: Int, outputPath: String) throws {
+    guard let ffmpeg = findExecutable("ffmpeg") else {
+        throw NSError(domain: "capture", code: 5,
+                      userInfo: [NSLocalizedDescriptionKey: "ffmpeg not found in PATH. Install ffmpeg to enable MP4 output."])
+    }
+    let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("CaptureComparison-\(ProcessInfo.processInfo.globallyUniqueString)")
+    try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true, attributes: nil)
+    defer { try? FileManager.default.removeItem(at: tmpDir) }
+    for (idx, frame) in frames.enumerated() {
+        let path = tmpDir.appendingPathComponent(String(format: "frame_%05d.png", idx + 1)).path
+        try PNGWriter.write(frame, width: width, height: height, to: path)
+    }
+    let pattern = tmpDir.appendingPathComponent("frame_%05d.png").path
+    let args = [
+        "-y",
+        "-framerate", String(fps),
+        "-i", pattern,
+        "-vf", "scale=\(width):\(height)",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-crf", "23",
+        outputPath,
+    ]
+    try runProcess(ffmpeg, args)
+}
+
+/// Locate an executable on PATH (mirrors TestAnimationRenderer.VideoEncoder).
+private func findExecutable(_ name: String) -> String? {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+    process.arguments = [name]
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    do {
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    } catch {
+        return nil
+    }
+}
+
+/// Run an executable, throwing on non-zero exit with captured stderr.
+private func runProcess(_ executable: String, _ args: [String]) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = args
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = pipe
+    do {
+        try process.run()
+    } catch {
+        throw NSError(domain: "capture", code: 6,
+                      userInfo: [NSLocalizedDescriptionKey: "Failed to launch \(executable): \(error)"])
+    }
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: data, encoding: .utf8) ?? "unknown error"
+        throw NSError(domain: "capture", code: Int(process.terminationStatus),
+                      userInfo: [NSLocalizedDescriptionKey: "\(executable) failed: \(output)"])
     }
 }
 
@@ -329,12 +434,12 @@ Usage: CaptureComparison --ref <git-ref> --seed <uint64> --ticks <int> --fps <in
   --seed          Simulation seed (default: 42)
   --ticks         Ticks to simulate (default: 300)
   --fps           Output video FPS (default: 30)
-  --width         Video width (default: 640)
-  --height        Video height (default: 360)
+  --width         Video width (default: 800)
+  --height        Video height (default: 450)
   --worktree      Path to git worktree (default: current directory)
   --world-type    World type: beacon or cave (default: beacon)
   --hud           Composite the headless HUD overlay onto captured frames (default: off)
-  --out           Write the first captured frame as a PNG to <path> instead of raw RGBA to stdout
+  --out           Write output to <path>: .png = first frame, .mp4 = full video at --fps, else raw RGBA to stdout
   --info          Print viewport info and exit
 """
     stderr.write(msg.data(using: .utf8)!)
@@ -377,26 +482,28 @@ func main() throws {
                                         version: version, hudEnabled: args.hudEnabled)
         vp = capture.viewport
         if showInfo {
-            let info = "WIDTH=\(vp.columns)\nHEIGHT=\(vp.rows)\nBYTES_PER_FRAME=\(vp.columns * vp.rows * 4)\n"
+            let outBytes = args.width * args.height * 4
+            let info = "WIDTH=\(args.width)\nHEIGHT=\(args.height)\nBYTES_PER_FRAME=\(outBytes)\n"
             FileHandle.standardOutput.write(info.data(using: .utf8)!)
             return
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
+        try emitFrames(frames, width: args.width, height: args.height, fps: args.fps, outPath: args.outPath)
 
     case .cave:
         let capture = try CaveCapture(width: args.width, height: args.height, seed: args.seed,
                                       version: version, hudEnabled: args.hudEnabled)
         vp = capture.viewport
         if showInfo {
-            let info = "WIDTH=\(vp.columns)\nHEIGHT=\(vp.rows)\nBYTES_PER_FRAME=\(vp.columns * vp.rows * 4)\n"
+            let outBytes = args.width * args.height * 4
+            let info = "WIDTH=\(args.width)\nHEIGHT=\(args.height)\nBYTES_PER_FRAME=\(outBytes)\n"
             FileHandle.standardOutput.write(info.data(using: .utf8)!)
             return
         }
         var mutableCapture = capture
         let frames = try mutableCapture.runAuto(ticks: args.ticks)
-        try emitFrames(frames, width: vp.columns, height: vp.rows, outPath: args.outPath)
+        try emitFrames(frames, width: args.width, height: args.height, fps: args.fps, outPath: args.outPath)
     }
 }
 

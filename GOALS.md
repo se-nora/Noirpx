@@ -60,6 +60,35 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - No regression in live app HUD rendering.
 - result: Investigation showed the HUD was NOT missing when `--hud` is passed correctly — `--hud` vs no-hud differs in hundreds of pixels on frame 0 (HeadlessHUD.composite is wired in both BeaconCapture and CaveCapture). The real defect was the documented acceptance command and tooling: it used non-existent flags (`--cave`, `--frames`, `--out`), omitted the required `--ref`, and the tool only wrote raw RGBA to stdout (no PNG writer), so it could never produce `/tmp/test.png`. Fix: added an `--out <path>` PNG writer to CaptureComparison (CoreGraphics/ImageIO CGImageDestination, first frame; raw-RGBA stdout path unchanged when `--out` is absent), corrected the GOALS acceptance command to real flags (`--ref HEAD --world-type cave --ticks 10 --out`), and added a fixed-seed capture-path test (`testCapturedFrameContainsHUDForFixedSeed`) asserting HUD pixels appear in the top-left panel and bottom material pill, alongside the existing capture-size tests. MARKETING_VERSION 0.40.0 -> 0.40.1 (tooling-only, no live-app appearance change). Verification: `swift test --parallel -c release` green; `xcodebuild` macOS Debug BUILD SUCCEEDED; acceptance PNG 200x113 with readable HUD (NOIRPX v0.40.1, CAVE RUN, Seed 12345, Size, Tick, Sand pill) and 646 differing pixels vs no-hud (188 panel, 54 pill). Unverified: the downstream Telegram report pipeline was not exercised here (captured frames provably contain HUD; report wiring is downstream and outside this worktree); only macOS was verified (the capture tool is macOS CoreGraphics-based).
 
+
+### fall-damage-bugfix: Fall damage kills on landing at same height
+- status: todo
+- priority: 1
+- track: perf
+- depends: player-health
+- areas: player, sim-rules
+- why: Jumping up and landing at the same height kills the player instantly — fall damage calculation is excessively punishing and prevents normal movement.
+- scope: Identify the fall damage formula in the player physics/health code, fix the velocity-to-damage conversion so that small falls (≤1 cell) are harmless and lethal damage only occurs at significant heights. Verify with Cave Run gameplay.
+- acceptance:
+  - Jumping in place (≤1 cell fall) deals zero damage.
+  - Falling 3-4 cells deals minor damage.
+  - Falling 10+ cells deals lethal or near-lethal damage.
+  - Deterministic replay test covers the damage curve.
+
+### cpu-freeze-bugfix: Game freezes at 100% CPU after a few seconds
+- status: todo
+- priority: 2
+- track: perf
+- depends: sim-hot-loop-allocations
+- areas: sim-engine, sim-rules
+- why: Some runs freeze after a few seconds with one core at 100% CPU — the simulation tick loop enters a non-terminating state. Root cause must be found and fixed.
+- scope: Reproduce the freeze (likely an infinite loop in material reactions, pathfinding, or entity update). Add a watchdog test that runs the simulation for N ticks and asserts it completes. Fix the underlying logic (e.g., unbounded reaction chain, missing termination condition, queue processing loop).
+- acceptance:
+  - `swift test -c release` completes without hangs.
+  - A 10,000-tick headless run finishes in <30s on macOS.
+  - No CPU spin in Instruments when idle (no input, no active entities).
+
+
 ### levitation-jump-bugfix: Fix levitation activating immediately on jump instead of at max levitation speed
 - status: done
 - priority: 18

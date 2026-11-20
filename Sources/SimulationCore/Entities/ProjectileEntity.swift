@@ -11,6 +11,10 @@ public struct ProjectileEntity: Sendable {
     public var lifetimeTicks: UInt16
     public private(set) var age: UInt16 = 0
     public private(set) var hasImpacted: Bool = false
+    /// Cells the projectile traversed during the most recent advance, including
+    /// the origin cell and the terminal (impact or destination) cell.
+    /// Session-only data for creature hit detection; not part of any snapshot.
+    public private(set) var lastPath: [CellPosition] = []
 
     public init(id: UInt64,
                 blueprintId: String,
@@ -58,11 +62,18 @@ public struct ProjectileEntity: Sendable {
         // If position didn't change cell, just update position and continue
         if fromCell == toCell {
             position = newPosition
+            lastPath = [fromCell]
             return nil
         }
 
+        // Clear path for this tick
+        lastPath.removeAll(keepingCapacity: true)
+        lastPath.append(fromCell)
+
         // Check each cell along the Bresenham segment for collision
-        let collisionCell = bresenhamCollision(from: fromCell, to: toCell, canVisit: canVisit, materialAt: materialAt)
+        let collisionCell = bresenhamCollision(from: fromCell, to: toCell,
+                                               canVisit: canVisit, materialAt: materialAt,
+                                               path: &lastPath)
 
         if let hitCell = collisionCell {
             // Impact! Clamp position to the impact cell center (Q8)
@@ -80,7 +91,8 @@ public struct ProjectileEntity: Sendable {
     /// Returns the first blocking cell encountered, or nil if none.
     private func bresenhamCollision(from: CellPosition, to: CellPosition,
                                      canVisit: (CellPosition) -> Bool,
-                                     materialAt: (CellPosition) -> Material) -> CellPosition? {
+                                     materialAt: (CellPosition) -> Material,
+                                     path: inout [CellPosition]) -> CellPosition? {
         var x = from.x
         var y = from.y
         let dx = abs(to.x - from.x)
@@ -91,6 +103,7 @@ public struct ProjectileEntity: Sendable {
 
         while true {
             let cell = CellPosition(x: x, y: y)
+            path.append(cell)
 
             // Skip the starting cell (already occupied by projectile origin)
             if cell != from {

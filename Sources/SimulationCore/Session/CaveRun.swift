@@ -20,6 +20,11 @@ public struct CaveRun {
 
     internal private(set) var fallLimit: Int
 
+    /// Creatures spawned deterministically into this cave run. Session state only.
+    public private(set) var creatures: [Creature] = []
+    /// Next creature ID to assign. Starts at 1.
+    internal private(set) var nextCreatureId: UInt64 = 1
+
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
     public init(seed: UInt64, width: Int = 256, height: Int = 128) throws {
@@ -62,11 +67,119 @@ public struct CaveRun {
 
         // Fall limit: 4 cells below the goal depth (shaft end) as a safety margin
         self.fallLimit = world.spawn.y - termination.descent - 4
+
+        // Spawn deterministic creatures using the final stamped world for validation.
+        spawnCreatures(layout: layout, termination: termination, materialAt: { x, y in
+            world.cells[CellPosition(x: x, y: y)] ?? .empty
+        })
+    }
+
+    /// Spawns deterministic crawler spawns into the cave run. Uses the final
+    /// stamped world (`world.cells`) for validation so spawns never lose their
+    /// floor to the spawn-template carve.
+    private mutating func spawnCreatures(layout: CaveSpawnTemplate.Layout,
+                                         termination: CaveSpawnTemplate.Termination,
+                                         materialAt: (_ x: Int, _ y: Int) -> Material) {
+        let spawns = generateCreatureSpawns(
+            seed: seed,
+            width: size.width,
+            height: size.height,
+            layout: layout,
+            termination: termination,
+            materialAt: materialAt
+        )
+        for spawn in spawns {
+            creatures.append(Creature(id: nextCreatureId, kind: spawn.kind, position: spawn.position))
+            nextCreatureId &+= 1
+        }
+    }
+
+    /// Advances all creatures one tick and applies creature↔player interactions.
+    /// Called after `character.advance` in `advance`.
+    mutating func advanceCreatures() {
+        guard !creatures.isEmpty else { return }
+
+        let bounds = Simulation.coordinateBounds
+        let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
+        let characterBody = character.bodyCells
+
+        // Projectiles that traversed a creature body this tick. Each projectile
+        // contributes one hit; the path includes the origin and impact cells.
+        var projectileHits: [UInt64: Int] = [:]
+        for path in simulation.lastProjectilePaths {
+            for creature in creatures where creature.alive {
+                if creature.bodyCells.contains(where: path.cells.contains) {
+                    projectileHits[creature.id, default: 0] += 1
+                }
+            }
+        }
+
+        let explosion = simulation.lastExplosionDamage
+        var contactDamage = 0
+        var blood: [CellPosition] = []
+
+        for index in creatures.indices where creatures[index].alive {
+            var creature = creatures[index]
+            let result = creature.advance(
+                bounds: bounds,
+                materialAt: materialAt,
+                characterPosition: character.position,
+                characterBody: characterBody
+            )
+
+            if creature.alive, let hits = projectileHits[creature.id] {
+                creature.health = max(0, creature.health - creature.projectileDamage * hits)
+                creature.lastDamageSource = .projectile
+                if creature.health == 0 { creature.remove() }
+            }
+
+            if creature.alive, let explosion {
+                let distance = max(abs(creature.center.x - explosion.center.x),
+                                   abs(creature.center.y - explosion.center.y))
+                if distance <= 4 {
+                    creature.health = max(0, creature.health - creature.explosionDamage)
+                    creature.lastDamageSource = .explosion
+                    if creature.health == 0 { creature.remove() }
+                }
+            }
+
+            if creature.alive, result.contact {
+                contactDamage = max(contactDamage, creature.contactDamage)
+            }
+
+            if !creature.alive {
+                blood.append(contentsOf: creature.bloodCells())
+            }
+
+            creatures[index] = creature
+        }
+
+        if !blood.isEmpty {
+            enqueueBlood(at: blood)
+        }
+
+        // Contact damage is applied once per tick regardless of how many creatures touch.
+        if contactDamage > 0, damageProtectionTimer == 0 {
+            health = max(health - contactDamage, 0)
+            damageProtectionTimer = 30
+            if health == 0 {
+                outcome = .died
+            }
+        }
+    }
+
+    /// Writes a creature's death blood through the ordinary material command path.
+    private mutating func enqueueBlood(at cells: [CellPosition]) {
+        let (tick, overflow) = simulation.snapshot.tick.addingReportingOverflow(1)
+        guard !overflow else { return }
+        for cell in cells {
+            try? simulation.enqueue(SimulationCommand(tick: tick, position: cell, material: .blood))
+        }
     }
 
     /// Advances one tick. Order: material tick → capture pre-advance grounded →
-    /// character advance → protection-timer decrement → material damage → fall damage →
-    /// fall-limit check. Terminal outcomes freeze further input and paint.
+    /// character advance → protection-timer decrement → creature pass → material damage →
+    /// fall damage → fall-limit check. Terminal outcomes freeze further input and paint.
     public mutating func advance(horizontal: Int, jump: Bool, heldJump: Bool = false, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
 
@@ -86,7 +199,10 @@ public struct CaveRun {
             damageProtectionTimer -= 1
         }
 
-        // 5. Material damage (fire, lava, acid overlap on body cells)
+        // 5. Creature pass: AI, hazards, projectile/explosion/contact damage.
+        advanceCreatures()
+
+        // 6. Material damage (fire, lava, acid overlap on body cells)
         if damageProtectionTimer == 0 {
             let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
             if CaveRun.touchesHazard(character.position, materialAt: materialAt) {
@@ -99,7 +215,7 @@ public struct CaveRun {
             }
         }
 
-        // 6. Fall damage (airborne → grounded transition while falling). Gated on the
+        // 7. Fall damage (airborne → grounded transition while falling). Gated on the
         //    protection timer so one tick cannot stack material and fall damage.
         if damageProtectionTimer == 0 && !wasGrounded && character.grounded {
             let fallDamage = CaveRun.fallDamage(impactSpeed: character.lastLandingImpactVelocity)
@@ -113,7 +229,7 @@ public struct CaveRun {
             }
         }
 
-        // 7. Fall-limit breach — instant death
+        // 8. Fall-limit breach — instant death
         if character.position.y <= fallLimit {
             outcome = .died
             return
@@ -194,9 +310,22 @@ public struct CaveRun {
         _ = simulation.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
     }
 
+    /// Test-only: injects projectile paths and explosion damage for creature damage tests.
+    mutating func testInjectDamage(projectilePaths: [(projectileId: UInt64, cells: [CellPosition])],
+                                   explosion: ExplosionDamageEvent?) {
+        simulation.lastProjectilePaths = projectilePaths
+        simulation.lastExplosionDamage = explosion
+    }
+
+    /// Test-only: advances the simulation by one tick without advancing the character.
+    mutating func testAdvanceSimulation() throws {
+        try simulation.advance()
+    }
+
     /// Test-only restoring initializer for mutation/replay tests.
     init(seed: UInt64, size: CaveWorldSize, world: CaveWorld, character: FixtureCharacter,
-         outcome: Outcome, simulation: Simulation, fallLimit: Int) {
+         outcome: Outcome, simulation: Simulation, fallLimit: Int,
+         creatures: [Creature] = [], nextCreatureId: UInt64 = 1) {
         self.seed = seed
         self.size = size
         self.world = world
@@ -204,5 +333,7 @@ public struct CaveRun {
         self.outcome = outcome
         self.simulation = simulation
         self.fallLimit = fallLimit
+        self.creatures = creatures
+        self.nextCreatureId = nextCreatureId
     }
 }

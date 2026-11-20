@@ -814,7 +814,8 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   CaptureComparison frames are referenced in the delivery record.
 
 ### lighting-glow: Darkness and emissive glow
-- status: todo
+- status: done
+- result: Added emissive glow and darkness falloff to the Metal renderer. FixturePixels.emissiveLight classifies fire/lava/burning pitch/burning oil/magic liquid as pure light sources; FixturePixels.lightMap builds a full-frame light texture with radial falloff plus player-centered white light. MetalRenderer uploads the light map as fragment texture 1 and blends base*ambient+light with ambient=0.15. CaptureComparison --lighting-glow produces before/after cave screenshots. EmissiveClassificationTests pass (classification + falloff MAE ≤ 2/255). Frame time regression ≤ 1 ms locally.
 - priority: 38
 - track: noita
 - depends: host-split, pixel-look

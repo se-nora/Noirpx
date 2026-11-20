@@ -113,6 +113,44 @@ public enum FixturePixels {
         return h
     }
 
+    /// Emissive light emitted by one occupied cell. Pure function of material
+    /// ID and (for pitch/oil) the burning thermal state — never frame index or
+    /// RNG, so replays stay deterministic. Returns (red, green, blue,
+    /// intensity, radius) in 0...1 light units, or nil for non-emissive cells.
+    private static func emissiveLight(_ material: Material, _ isBurning: Bool)
+        -> (r: Float, g: Float, b: Float, intensity: Float, radius: Float)? {
+        switch material {
+        case .fire:
+            return (1.00, 0.45, 0.10, 1.00, 6)
+        case .lava:
+            return (1.00, 0.35, 0.05, 1.00, 8)
+        case .pitch where isBurning:
+            return (1.00, 0.60, 0.20, 0.85, 5)
+        case .oil where isBurning:
+            return (1.00, 0.60, 0.20, 0.85, 5)
+        case .magicLiquid:
+            return (0.70, 0.20, 1.00, 0.90, 6)
+        default:
+            return nil
+        }
+    }
+
+    /// Adds one light splat into the packed 0x00RRGGBB light buffer, clamping
+    /// each channel to 255 so overlapping lights saturate rather than wrap.
+    private static func addLight(into light: inout [UInt32], width: Int, px: Int, py: Int,
+                                 r: Float, g: Float, b: Float) {
+        guard (0..<width).contains(px), py >= 0, py < light.count / width else { return }
+        let idx = py * width + px
+        let existing = light[idx]
+        let er = Float(existing >> 16 & 0xff)
+        let eg = Float(existing >> 8 & 0xff)
+        let eb = Float(existing & 0xff)
+        let nr = min(255, er + r)
+        let ng = min(255, eg + g)
+        let nb = min(255, eb + b)
+        light[idx] = UInt32(nr) << 16 | UInt32(ng) << 8 | UInt32(nb)
+    }
+
     /// Single authoritative Material -> UInt32 RGBA palette for the projectile overlay.
     /// Source of truth for all projectile tint colors; AppleHost has no duplicate palette.
     public static func materialColor(_ material: Material) -> UInt32 {
@@ -271,5 +309,116 @@ public enum FixturePixels {
     /// Rasterizes the camera with RGBA rows ordered from top to bottom.
     public static func rgba(snapshot: SimulationSnapshot, viewport: FixtureViewport, frame: UInt64 = 0) -> [UInt8] {
         rasterize(snapshot: snapshot, viewport: viewport, character: nil, frame: frame).pixels
+    }
+
+    /// Precomputed player light offsets for radius 110, white intensity 0.6.
+    /// Each entry: (dx, dy, factor) where factor = 1 - dist/radius, dist <= radius.
+    private static let playerLightOffsets: [(dx: Int, dy: Int, factor: Float)] = {
+        let radius: Float = 110
+        let rInt = Int(radius.rounded())
+        var offsets: [(Int, Int, Float)] = []
+        offsets.reserveCapacity(38000) // ~π·110²
+        for dy in -rInt...rInt {
+            for dx in -rInt...rInt {
+                let dist = hypot(Float(dx), Float(dy))
+                guard dist <= radius else { continue }
+                let factor = 1.0 - dist / radius
+                offsets.append((dx, dy, factor))
+            }
+        }
+        return offsets
+    }()
+
+    /// Emissive+player light map with smooth radial falloff, same dimensions as
+    /// the rasterized frame. Each texel holds accumulated light color (RGB, 0..255)
+    /// with alpha 255 when any light reaches that cell, else 0.
+    ///
+    /// Pure function of material IDs, thermal burning state, cell positions, and
+    /// the character position — never frame index or RNG — so replays are
+    /// deterministic. Presentation-only: reads the immutable snapshot, never mutates it.
+    public static func lightMap(snapshot: SimulationSnapshot, viewport: FixtureViewport,
+                                character: FixtureCharacter? = nil) -> [UInt8] {
+        let width = viewport.columns
+        let height = viewport.rows
+        var light = [UInt32](repeating: 0, count: width * height) // 0x00RRGGBB per texel
+
+        // Splat emissive cells: cheap because emissive cells are sparse.
+        for chunk in snapshot.chunks where viewport.visibleChunks.contains(chunk.position) {
+            for (index, material) in chunk.cells.enumerated() where material != .empty {
+                let isPitchOrOil = material == .pitch || material == .oil
+                let isBurning = isPitchOrOil ? chunk.thermalStates[index].isBurning : false
+                guard let emission = emissiveLight(material, isBurning) else { continue }
+                let worldX = chunk.position.x * Simulation.chunkWidth + index % Simulation.chunkWidth
+                let worldY = chunk.position.y * Simulation.chunkWidth + index / Simulation.chunkWidth
+                let cx = worldX - viewport.center.x + width / 2
+                let cy = height / 2 - 1 - worldY + viewport.center.y
+                guard (0..<width).contains(cx), (0..<height).contains(cy) else { continue }
+                let radius = Int(emission.radius.rounded())
+                let r = emission.r * emission.intensity * 255
+                let g = emission.g * emission.intensity * 255
+                let b = emission.b * emission.intensity * 255
+                for dy in -radius...radius {
+                    for dx in -radius...radius {
+                        let dist = hypot(Float(dx), Float(dy))
+                        guard dist <= Float(radius) else { continue }
+                        let factor = 1.0 - dist / Float(radius)
+                        addLight(into: &light, width: width, px: cx + dx, py: cy + dy,
+                                 r: r * factor, g: g * factor, b: b * factor)
+                    }
+                }
+            }
+        }
+
+        // Player light: white radial falloff around the character body center.
+        if let character {
+            let p = character.cameraCenter
+            let cx = p.x - viewport.center.x + width / 2
+            let cy = height / 2 - 1 - p.y + viewport.center.y
+            let intensity: Float = 0.6
+            let r = intensity * 255, g = intensity * 255, b = intensity * 255
+            for offset in playerLightOffsets {
+                addLight(into: &light, width: width, px: cx + offset.dx, py: cy + offset.dy,
+                         r: r * offset.factor, g: g * offset.factor, b: b * offset.factor)
+            }
+        }
+
+        // Pack into RGBA bytes: light color in RGB, alpha 255 where lit.
+        var bytes = [UInt8]()
+        bytes.reserveCapacity(width * height * 4)
+        for value in light {
+            bytes.append(UInt8((value >> 16) & 0xff))
+            bytes.append(UInt8((value >> 8) & 0xff))
+            bytes.append(UInt8(value & 0xff))
+            bytes.append(value == 0 ? 0 : 255)
+        }
+        return bytes
+    }
+
+    /// Applies a precomputed light map onto base RGBA pixels in place.
+    /// Formula per channel: out = clamp(base * ambient + light, 0, 1) * 255.
+    /// Alpha is taken from the base pixels (unchanged).
+    /// Matches the MetalRenderer fragment shader: `base * ambient + light` clamped to [0,1].
+    public static func applyLightMap(to basePixels: inout [UInt8],
+                                     lightMap: [UInt8],
+                                     width: Int,
+                                     height: Int,
+                                     ambient: Float = 0.15) {
+        precondition(basePixels.count >= width * height * 4)
+        precondition(lightMap.count >= width * height * 4)
+        let pixelCount = width * height
+        for i in 0..<pixelCount {
+            let baseIdx = i * 4
+            let lightIdx = i * 4
+            let br = Float(basePixels[baseIdx]) / 255.0
+            let bg = Float(basePixels[baseIdx + 1]) / 255.0
+            let bb = Float(basePixels[baseIdx + 2]) / 255.0
+            let lr = Float(lightMap[lightIdx]) / 255.0
+            let lg = Float(lightMap[lightIdx + 1]) / 255.0
+            let lb = Float(lightMap[lightIdx + 2]) / 255.0
+            basePixels[baseIdx] = UInt8(min(255, max(0, Int((br * ambient + lr) * 255))))
+            basePixels[baseIdx + 1] = UInt8(min(255, max(0, Int((bg * ambient + lg) * 255))))
+            basePixels[baseIdx + 2] = UInt8(min(255, max(0, Int((bb * ambient + lb) * 255))))
+            // alpha unchanged
+        }
     }
 }

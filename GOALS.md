@@ -973,7 +973,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
     screenshots; the frame time does not regress more than 1 ms locally.
 
 ### particles-debris: Ballistic cell particles
-- status: todo
+- status: done
 - priority: 48
 - track: noita
 - depends: explosions
@@ -984,6 +984,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   advanced deterministically and re-enter the grid on collision.
 - acceptance:
   - Tests: conservation of material, landing rules, replay; screenshot.
+- result: Spawn debris in Simulation.applyExplosion (40% chance per destroyed cell via blastRoll with distinct debrisSpawnSalt, no nextRandom consumption). Advance after projectiles (advanceDebris pass): Bresenham traversal, gravity (0.5 cells/tick²), collision with blocksCharacter materials, 120-tick lifetime. Deposit on collision/expiry with 8-neighborhood search; conservation invariant enforced. Per-explosion cap: 32; per-tick cap: 512. SimulationSnapshot.debris field (presentation-only, excluded from digest). digestVersion 8→9; SaveCodec.rulesVersion 7→8 (debris not saved). FixturePixels debris overlay: single-pixel tinted by materialColor, after projectiles before blast flash, sorted by ID for deterministic order-independence. Tests: 17 DebrisParticleTests (advance, collision, deposit, conservation), 10 SimulationDebrisTests (spawn determinism, caps, digestion exclusion, chunk-edge), 8 DebrisOverlayTests (viewport, clipping, order-independent, deterministic re-raster, digest exclusion). All 35 debris tests pass; full suite green except pre-existing CaveRunLevitationIntegrationTests failures. MARKETING_VERSION 0.52.0→0.53.0 (gameplay-visible). Headless PNG evidence at /tmp/debris_capture.png and /tmp/debris_capture_cave.png. Unverified: no visual regression test against prior projectile-overlay-proof captures; iOS Simulator build not run.
 
 ### run-summary: Permadeath run summary and new run
 - status: todo

@@ -54,9 +54,6 @@ struct HostView: View {
                     onNewRun: { model.newRun() },
                     onCycleMaterial: { model.cycleWandMaterial($0 ? 1 : -1) },
                     onToggleHUD: { isHUDVisible.toggle() },
-                    onCollectFluid: { model.collectFluid() },
-                    onPourFluid: { model.pourFluid() },
-                    onThrowFlask: { model.throwFlask() }
                 )
                 .id(model.renderGeneration)
                 .ignoresSafeArea()

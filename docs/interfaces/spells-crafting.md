@@ -47,6 +47,8 @@ public struct ProjectileBlueprint: Equatable, Sendable {
     public let manaCost: UInt8               // 0…255 mana points (0 = free)
     public let flags: Flags                  // behavior modifiers
     public let footprint: SpellFootprint     // deterministic impact footprint
+    public let explosionRadius: Int          // blast radius in cells (0 = no explosion), max 16
+    public let explosionPower: Int           // blast power vs hardness (0 = none), max 500
 
     public init(id: String,
                 name: String,
@@ -57,7 +59,11 @@ public struct ProjectileBlueprint: Equatable, Sendable {
                 cooldownTicks: UInt16 = 0,
                 manaCost: UInt8 = 0,
                 flags: Flags = [],
-                footprint: SpellFootprint)
+                footprint: SpellFootprint,
+                gravityFactor: GravityFactor = 0,
+                speed: ProjectileSpeed = 0,
+                explosionRadius: Int = 0,
+                explosionPower: Int = 0)
 }
 
 public struct Flags: OptionSet, Sendable {
@@ -67,6 +73,7 @@ public struct Flags: OptionSet, Sendable {
     public static let explosive     = Flags(rawValue: 1 << 1)  // triggers explosion on impact
     public static let leavesTrail   = Flags(rawValue: 1 << 2)  // places secondaryMaterial along path
     public static let homing        = Flags(rawValue: 1 << 3)  // future: adjusts ray toward nearest target
+    public static let digging       = Flags(rawValue: 1 << 4)  // removes soft materials along path, stops at rock
 }
 ```
 
@@ -150,7 +157,7 @@ public struct RecipeRegistry: Sendable {
     public func match(_ grid: CraftingGrid) -> Recipe?
 }
 ```
-- `RecipeRegistry.standard` contains 10 deterministic recipes (see table below).
+- `RecipeRegistry.standard` contains 13 deterministic recipes (see table below).
 - First match in registry order wins (priority = array order).
 
 ### `ManaPool`
@@ -219,7 +226,7 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 | `wandSlotCount` | 4 | `Wand.slots` capacity |
 | `craftingGridSize` | 9 | `CraftingGrid.slots` count |
 
-## Recipe Registry (Standard — 10 Recipes)
+## Recipe Registry (Standard — 13 Recipes)
 
 | ID | Name | Pattern (row-major, nil=wildcard) | Primary | Secondary | Range | Budget | Cooldown | Mana | Flags |
 |----|------|-----------------------------------|---------|-----------|-------|--------|----------|------|-------|
@@ -229,10 +236,12 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 | acid_spray | Acid Spray | [acid, acid, nil, acid, slime, nil, nil, nil, nil] | acid | — | 8 | 3 | 40 | 12 | piercing |
 | blood_boil | Blood Boil | [blood, blood, blood, nil, oil, nil, nil, nil, nil] | blood | fire | 12 | 3 | 45 | 15 | leavesTrail |
 | ice_shard | Ice Shard | [ice, ice, ice, nil, water, nil, nil, nil, nil] | ice | — | 14 | 3 | 25 | 10 | piercing |
-| gunpowder_blast | Gunpowder Blast | [gunpowder, gunpowder, gunpowder, nil, fire, nil, nil, nil, nil] | gunpowder | — | 8 | 2 | 80 | 25 | explosive |
+| bomb | Bomb | [gunpowder, gunpowder, gunpowder, nil, fire, nil, nil, nil, pitch] | empty | — | 10 | 1 | 90 | 30 | explosive |
+| gunpowder_blast | Gunpowder Blast | [gunpowder, gunpowder, gunpowder, nil, fire, nil, nil, nil, nil] | empty | — | 8 | 2 | 80 | 25 | explosive |
 | golden_touch | Golden Touch | [gold, gold, gold, nil, magicLiquid, nil, nil, nil, nil] | gold | — | 10 | 2 | 50 | 18 | — |
 | steam_cloud | Steam Cloud | [steam, steam, nil, steam, water, nil, nil, nil, nil] | steam | water | 6 | 4 | 30 | 8 | leavesTrail |
 | magic_missile | Magic Missile | [magicLiquid, magicLiquid, magicLiquid, nil, gold, nil, nil, nil, nil] | magicLiquid | — | 18 | 3 | 40 | 22 | homing |
+| dig_bolt | Digging Bolt | [sand, sand, sand, nil, ice, nil, nil, nil, gunpowder] | empty | — | 16 | 2 | 60 | 20 | digging |
 
 - Wildcard slots (nil) match any material and are NOT consumed.
 - Non-wildcard slots consume 1 count per craft.
@@ -242,14 +251,16 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 - `acid_spray` uses `slime` as catalyst (slot 4, not consumed).
 - `blood_boil` uses `oil` as catalyst (slot 4, not consumed).
 - `ice_shard` uses `water` as catalyst (slot 4, not consumed).
+- `bomb` uses `pitch` at slot 8 as catalyst (not consumed). `gunpowder_blast` requires an empty slot 8 to disambiguate.
 - `gunpowder_blast` uses `fire` as catalyst (slot 4, not consumed).
 - `steam_cloud` uses `water` as catalyst (slot 4, not consumed).
 - `magic_missile` uses `gold` as catalyst (slot 4, not consumed).
+- `dig_bolt` uses `ice` as catalyst (slot 4, not consumed). `gunpowder` at slot 8 completes the dig pattern.
 
 ## Save Codec Impact
 
-- `SaveCodec.rulesVersion` remains **4** (no change for spell system)
-- `SimulationSnapshot.digestVersion` unchanged (**6**)
+- `SaveCodec.rulesVersion` **7** (incremented for digging/explosive spells)
+- `SimulationSnapshot.digestVersion` **8** (incremented for digging/explosive spells)
 - **Not saved** (intentionally excluded):
   - In-flight spell casts (`SpellCasting.liveCasts`)
   - `CraftingGrid` contents
@@ -294,6 +305,26 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 - This ensures spell footprints always apply even under heavy paint load
 - **Tick 1 is exempt**: world initialization (e.g. `CaveRun` spawning a 256×128 grid) legitimately enqueues far more than 148 commands; the budget applies from tick 2 (first gameplay tick) onward
 
+## Digging Spell Behavior
+
+Digging projectiles (`dig_bolt`) use `advanceDigging()` instead of standard `advance()`:
+
+1. Advances along a Bresenham line from origin to target each tick.
+2. Removes soft materials (`.sand`, `.ice`, `.slime`, `.gunpowder`) from cells along the path — they become `.empty`.
+3. Passes through `.empty`, `.water`, `.fire`, `.lava`, `.steam`, `.oil`, `.blood`, `.acid`, `.pitch`, `.magicLiquid`, `.gold` unchanged.
+4. Stops at `.solid` (rock) — rock is unchanged, projectile is removed, no footprint is applied.
+5. Stops at world edge — projectile is removed, no footprint is applied.
+6. Leaves no footprint at impact — digging only removes cells, never places material.
+7. Expires silently when lifetimeTicks reaches 0 without impact — no footprint, no explosion.
+
+Explosive projectiles (`bomb`, `gunpowder_blast`):
+
+1. Detonates on impact — enqueues `ExplosionInput` to `pendingExplosions` at impact cell.
+2. Detonates on fuse expiry — when `lifetimeTicks == 0` without prior impact, enqueues `ExplosionInput` at current position.
+3. Explosions drain `pendingExplosions` within the same tick, chained bounded by `maxChainDepth = 8` — gunpowder cells trigger chain explosions.
+4. Gunpowder cells destroyed by explosion trigger further explosions (chaining).
+5. `ExplosionInput` carries `radius` and `power` from the blueprint.
+
 ## Testing Coverage
 
 - `CraftingTests` — Grid operations, recipe matching, crafting, wildcard consumption
@@ -302,3 +333,6 @@ Manages in-flight spell casts, advances them each tick via `WandCastProgress`, r
 - `ManaPoolTests` — Spend, refund, regenerate, caps, equality, Sendable
 - `CommandBudgetTests` — Spell command precedence over paint, budget cap (real pipeline)
 - `DeterministicReplayTests` — Seeded reproducibility with spell commands
+- `DiggingSpellsTests` — Digging bolt path/removal, bomb fuse+impact detonation, gunpowder chain, digestVersion 8
+- `ProjectileEntityTests` — digestVersion assertion updated to 8
+- `SaveFormatValidationTests` — rulesVersion 7 / digestVersion 8 rejection tests

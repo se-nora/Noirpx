@@ -200,11 +200,11 @@ final class CraftingTests: XCTestCase {
 
     func testAllRecipesConstructible() {
         let registry = RecipeRegistry.standard
-        // 10 base recipes + 3 modifiers
-        XCTAssertEqual(registry.recipes.count, 13)
+        // 10 base recipes + bomb + dig_bolt + 3 modifiers = 15
+        XCTAssertEqual(registry.recipes.count, 15)
 
         let ids = Set(registry.recipes.map { $0.id })
-        XCTAssertEqual(ids.count, 13) // All unique IDs
+        XCTAssertEqual(ids.count, 15) // All unique IDs
 
         for recipe in registry.recipes {
             XCTAssertEqual(recipe.pattern.count, 9)

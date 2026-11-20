@@ -649,7 +649,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Screenshot of lava meeting water forming rock and steam.
 
 ### wand-stats: Wands with stats and modifier spells
-- status: todo
+- status: done
 - priority: 30
 - track: noita
 - depends: projectile-entities

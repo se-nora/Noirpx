@@ -77,7 +77,7 @@ final class InputMetalView: MTKView {
                 }
                 return nil
             }
-            // B (11) - Pour fluid
+// B (11) - Pour fluid
             if event.keyCode == 11 {
                 if event.type == .keyDown && !event.isARepeat {
                     self.onPourFluid?()

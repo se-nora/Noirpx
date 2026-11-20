@@ -71,6 +71,8 @@ public struct DisplayListState: Equatable, Sendable {
     public let energy: Int?
     public let maxEnergy: Int?
     public let runGold: Int
+    public let flaskContents: [Material: Int]
+    public let flaskCapacity: Int
 
     // Beacon HUD
     public let collectedBeacons: Int
@@ -114,6 +116,8 @@ public struct DisplayListState: Equatable, Sendable {
         energy: Int? = nil,
         maxEnergy: Int? = nil,
         runGold: Int = 0,
+        flaskContents: [Material: Int] = [:],
+        flaskCapacity: Int = 0,
         collectedBeacons: Int = 0,
         warden: DisplayWarden? = nil,
         selectedMaterial: Material,
@@ -146,6 +150,8 @@ public struct DisplayListState: Equatable, Sendable {
         self.energy = energy
         self.maxEnergy = maxEnergy
         self.runGold = runGold
+        self.flaskContents = flaskContents
+        self.flaskCapacity = flaskCapacity
         self.collectedBeacons = collectedBeacons
         self.warden = warden
         self.selectedMaterial = selectedMaterial

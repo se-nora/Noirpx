@@ -15,10 +15,16 @@ final class GameModel: ObservableObject {
     @Published private(set) var hoverCell: CellPosition?
 
     /// Flask contents exposed to HUD. `[:]` when no active run.
-    @Published private(set) var flaskContents: [Material: Int] = [:]
+    @Published private(set) var flaskContents: [SimulationCore.Material: Int] = [:]
     /// Flask capacity exposed to HUD. `0` when no active run.
     @Published private(set) var flaskCapacity: Int = 0
 
+    /// Last non-nil hover cell for fluid interaction when hover clears (iOS touch end).
+    private var lastHoverCell: CellPosition?
+    /// The cell at which flask actions target (hover cell or last known hover).
+    private var flaskAimCell: CellPosition? {
+        hoverCell ?? lastHoverCell
+    }
     /// Material name under the cursor, derived from the current snapshot so it
     /// tracks changes (falling sand, burning out) without re-aiming.
     var hoveredMaterialName: String? {
@@ -94,7 +100,7 @@ final class GameModel: ObservableObject {
 
             // Publish initial flask state.
             flaskContents = run.flask.contents
-            flaskCapacity = CaveRun.flaskCapacity
+            flaskCapacity = run.flask.capacity
 
             // Rewire wandController to this run's active wand and stats.
             let activeWand = run.activeWand
@@ -191,7 +197,7 @@ final class GameModel: ObservableObject {
     private func updateFluidPublished() {
         guard let run = caveRun else { return }
         flaskContents = run.flask.contents
-        flaskCapacity = CaveRun.flaskCapacity
+        flaskCapacity = run.flask.capacity
         snapshot = run.simulation.snapshot
     }
 

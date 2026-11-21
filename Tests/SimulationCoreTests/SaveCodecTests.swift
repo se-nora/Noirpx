@@ -13,7 +13,13 @@ final class SaveCodecTests: XCTestCase {
     private func compare(_ decoded: BeaconRun, _ original: BeaconRun) throws {
         XCTAssertEqual(decoded.seed, original.seed)
         XCTAssertEqual(decoded.course, original.course)
-        XCTAssertEqual(decoded.character, original.character)
+        // fallStartY is runtime-only and not persisted; compare other fields.
+        XCTAssertEqual(decoded.character.position, original.character.position)
+        XCTAssertEqual(decoded.character.grounded, original.character.grounded)
+        XCTAssertEqual(decoded.character.verticalVelocity, original.character.verticalVelocity)
+        XCTAssertEqual(decoded.character.verticalRemainder, original.character.verticalRemainder)
+        XCTAssertEqual(decoded.character.lastLandingImpactVelocity, original.character.lastLandingImpactVelocity)
+        XCTAssertEqual(decoded.character.levitationEnergy, original.character.levitationEnergy)
         XCTAssertEqual(decoded.warden, original.warden)
         XCTAssertEqual(decoded.collected, original.collected)
         XCTAssertEqual(decoded.outcome, original.outcome)

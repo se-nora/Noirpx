@@ -325,6 +325,29 @@ Explosive projectiles (`bomb`, `gunpowder_blast`):
 4. Gunpowder cells destroyed by explosion trigger further explosions (chaining).
 5. `ExplosionInput` carries `radius` and `power` from the blueprint.
 
+## Crafting Gating
+
+### `CraftingGating`
+
+Pure gating logic for spell crafting UI — safe-zone only (Noita Holy Mountain pattern).
+
+```swift
+public enum CraftingGating {
+    /// Returns true when the crafting UI may be shown/toggled.
+    /// Allows crafting only when a run exists and has ended (any outcome != .playing).
+    /// This covers .died today and future terminal states (.won, .exhausted) without requiring updates.
+    /// Returns false when there is no run (nil) or the run is still .playing.
+    public static func isAllowed(_ outcome: CaveRun.Outcome?) -> Bool
+
+    /// Returns true when wand editing is allowed in the sanctuary.
+    /// Only true when sanctuaryState is .inSanctuary(...).
+    public static func isAllowedInSanctuary(_ sanctuaryState: SanctuaryState) -> Bool
+}
+```
+
+- `isAllowed(_ outcome:)` — used by death screen and terminal states; unchanged.
+- `isAllowedInSanctuary(_ state:)` — NEW: returns `true` iff `state == .inSanctuary(...)`. Used by `GameModel.isSanctuaryWandEditAllowed` to gate wand editing in the sanctuary shop.
+
 ## Testing Coverage
 
 - `CraftingTests` — Grid operations, recipe matching, crafting, wildcard consumption

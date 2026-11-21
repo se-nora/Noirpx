@@ -91,7 +91,7 @@ Header, 24 bytes:
 | 4 | 2 | format version, `1` |
 | 6 | 2 | flags, `0` (reserved; nonzero is rejected) |
 | 8 | 2 | rules version, `1` |
-| 10 | 2 | digest version, `3` |
+| 10 | 2 | digest version, `10` |
 | 12 | 4 | payload byte count u32, excluding the header |
 | 16 | 8 | material digest u64 of the saved world (digest version 3) |
 

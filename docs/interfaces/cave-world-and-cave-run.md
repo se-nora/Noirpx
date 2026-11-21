@@ -259,6 +259,78 @@ by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
 state is not saved or restored. This is a deliberate design: cave runs are
 session-scoped and regenerated from seed on restart.
 
+### Sanctuary (Safe Zone Between Levels)
+
+After completing a cave level, the run enters a **sanctuary** — a safe zone
+between levels where the character is fully healed, indestructible walls prevent
+damage, and a gold shop offers spells and a wand for purchase.
+
+#### Types
+
+```swift
+public enum SanctuaryState: Equatable, Sendable {
+    case notInSanctuary
+    case inSanctuary(level: Int, shopInventory: SanctuaryShopInventory, enteredAtTick: UInt64)
+}
+
+public struct SanctuaryShopInventory: Equatable, Sendable {
+    public let spellOffers: [SanctuaryShopOffer]  // 3–5 entries
+    public let wandOffer: SanctuaryShopOffer      // exactly 1 wand
+    public let generationSeed: UInt64
+}
+
+public struct SanctuaryShopOffer: Equatable, Sendable {
+    public let id: String                   // "spell:<blueprintId>" or "wand:<slot>"
+    public let spell: Spell?                // nil for wand offer
+    public let wand: Wand?                  // nil for spell offer
+    public let price: Int                   // gold cost
+    public let quantity: Int                // always 1
+}
+```
+
+#### `CaveRun` Integration
+
+- **`sanctuaryState: SanctuaryState`** — attached to `CaveRun`. When `.inSanctuary`,
+  normal level play is paused; the character cannot move, cast, or dig.
+
+- **`nextLevel(unlockedSpellIds:)`** — after level complete, generates sanctuary
+  world + shop inventory, applies full heal (`health = maxHealth`), sets
+  `sanctuaryState = .inSanctuary(...)`, and returns the sanctuary run (NOT the
+  next level).
+
+- **`enterSanctuary(unlockedSpellIds:)`** (internal) — creates the sanctuary
+  `CaveWorld` via `SanctuaryWorldGenerator`, applies full heal, builds shop
+  inventory via `SanctuaryShopGenerator.generate(seed:level:unlockedSpellIds:)`.
+
+- **`exitSanctuary(purchase: SanctuaryShopOffer?)`** — consumes purchase (if any),
+  deducts gold, grants spell/wand to active wand, generates the *actual* next
+  level world via `CaveWorldGenerator`, clears `sanctuaryState`.
+
+- **`buySanctuarySpell(index:)`** — purchases spell offer at index; validates
+  `runGold >= price`; on success deducts gold, grants spell to first empty wand
+  slot (or replaces active slot), removes offer from inventory (no restock).
+
+- **`buySanctuaryWand()`** — purchases the wand offer; validates gold; on success
+  deducts gold, replaces active wand.
+
+#### Indestructible Sanctuary Walls
+
+- **`Material.sanctuaryWall`** (raw value 16) — new material used for sanctuary
+  room borders.
+- **`isIndestructible: Bool`** property on `Material` — `true` only for
+  `sanctuaryWall`.
+- Simulation paint/dig/explosion paths check `isIndestructible` and no-op on
+  these cells.
+- `blocksCharacter = true` for sanctuary walls.
+
+#### Deterministic Generation Order
+
+1. `SanctuaryWorldGenerator.generate()` — sanctuary world (room + walls)
+2. `SanctuaryShopGenerator.generate()` — shop inventory (3–5 spells + 1 wand)
+3. `CaveWorldGenerator.generate()` — actual next level (only on `exitSanctuary`)
+
+Same `(seed, level)` → identical sanctuary world + identical shop inventory.
+
 ### Verified configurations
 
 - `standard` (256 × 128): seeds 1, 2, 3, 4, 42, 64 complete without falling

@@ -13,7 +13,8 @@ final class MaterialExpansionTests: XCTestCase {
         XCTAssertEqual(Material.gunpowder.rawValue, 13)
         XCTAssertEqual(Material.gold.rawValue, 14)
         XCTAssertEqual(Material.magicLiquid.rawValue, 15)
-        XCTAssertEqual(Material.allCases.count, 16)
+        XCTAssertEqual(Material.sanctuaryWall.rawValue, 16)
+        XCTAssertEqual(Material.allCases.count, 17)
     }
 
     func testLavaMovesAndCools() throws {

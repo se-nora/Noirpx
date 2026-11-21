@@ -244,6 +244,12 @@ public struct Simulation {
             chunks[chunk] = SimulationChunk()
         }
         let previous = chunks[chunk]!.cells[index]
+
+        // Indestructible guard: no-op if trying to overwrite an indestructible material.
+        if previous.isIndestructible {
+            return
+        }
+
         var newThermal = material == .empty ? .zero : thermal
         if material == .steam && thermal == .zero {
             newThermal = ThermalCellState(heat: 200)
@@ -622,6 +628,11 @@ extension Simulation {
 
                 let cellMaterial = material(at: pos)
                 guard cellMaterial != .empty else { continue }
+
+                // Indestructible guard: sanctuary walls cannot be destroyed by explosions.
+                if cellMaterial.isIndestructible {
+                    continue
+                }
 
                 let hardness = MaterialBehavior.forMaterial(cellMaterial).hardness
                 guard hardness > 0 else { continue } // hardness 0 = never targeted (empty, fire, steam)

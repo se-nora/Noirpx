@@ -55,3 +55,29 @@ segment state; returns `nil` to hide.
 - **Keyboard shortcuts**: The first 10 drawable materials receive shortcuts `1`–`9`, `0` (keycodes 18,19,20,21,23,22,26,28,25,29). Remaining materials have no shortcut.
 - **Wand materials**: `WandMaterials.all == MaterialBrush.drawable` (excludes `.empty`). `cycleWandMaterial` filters by the currently discovered set before cycling.
 - **Automatic derivation**: Adding a new case to `Material` automatically makes it drawable (via `MaterialBrush.drawable` and `WandMaterials.all`). Name, color, and behavior mappings remain compile-enforced manual additions in `WandCasting.swift` (`wandName`), `HUDControls.swift` (`materialColor`), `FixturePixels.swift` (color), and simulation reaction code.
+
+### Sanctuary Shop UI
+
+When `DisplayListState.inSanctuary == true`, `HUDLayout.gameUI()` renders the sanctuary shop instead of the normal HUD:
+
+- **Header**: "SANCTUARY" in gold, "Gold N" counter.
+- **Spell offers** (3–5): Each line shows "[N] SpellName — Xg" with a hit region.
+  - Hit region tag: `DisplayActionTag.buySanctuarySpell(index)` where index is 0-based.
+- **Wand offer**: One line showing "[W] Wand: CAP:N CD:N RC:N MANA:N/N/tick SPREAD:Ndeg — Xg" with a hit region.
+  - Hit region tag: `DisplayActionTag.buySanctuaryWand`.
+- **Continue button**: Prominent green button at bottom.
+  - Hit region tag: `DisplayActionTag.exitSanctuary`.
+- Panel background is darker (rgba(0,0,0,200)) with gold header.
+
+#### DisplayActionTag Extensions
+
+```swift
+case buySanctuarySpell(Int)   // "buySanctuarySpell:0"
+case buySanctuaryWand         // "buySanctuaryWand"
+case exitSanctuary            // "exitSanctuary"
+```
+
+These tags are handled by `GameModel`:
+- `buySanctuarySpell(_:)` → validates gold, deducts, grants spell to wand, removes offer.
+- `buySanctuaryWand()` → validates gold, deducts, replaces active wand.
+- `exitSanctuary(purchase:)` → consumes purchase, generates next level, clears sanctuary state.

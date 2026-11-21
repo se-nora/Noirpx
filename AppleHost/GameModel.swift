@@ -70,6 +70,12 @@ final class GameModel: ObservableObject {
         CraftingGating.isAllowed(caveRun?.outcome)
     }
 
+    /// Returns true when wand editing is allowed in sanctuary.
+    var isSanctuaryWandEditAllowed: Bool {
+        guard let run = caveRun else { return false }
+        return CraftingGating.isAllowedInSanctuary(run.sanctuaryState)
+    }
+
     var caveRun: CaveRun?
     @Published private(set) var worldBounds: FixtureViewport.CellRange? = nil
     private var scheduler = FixedTickScheduler()
@@ -119,11 +125,21 @@ final class GameModel: ObservableObject {
     }
 
     /// Advances to the next cave level. Called when the character reaches the goal cell.
-    /// Requires `caveRun?.isLevelComplete == true`. Increments level, mixes seed,
-    /// regenerates world with new biome config, and preserves health, wands, mana.
+    /// If not in sanctuary, enters sanctuary (generates sanctuary world + shop, applies full heal).
+    /// If in sanctuary, this should not be called directly; use exitSanctuary instead.
     func nextLevel() {
         guard var run = caveRun, run.isLevelComplete else { return }
-        guard let next = run.nextLevel() else { return }
+
+        // Check if we're already in sanctuary - if so, this is a programming error.
+        // Sanctuary exit should be handled via exitSanctuary().
+        if case .inSanctuary = run.sanctuaryState {
+            return
+        }
+
+        // Get unlocked spell IDs for shop generation
+        let unlockedSpellIds = RecipeRegistry.standard.recipes.map { $0.id }
+
+        guard let next = run.nextLevel(unlockedSpellIds: unlockedSpellIds) else { return }
         caveRun = next
         caveRunSession.seed = next.seed
         caveRunSession.wands = next.wands
@@ -133,7 +149,51 @@ final class GameModel: ObservableObject {
         scanAndDiscover()
         clearControls()
 
-        // Rewire wandController to this run's active wand and stats.
+        // If we entered sanctuary, don't rewire wandController (no active wand in sanctuary).
+        // The UI will show the shop instead.
+        if next.sanctuaryState == .notInSanctuary {
+            let activeWand = next.activeWand
+            wandController = WandController(wand: activeWand,
+                                            manaPool: ManaPool(
+                                                maximum: activeWand.manaMax,
+                                                regenerationPerTick: activeWand.manaRegenPerTick,
+                                                startingMana: activeWand.manaMax))
+        }
+    }
+
+    /// Core-owned purchase API for sanctuary shop offers.
+    /// Forwards to CaveRun.purchaseSanctuaryOffer, updates UI on success.
+    func purchaseSanctuaryOffer(_ id: String) {
+        guard var run = caveRun else { return }
+        guard case .inSanctuary = run.sanctuaryState else { return }
+        let result = run.purchaseSanctuaryOffer(id)
+        switch result {
+        case .success:
+            caveRun = run
+            snapshot = run.simulation.snapshot
+            updateActiveChunks()
+            scanAndDiscover()
+        case .insufficientGold, .invalidOffer:
+            // No state change on failure
+            break
+        }
+    }
+
+    /// Exits the sanctuary, generating the actual next level.
+    func exitSanctuary() {
+        guard var run = caveRun else { return }
+        guard case .inSanctuary = run.sanctuaryState else { return }
+        guard let next = run.exitSanctuary() else { return }
+        caveRun = next
+        caveRunSession.seed = next.seed
+        caveRunSession.wands = next.wands
+        caveRunSession.level = next.level
+        snapshot = next.simulation.snapshot
+        updateActiveChunks()
+        scanAndDiscover()
+        clearControls()
+
+        // Rewire wandController to the new run's active wand
         let activeWand = next.activeWand
         wandController = WandController(wand: activeWand,
                                         manaPool: ManaPool(

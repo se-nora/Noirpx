@@ -208,6 +208,14 @@ public struct ProjectileEntity: Sendable {
 
                 let material = materialAt(cell)
 
+                // Indestructible guard: sanctuary walls stop digging like solid rock.
+                if material.isIndestructible {
+                    position = FixedPoint.fromCells(x: cell.x, y: cell.y)
+                    hasImpacted = true
+                    moved.formUnion(dugCells)
+                    return (cell, dugCells)
+                }
+
                 if diggable.contains(material) {
                     dugCells.append(cell)
                 } else if material == .solid {

@@ -110,6 +110,14 @@ public struct DisplayListState: Equatable, Sendable {
     public let controls: DisplayControlScheme
     public let overlays: DisplayOverlayVisibility
 
+    // Sanctuary
+    public let sanctuaryState: SanctuaryState?
+    public let sanctuaryShopInventory: SanctuaryShopInventory?
+    public var inSanctuary: Bool {
+        if case .inSanctuary = sanctuaryState { return true }
+        return false
+    }
+
     public init(
         version: String,
         worldKind: DisplayWorldKind,
@@ -150,7 +158,9 @@ public struct DisplayListState: Equatable, Sendable {
         hoveredMaterialName: String? = nil,
         hudVisible: Bool = true,
         controls: DisplayControlScheme = .keyboard,
-        overlays: DisplayOverlayVisibility = DisplayOverlayVisibility(stats: false, help: false, crafting: false)
+        overlays: DisplayOverlayVisibility = DisplayOverlayVisibility(stats: false, help: false, crafting: false),
+        sanctuaryState: SanctuaryState? = nil,
+        sanctuaryShopInventory: SanctuaryShopInventory? = nil
     ) {
         self.version = version
         self.worldKind = worldKind
@@ -192,5 +202,7 @@ public struct DisplayListState: Equatable, Sendable {
         self.hudVisible = hudVisible
         self.controls = controls
         self.overlays = overlays
+        self.sanctuaryState = sanctuaryState
+        self.sanctuaryShopInventory = sanctuaryShopInventory
     }
 }

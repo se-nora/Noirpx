@@ -121,6 +121,11 @@ public enum DisplayActionTag: Equatable, Sendable, Hashable {
     case craftingSlot(Int)
     case clearCraftingSlot(Int)
 
+    // Sanctuary shop actions
+    case buySanctuarySpell(Int)
+    case buySanctuaryWand
+    case exitSanctuary
+
     public var jsonString: String {
         switch self {
         case .restart: return "restart"
@@ -137,6 +142,9 @@ public enum DisplayActionTag: Equatable, Sendable, Hashable {
         case .cycleWandSlot(let i): return "cycleWandSlot:\(i)"
         case .craftingSlot(let i): return "craftingSlot:\(i)"
         case .clearCraftingSlot(let i): return "clearCraftingSlot:\(i)"
+        case .buySanctuarySpell(let i): return "buySanctuarySpell:\(i)"
+        case .buySanctuaryWand: return "buySanctuaryWand"
+        case .exitSanctuary: return "exitSanctuary"
         }
     }
 
@@ -149,6 +157,7 @@ public enum DisplayActionTag: Equatable, Sendable, Hashable {
             case "cycleWandSlot": return .cycleWandSlot(Int(suffix)!)
             case "craftingSlot": return .craftingSlot(Int(suffix)!)
             case "clearCraftingSlot": return .clearCraftingSlot(Int(suffix)!)
+            case "buySanctuarySpell": return .buySanctuarySpell(Int(suffix)!)
             default: return nil
             }
         }
@@ -163,6 +172,8 @@ public enum DisplayActionTag: Equatable, Sendable, Hashable {
         case "closeCrafting": return .closeCrafting
         case "craft": return .craft
         case "selectErase": return .selectErase
+        case "buySanctuaryWand": return .buySanctuaryWand
+        case "exitSanctuary": return .exitSanctuary
         default: return nil
         }
     }

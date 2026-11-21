@@ -68,6 +68,11 @@ public struct CaveRun {
     /// Public getter for levelComplete for cross-module access.
     public var isLevelComplete: Bool { levelComplete }
 
+    /// Current simulation tick (completed tick count).
+    public var currentTick: UInt64 {
+        simulation.snapshot.tick
+    }
+
     internal private(set) var fallLimit: Int
 
     /// Creatures spawned deterministically into this cave run. Session state only.
@@ -77,6 +82,9 @@ public struct CaveRun {
 
     /// The player's two starting wands: wands[0] = active wand, wands[1] = secondary.
     public var wands: [Wand] = []
+
+    /// Sanctuary state for the safe zone between levels.
+    public var sanctuaryState: SanctuaryState = .notInSanctuary
 
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
@@ -359,6 +367,8 @@ public struct CaveRun {
     /// capture pre-advance grounded → character advance → protection-timer decrement →
     /// creature pass → material damage → fall damage → fall-limit check.
     /// Terminal outcomes freeze further input and paint.
+    /// When in sanctuary (sanctuaryState == .inSanctuary), skips goal-reach, fall-limit,
+    /// damage, and creature spawns — the sanctuary is a safe zone.
     public mutating func advance(horizontal: Int, jump: Bool, heldJump: Bool = false, activeChunks: ChunkRegion? = nil) throws {
         guard outcome == .playing else { return }
 
@@ -376,6 +386,15 @@ public struct CaveRun {
         //    records lastLandingImpactVelocity on landing (loop collision or post-loop
         //    grounded transition).
         try character.advance(snapshot: simulation.snapshot, horizontal: horizontal, jump: jump, heldJump: heldJump)
+
+        // In sanctuary: skip damage, goal, fall-limit, and creatures.
+        if case .inSanctuary = sanctuaryState {
+            // Still decrement protection timer (harmless).
+            if damageProtectionTimer > 0 {
+                damageProtectionTimer -= 1
+            }
+            return
+        }
 
         // 4. Decrement damage protection timer on playing ticks
         if damageProtectionTimer > 0 {
@@ -432,30 +451,138 @@ public struct CaveRun {
         }
     }
 
-    /// Advances to the next level. Requires `levelComplete == true`. Mixes the seed
-    /// by the level index, increments `level`, updates `biomeName`, and replaces
-    /// `world`, `simulation`, and `character` with a fresh CaveRun for the new level.
-    /// Health, wands, mana, and runGold carry across levels. Returns nil if not complete.
-    public mutating func nextLevel() -> CaveRun? {
+    /// Advances to the next level. Requires `levelComplete == true`.
+    /// If not currently in a sanctuary, generates the sanctuary world + shop inventory,
+    /// applies full heal, and returns the sanctuary run.
+    /// If currently in a sanctuary, this should not be called directly; use `exitSanctuary(purchase:)` instead.
+    public mutating func nextLevel(unlockedSpellIds: [String]) -> CaveRun? {
         guard levelComplete else { return nil }
 
-        level += 1
-        levelComplete = false
-        let newConfig = caveBiomeConfigForLevel(level, height: size.height)
-        let mixedSeed = seed &+ 0x9e3779b97f4a7c15 &* UInt64(level)
-        let next = try? CaveRun(seed: mixedSeed, width: size.width, height: size.height,
-                                level: level, biomeConfig: newConfig)
-        guard let next else { return nil }
+        // If already in sanctuary, this is a programming error — use exitSanctuary instead.
+        guard sanctuaryState == .notInSanctuary else { return nil }
 
-        self.world = next.world
-        self.simulation = next.simulation
-        self.character = next.character
-        self.seed = next.seed
-        self.fallLimit = next.fallLimit
-        self.biomeName = next.biomeName
-        self.level = next.level
+        // Enter sanctuary: generate sanctuary world and shop, apply full heal.
+        enterSanctuary(unlockedSpellIds: unlockedSpellIds)
+        levelComplete = false
+
+        // Return a copy with sanctuary state.
+        var sanctuaryRun = self
+        sanctuaryRun.sanctuaryState = sanctuaryState
+        return sanctuaryRun
+    }
+
+    /// Internal: creates the sanctuary CaveWorld, applies full heal, builds shop inventory.
+    mutating func enterSanctuary(unlockedSpellIds: [String]) {
+        // Generate sanctuary world with indestructible walls.
+        let sanctuaryGen = SanctuaryWorldGenerator(seed: seed, level: level, width: size.width, height: size.height)
+        let sanctuaryWorld = sanctuaryGen.generate()
+
+        // Generate deterministic shop inventory from unlocked spells + seed + level.
+        let shopInventory = SanctuaryShopGenerator.generate(seed: seed, level: level, unlockedSpellIds: unlockedSpellIds)
+
+        // Apply full heal.
+        health = maxHealth
+
+        // Update world, simulation, character for sanctuary.
+        world = sanctuaryWorld
+        simulation = Simulation(seed: seed)
+        character = FixtureCharacter(position: sanctuaryWorld.spawn)
+        fallLimit = sanctuaryWorld.extents.minY - 4 // safety margin below sanctuary room
+        biomeName = "sanctuary"
+
+        // Stamp sanctuary world into simulation (same as normal level generation).
+        let sortedCells = sanctuaryWorld.cells.keys.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+        for pos in sortedCells {
+            try? simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: sanctuaryWorld.cells[pos]!))
+        }
+        _ = try? simulation.advance()
+
+        // Set sanctuary state with entered tick (using CaveRun.currentTick getter).
+        sanctuaryState = .inSanctuary(
+            level: level + 1, // sanctuary sits between current level and next
+            shopInventory: shopInventory,
+            enteredAtTick: currentTick
+        )
+    }
+
+    /// Exits the sanctuary, generating the actual next level.
+    /// Returns the new CaveRun for the next level, or nil if generation fails.
+    public mutating func exitSanctuary() -> CaveRun? {
+        guard case .inSanctuary(let sanctuaryLevel, _, _) = sanctuaryState else { return nil }
+
+        // Generate the actual next level.
+        let nextLevelIndex = sanctuaryLevel
+        let newConfig = caveBiomeConfigForLevel(nextLevelIndex, height: size.height)
+        let mixedSeed = seed &+ 0x9e3779b97f4a7c15 &* UInt64(nextLevelIndex)
+        guard var next = try? CaveRun(seed: mixedSeed, width: size.width, height: size.height,
+                                      level: nextLevelIndex, biomeConfig: newConfig) else { return nil }
+
+        // Preserve cross-level state.
+        next.wands = self.wands
+        next.runGold = self.runGold
+        next.flask = self.flask
+        next.sanctuaryState = .notInSanctuary
+        next.level = nextLevelIndex
 
         return next
+    }
+
+    /// Test helper: sets character health directly.
+    mutating func testSetHealth(_ health: Int) {
+        self.health = health
+    }
+
+    /// Test helper: sets run gold directly.
+    mutating func testSetRunGold(_ gold: Int) {
+        self.runGold = gold
+    }
+
+    /// Core-owned purchase API for sanctuary shop offers.
+    /// Validates gold, deducts, grants spell/wand to first wand, removes offer from inventory.
+    /// Returns .success, .insufficientGold, or .invalidOffer.
+    public mutating func purchaseSanctuaryOffer(_ id: String) -> SanctuaryPurchaseResult {
+        guard case .inSanctuary(let level, var inventory, let enteredAtTick) = sanctuaryState else {
+            return .invalidOffer
+        }
+
+        // Find the offer by ID.
+        if let spellIndex = inventory.spellOffers.firstIndex(where: { $0.id == id }) {
+            let offer = inventory.spellOffers[spellIndex]
+            guard runGold >= offer.price else { return .insufficientGold }
+
+            // Deduct gold and grant spell.
+            runGold -= offer.price
+            if let spell = offer.spell {
+                if let emptyIndex = wands[0].slots.firstIndex(where: { $0 == nil }) {
+                    wands[0].slots[emptyIndex] = spell
+                } else {
+                    wands[0].slots[wands[0].activeSlotIndex] = spell
+                }
+            }
+
+            // Remove offer from inventory (no restock).
+            inventory.spellOffers.remove(at: spellIndex)
+            sanctuaryState = .inSanctuary(level: level, shopInventory: inventory, enteredAtTick: enteredAtTick)
+            return .success(offer: offer)
+        }
+
+        if inventory.wandOffer.id == id {
+            let offer = inventory.wandOffer
+            guard runGold >= offer.price else { return .insufficientGold }
+
+            // Deduct gold and grant wand.
+            runGold -= offer.price
+            if let wand = offer.wand {
+                wands[0] = wand
+            }
+
+            // Mark wand offer as purchased by setting a sentinel (price = -1, wand = nil).
+            inventory.wandOffer = SanctuaryShopOffer(id: offer.id, spell: nil, wand: nil, price: -1)
+            sanctuaryState = .inSanctuary(level: level, shopInventory: inventory, enteredAtTick: enteredAtTick)
+            return .success(offer: offer)
+        }
+
+        return .invalidOffer
     }
 
     /// Fall damage based on fall height in cells (takeoff Y minus landing Y).

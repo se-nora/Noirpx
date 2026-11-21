@@ -81,6 +81,11 @@ public enum HUDLayout {
         let bottomReserved = pillHeight + pillBottomMargin
         let maxPanelHeight = max(0, height - 2 * panelTop - bottomReserved)
 
+        // SANCTUARY MODE: render sanctuary shop instead of normal HUD
+        if state.inSanctuary, let inventory = state.sanctuaryShopInventory {
+            return sanctuaryShopUI(width: width, height: height, state: state, inventory: inventory, fs: fs, lh: lh, op: op, ip: ip, pw: pw, panelX: panelX, panelTop: panelTop, contentX: contentX, contentTop: contentTop, contentInset: contentInset, maxPanelHeight: maxPanelHeight)
+        }
+
         // ---- Build text lines ----
         var lines: [HUDLine] = []
         lines.append(HUDLine(text: "NOIRPX v\(state.version)", bold: true))
@@ -296,6 +301,91 @@ public enum HUDLayout {
         if state.outcome == .died {
             list.append(contentsOf: summaryOverlay(width: width, height: height, state: state).items)
         }
+
+        return list
+    }
+
+    // MARK: - Sanctuary Shop UI
+
+    private static func sanctuaryShopUI(
+        width: Int, height: Int, state: DisplayListState, inventory: SanctuaryShopInventory,
+        fs: Int, lh: Int, op: Int, ip: Int, pw: Int, panelX: Int, panelTop: Int,
+        contentX: Int, contentTop: Int, contentInset: Int, maxPanelHeight: Int
+    ) -> DisplayList {
+        var list = DisplayList(width: width, height: height)
+
+        // Build sanctuary shop lines
+        var lines: [HUDLine] = []
+        lines.append(HUDLine(text: "SANCTUARY", bold: true, color: .rgba(255, 215, 0))) // Gold header
+        lines.append(HUDLine(text: "Gold \(state.runGold)", bold: true))
+        lines.append(HUDLine(text: "")) // spacer
+
+        // Spell offers
+        for (index, offer) in inventory.spellOffers.enumerated() {
+            let spellName = offer.spell?.blueprint.name ?? "Unknown Spell"
+            let priceText = "\(offer.price)g"
+            lines.append(HUDLine(text: "  [\(index + 1)] \(spellName)  —  \(priceText)"))
+        }
+
+        // Wand offer
+        if let wand = inventory.wandOffer.wand {
+            let wandDesc = "CAP:\(wand.capacity) CD:\(wand.castDelayTicks) RC:\(wand.rechargeTimeTicks) MANA:\(wand.manaMax)/\(wand.manaRegenPerTick)/tick SPREAD:\(wand.spreadDegrees)deg"
+            lines.append(HUDLine(text: "  [W] Wand: \(wandDesc)  —  \(inventory.wandOffer.price)g"))
+        }
+
+        lines.append(HUDLine(text: "")) // spacer
+        lines.append(HUDLine(text: "Press Continue to proceed"))
+
+        let maxLines = max(1, (maxPanelHeight - contentInset) / lh)
+        let shownLines = Array(lines.prefix(maxLines))
+        let panelHeight = min(maxPanelHeight, shownLines.count * lh + contentInset)
+
+        // Panel background
+        let panelRect = DisplayRect(x: panelX, y: panelTop, width: pw, height: panelHeight)
+        list.append(.roundRect(rect: panelRect, color: .rgba(0, 0, 0, 200), cornerRadius: 8))
+
+        // Text lines (clipped to panel)
+        list.append(.clip(rect: panelRect))
+        var lineTop = contentTop
+        for (lineIndex, line) in shownLines.enumerated() {
+            let tw = line.totalWidth
+            let textRect = DisplayRect(x: contentX, y: lineTop, width: max(tw, 1), height: lh)
+            list.append(.text(rect: textRect, runs: line.runs, baselineFromTop: 6))
+
+            // Add hit regions for spell offers
+            let offerCount = inventory.spellOffers.count
+            if lineIndex < offerCount {
+                let offer = inventory.spellOffers[lineIndex]
+                let buyRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: buyRect, actionTag: .buySanctuarySpell(lineIndex)))
+            }
+            // Wand offer hit region
+            if lineIndex == offerCount {
+                let buyRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: buyRect, actionTag: .buySanctuaryWand))
+            }
+            // Continue button hit region (last line)
+            if lineIndex == shownLines.count - 1 {
+                let continueRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: continueRect, actionTag: .exitSanctuary))
+            }
+
+            lineTop += lh
+        }
+        list.append(.clip(rect: nil))
+
+        // Bottom Continue button (prominent)
+        let buttonHeight = lh + 12
+        let buttonY = panelTop + panelHeight + 8
+        let continueTitle = "Continue"
+        let bw = max(120, BitmapFont.textWidth(continueTitle) + 32)
+        let bx = (width - bw) / 2
+        let brect = DisplayRect(x: bx, y: buttonY, width: bw, height: buttonHeight)
+        list.append(.roundRect(rect: brect, color: .rgba(60, 120, 60, 255), cornerRadius: 6))
+        list.append(.strokeRect(rect: brect, color: .rgba(160, 200, 160, 255), lineWidth: 2))
+        let tRect = DisplayRect(x: bx + 16, y: buttonY, width: bw - 32, height: lh)
+        list.append(.text(rect: tRect, runs: [DisplayTextRun(text: continueTitle, color: .rgba(255, 255, 255, 255))], baselineFromTop: (buttonHeight - lh) / 2))
+        list.append(.hitRegion(rect: brect, actionTag: .exitSanctuary))
 
         return list
     }

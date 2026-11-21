@@ -146,6 +146,7 @@ func asciiDump(
         case .gunpowder: c = "G"
         case .gold: c = "$"
         case .magicLiquid: c = "M"
+        case .sanctuaryWall: c = "#"
         }
         return prefix.isEmpty ? c : "*"
     }

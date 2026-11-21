@@ -634,6 +634,31 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   `// Each worker publishes one result through the lock` failures; ResidentSimulation.swift edits apply cleanly on first
   attempt; the tooling digest no longer lists this signature as actionable.
 
+### fix-explosion-bugfix-edit-radius: Stabilize implementer edit call for CaveWorldGenTests spawn radius in explosion-bugfix
+- status: todo
+- priority: 10
+- track: infra
+- depends: none
+- areas: [tests-infra]
+- why: >
+  The tooling review surfaces 4 occurrences of
+  `pass-tool :: edit :: N: XCTAssertGreaterThan(dgx * dgx + dgy * dgy, N * N,`
+  inside the explosion-bugfix goal pass editing
+  Tests/SimulationCoreTests/CaveWorldGenTests.swift. The implementer's edit
+  oldString no longer matches the current file content (changing spawn/goal
+  safety radius `6 * 6` -> `12`), so the edit tool rejects the application and
+  the pass stalls. This is recurring game-repository tooling inside a goal pass,
+  not loop machinery; the loop may not edit the game repository.
+- scope: >
+  Fix the implementer's edit oldString input for the CaveWorldGenTests.swift
+  spawn/goal safety radius assertion so it matches current file content,
+  targeting Tests/SimulationCoreTests/CaveWorldGenTests.swift only.
+- acceptance: >
+  The explosion-bugfix goal pass completes without pass-tool edit
+  `XCTAssertGreaterThan(dgx * dgx + dgy * dgy, N * N,` failures;
+  CaveWorldGenTests.swift edits apply cleanly; the tooling digest no longer
+  lists this signature as actionable.
+
 ## Performance
 
 ### test-suite-speed: Make the default test suite fast

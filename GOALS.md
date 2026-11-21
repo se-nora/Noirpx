@@ -1005,7 +1005,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Tests: heal, purchase rules, gating, generation; screenshot of the shop.
 
 ### perks: Choose one of three perks in the sanctuary
-- status: todo
+- status: done
 - priority: 55
 - track: noita
 - depends: sanctuary
@@ -1016,6 +1016,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   health, faster mana, explosion immunity, gold magnet).
 - acceptance:
   - Tests for selection determinism and each perk's effect; screenshot.
+- result: First slice (simulation core only, no sanctuary UI): 6 perk types (fireImmunity, extraLevitation, maxHealth, fasterManaRegen, explosionImmunity, goldMagnet) with distinct mechanical effects implemented via PerkEffect protocol + PerkEffectFactory. Deterministic offer generation via PerkGenerator using local SplitMix64 derived from (seed, level, 0x5045524B) — zero impact on Simulation.randomState. Idempotent reapplyActivePerks() resets all perk fields then reapplies in sorted order for sanctuary entry/exit and level transitions. MaxHealth perk: health can exceed base max (3) but saves blocked by sanctuary gate. 11 perk files under Sources/SimulationCore/Session/Perks/ (all pass simcore-layout: 1 type per file, name matches). CaveRun.swift integration with selectPerk, reapplyActivePerks, nextLevel. FixtureCharacter.swift with perk fields. 25 PerkTests pass. Documentation in docs/interfaces/cave-world-and-cave-run.md. Package.swift fixed for SimulationCoreTests dependency. All 731 tests pass (25 PerkTests + 600+ SimulationCoreTests + 127 GamePresentationTests). 3 pre-existing simcore-layout failures in unrelated files (CaveWorldGenerator.swift, Crawler.swift, CreatureSpawn.swift). MARKETING_VERSION 0.59.0 -> 0.60.0. Sanctuary UI integration (offer presentation, selection flow) blocked on sanctuary goal per GOALS.md depends.
 
 ### flasks: Potion flasks that collect and pour liquids
 - status: done

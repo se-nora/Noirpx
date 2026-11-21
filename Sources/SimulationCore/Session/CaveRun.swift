@@ -566,8 +566,8 @@ public struct CaveRun {
             return .success(offer: offer)
         }
 
-        if inventory.wandOffer.id == id {
-            let offer = inventory.wandOffer
+        if inventory.wandOffer?.id == id {
+            let offer = inventory.wandOffer!
             guard runGold >= offer.price else { return .insufficientGold }
 
             // Deduct gold and grant wand.
@@ -576,8 +576,8 @@ public struct CaveRun {
                 wands[0] = wand
             }
 
-            // Mark wand offer as purchased by setting a sentinel (price = -1, wand = nil).
-            inventory.wandOffer = SanctuaryShopOffer(id: offer.id, spell: nil, wand: nil, price: -1)
+            // Remove wand offer (nil after purchase, no restock).
+            inventory.wandOffer = nil
             sanctuaryState = .inSanctuary(level: level, shopInventory: inventory, enteredAtTick: enteredAtTick)
             return .success(offer: offer)
         }

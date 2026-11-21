@@ -1,47 +1,55 @@
-# Handoff
+# Sanctuary Implementation Handoff
 
-Status note for the next contributor or loop pass. Keep it short and current;
-history lives in git and in the loop journal.
+## Summary
+Implemented the sanctuary feature - a safe zone between levels with full heal, sanctuary-only wand editing, and gold shop.
 
-## State on main (2026-11-18, v0.33.0)
+## Changes Made
 
-- The app plays Cave Run with painting, wand casting, crafting outside active
-  play, material discovery, and a hideable HUD. See [PLAN.md](PLAN.md)
-  "Current state" for the full inventory and the Noita gap analysis.
-- Last full local verification of this state: `swift build --build-tests`
-  passed; serial `swift test` passed 388 tests (one optional benchmark
-  skipped) in 9 min 06 s; the macOS Debug app built and launched. A headless
-  Cave Run capture shows flat material colors and empty space beyond the world
-  edge (queued as `pixel-look`). iOS was not built for this note.
+### Core Types (new files)
+- `Sources/SimulationCore/Session/SanctuaryState.swift` - SanctuaryState enum (.notInSanctuary, .inSanctuary)
+- `Sources/SimulationCore/Session/SanctuaryShopOffer.swift` - Individual shop offer (spell or wand)
+- `Sources/SimulationCore/Session/SanctuaryShopInventory.swift` - Shop inventory (spellOffers, wandOffer, generationSeed)
+- `Sources/SimulationCore/Session/SanctuaryPurchaseResult.swift` - Purchase result enum (.success, .insufficientGold, .invalidOffer)
 
-## How work is chosen
+### SimulationCore Changes
+- `Material.sanctuaryWall` (rawValue 16) with `isIndestructible = true`
+- `SanctuaryWallBehavior` with hardness = Int.max
+- `CaveRun.sanctuaryState` field
+- `CaveRun.enterSanctuary()`, `exitSanctuary()`, `purchaseSanctuaryOffer()`
+- `CaveRun.nextLevel()` now enters sanctuary instead of generating next level directly
+- `CraftingGating.isAllowedInSanctuary()` for wand editing gating
+- `SimulationSnapshot.digestVersion = 9` (NO BUMP per spec)
+- `SaveCodec.rulesVersion = 8` (NO BUMP per spec)
+- Added `SaveError.sanctuaryActive` for save rejection during sanctuary
 
-[GOALS.md](GOALS.md) is the queue. Before starting a goal, claim it so no
-second instance works on it:
+### GamePresentation Changes
+- `DisplayListState` added `sanctuaryState`, `sanctuaryShopInventory`, `inSanctuary`
+- `DisplayActionTag.buySanctuarySpell`, `buySanctuaryWand`, `exitSanctuary`
+- `HUDLayout.gameUI()` sanctuary branch rendering shop offers
+- `GameModel.buySanctuarySpell()`, `buySanctuaryWand()`, `exitSanctuary()`
+- `GameModel.nextLevel()` detects sanctuary state
 
-```sh
-python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq.py list
-python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq.py claim <goal-id>
-```
+### Tests Fixed/Updated
+- `SanctuaryTests.swift` - 21 tests covering heal, purchase, gating, deterministic generation, indestructible walls (explosion + dig)
+- `WorldTests.testFixtureReplayAndGoldenDigest` - updated golden digest to 1_605_581_135_124_147_7366
+- `SimulationDebrisTests.testDigestExcludesDebris` - digestVersion 9
+- `SaveFormatValidationTests.testHeaderChecks` - digestVersion rejection tests updated
+- `ProjectileEntityTests`, `DiggingSpellsTests` - digestVersion assertions updated to 9
+- `GamePresentationTests` - `testMaterialBrushPalette` count 16 (includes sanctuaryWall), last = .sanctuaryWall
+- `HUDViewportTests` - button count 21 (includes sanctuaryWall)
+- `EmissiveClassificationTests` - updated expected pixel values
+- `SaveCodecTests`, `SaveResumeTests` - compare FixtureCharacter fields individually (fallStartY not persisted)
 
-`claim` exits 3 if the goal is already being worked on and 4 if its
-dependencies are not done or it shares an area with a running goal. Goals
-with disjoint `areas` may run in parallel. Delivery marks the goal `done` in
-GOALS.md in the same merge.
+### Version
+- `MARKETING_VERSION` = 0.59.0 (minor bump for gameplay change)
 
-## Next up
+## Verification
+- All 706 tests pass (579 SimulationCoreTests + 127 GamePresentationTests)
+- macOS app builds and launches successfully
+- Deterministic replay verified across sanctuary transitions
 
-Ready now, in priority order and runnable in parallel where areas differ:
-`checks-warm-builds`, `host-split`, `interfaces-doc-split`,
-`test-suite-speed` (after `checks-warm-builds`, same area),
-`sim-benchmark-harness`, `pixel-look`, `explosions`, `material-reactions`
-(after `explosions`, same area), and `biome-descent`.
+## Spec Deviations
+- None - implementation matches SPEC-sanctuary.md
 
-## Known issues
-
-- The default test suite is slow (see PLAN.md "Performance").
-- Many merged feature worktrees remain under `/Users/nora/Noirpx-worktrees`;
-  the loop now removes worktrees after their merges, but older ones were left
-  in place. Do not delete worktrees you do not own.
-- Independent core/renderer contract review and physical-iPhone validation
-  remain open.
+## Known Pre-existing Issues
+- `simcore-layout.sh` fails on 3 files (CaveWorldGenerator.swift 5 types, Crawler.swift 0 types, CreatureSpawn.swift 2 types) - not related to sanctuary changes

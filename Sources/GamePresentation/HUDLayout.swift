@@ -328,9 +328,9 @@ public enum HUDLayout {
         }
 
         // Wand offer
-        if let wand = inventory.wandOffer.wand {
+        if let wandOffer = inventory.wandOffer, let wand = wandOffer.wand {
             let wandDesc = "CAP:\(wand.capacity) CD:\(wand.castDelayTicks) RC:\(wand.rechargeTimeTicks) MANA:\(wand.manaMax)/\(wand.manaRegenPerTick)/tick SPREAD:\(wand.spreadDegrees)deg"
-            lines.append(HUDLine(text: "  [W] Wand: \(wandDesc)  —  \(inventory.wandOffer.price)g"))
+            lines.append(HUDLine(text: "  [W] Wand: \(wandDesc)  —  \(wandOffer.price)g"))
         }
 
         lines.append(HUDLine(text: "")) // spacer

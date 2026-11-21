@@ -831,6 +831,25 @@ public struct CaveWorldGenerator: Sendable {
             }
         }
 
+        // Early natural spawn/goal selection (when not using template).
+        // This must happen BEFORE chamber placement so chambers can avoid the actual spawn/goal.
+        var earlySpawnCell: (Int, Int)? = nil
+        var earlyGoalCell: (Int, Int)? = nil
+        if !stampSpawnTemplate {
+            var empties: [(Int, Int)] = []
+            for gy in 0..<h {
+                for gx in 0..<w {
+                    if grid[gy][gx] == .empty {
+                        empties.append((gx, gy))
+                    }
+                }
+            }
+            if !empties.isEmpty {
+                earlySpawnCell = empties.min(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+                earlyGoalCell = empties.max(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+            }
+        }
+
         // Chamber placement pass: carve varied rooms (>=15x15) into solid rock,
         // distributed across biome bands, respecting safety radius from spawn/goal.
         // Runs after initial connectivity repair, before sand/material placement.
@@ -843,7 +862,7 @@ public struct CaveWorldGenerator: Sendable {
             // For initial chamber placement safety checks, use spawn/goal estimates that
             // approximate the FINAL positions. When stampSpawnTemplate=true, the template
             // spawn is used and goal is outside footprint. When false, natural selection
-            // picks lexicographic min/max empty cells, typically near (2,2) and (w-3,h-3).
+            // picks lexicographic min/max empty cells (computed early above).
             let safetySpawn: (Int, Int)
             let safetyGoal: (Int, Int)
             if stampSpawnTemplate {
@@ -851,9 +870,12 @@ public struct CaveWorldGenerator: Sendable {
                 // Goal will be the lexicographic max empty cell outside footprint.
                 // Use a conservative estimate: far right, middle height.
                 safetyGoal = (w - 3, h / 2)
+            } else if let earlySpawn = earlySpawnCell, let earlyGoal = earlyGoalCell {
+                // Use the actual early natural spawn/goal for safety checks.
+                safetySpawn = earlySpawn
+                safetyGoal = earlyGoal
             } else {
-                // Natural spawn/goal: lexicographic min/max of empty cells.
-                // After cave carving, these tend to be near top-left and bottom-right.
+                // Fallback (should not happen): conservative estimates.
                 safetySpawn = (2, 2)
                 safetyGoal = (w - 3, h - 3)
             }
@@ -1273,7 +1295,10 @@ public struct CaveWorldGenerator: Sendable {
 
         // Post-chamber-placement revalidation: ensure chambers respect the
         // FINAL spawn and goal safety radius. Fill violating chambers with solid.
-        if !placedChambers.isEmpty {
+        // Only run for template case (layout != nil), where spawn/goal are designed
+        // locations that must be protected. For natural case, spawn/goal are emergent
+        // and early safety checks during placement are sufficient.
+        if !placedChambers.isEmpty && layout != nil {
             revalidateChambers(
                 grid: &grid,
                 width: w,

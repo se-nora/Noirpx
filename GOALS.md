@@ -109,6 +109,21 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Deterministic replay test covers explosion damage and terrain modification.
 
 
+### cave-depth-death-bugfix: Cave run kills player at depth without fall damage
+- status: todo
+- priority: 2
+- track: perf
+- depends: none
+- areas: worldgen, player
+- why: In Cave Run mode, the player dies at a certain depth without taking fall damage. The game should not kill the player for descending deeper into the cave — only fall damage, environmental hazards, and combat should cause death. This is likely a worldgen boundary check, a spawn/goal placement issue, or an incorrect death trigger in the simulation.
+- scope: Identify the code path that kills the player at depth (search for death/damage logic in CaveRun, CaveWorldGenerator, FixtureCharacter, or world bounds checking). Fix the erroneous death trigger so descending deeper is safe unless the player takes actual fall damage or hits a hazard. Verify with a deep cave run playtest.
+- acceptance:
+  - Player can descend to the maximum cave depth without dying from depth alone.
+  - Fall damage still works correctly (validated by fall-damage-bugfix criteria).
+  - No new death triggers added for depth/position.
+  - Deterministic replay test runs a deep cave (256x128+) for 5000+ ticks without spurious death.
+
+
 ### noita-gap-analysis: Compare current game to Noita and add missing goals
 - status: todo
 - priority: 75

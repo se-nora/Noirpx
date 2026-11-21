@@ -661,7 +661,6 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - track: infra
 - depends: none
 - areas: tests-infra
-- result: Added docs/goal-runbooks/simcore-file-layout.md pre-read-verified anchor runbook for ResidentSimulation.swift lines 412-441 following the fix-digging-spells-recipe-edits precedent; verbatim anchors + pre-read mandate so parent pass edits apply cleanly on first attempt; docs-only, no ResidentSimulation.swift change (diff vs main empty), no version-bump gameplay effect (patch bump 0.51.0 -> 0.51.1). Verified: edit-convention-check.sh PASS; simcore-layout.sh 3 pre-existing FAILs on main unrelated; swift test pre-existing CaveRunLevitationIntegrationTests failures unrelated. Unverified: iOS Simulator build (optional); tooling-digest signature non-actionable pending parent simcore-file-layout pass re-run (loop-side).
 - why: >
   The tooling review (2026-11-20T00:17:23+0100) surfaces 3 occurrences of
   `pass-tool :: edit :: N: // Each worker publishes one result through the lock; the owner reads after all workers finish.`
@@ -679,6 +678,26 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   The simcore-file-layout goal pass completes without pass-tool edit
   `// Each worker publishes one result through the lock` failures; ResidentSimulation.swift edits apply cleanly on first
   attempt; the tooling digest no longer lists this signature as actionable.
+- result: Added docs/goal-runbooks/simcore-file-layout.md pre-read-verified anchor runbook for ResidentSimulation.swift lines 412-441 following the fix-digging-spells-recipe-edits precedent; verbatim anchors + pre-read mandate so parent pass edits apply cleanly on first attempt; docs-only, no ResidentSimulation.swift change (diff vs main empty), no version-bump gameplay effect (patch bump 0.51.0 -> 0.51.1). Verified: edit-convention-check.sh PASS; simcore-layout.sh 3 pre-existing FAILs on main unrelated; swift test pre-existing CaveRunLevitationIntegrationTests failures unrelated. Unverified: iOS Simulator build (optional); tooling-digest signature non-actionable pending parent simcore-file-layout pass re-run (loop-side).
+
+### fix-cave-room-size-distribution-edits: Fix implementer edit calls for cave-room-size-distribution chamber placement
+- status: todo
+- priority: 6
+- track: infra
+- depends: none
+- areas: tests-infra
+- why: >
+  The tooling review surfaces pass-tool edit failures inside the cave-room-size-distribution goal pass editing
+  Sources/SimulationCore/World/CaveWorldGenerator.swift. The implementer's edit oldString inputs for
+  `revalidateChambers`, `CaveWorldGenerator.swift`, or `lavaCells` no longer match the current file content, so
+  the edit tool rejects the application and the pass stalls. This is recurring game-repository tooling inside a
+  goal pass, not loop machinery; the loop may not edit the game repository.
+- scope: >
+  Fix the implementer's edit oldString inputs for cave-room-size-distribution chamber placement code in
+  Sources/SimulationCore/World/CaveWorldGenerator.swift so they match current file content, targeting that file only.
+- acceptance: >
+  The cave-room-size-distribution goal pass completes without pass-tool edit `revalidateChambers`,
+  `CaveWorldGenerator.swift`, or `lavaCells` failures; CaveWorldGenerator.swift edits apply cleanly on first attempt.
 
 ### fix-explosion-bugfix-edit-radius: Stabilize implementer edit call for CaveWorldGenTests spawn radius in explosion-bugfix
 - status: done

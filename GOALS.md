@@ -136,7 +136,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - No implementation work done in this goal.
 
 ### cave-navigation-bugfix: Generated cave is too tiny for player navigation
-- status: todo
+- status: done
 - priority: 85
 - track: noita
 - depends: biome-descent
@@ -147,7 +147,78 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Analysis document in docs/interfaces/cave-generation.md or similar.
   - GOALS.md has 4-6 new cave generation goals with proper fields.
   - Target dimensions documented and achievable.
+- result: Analysis complete (docs/interfaces/cave-generation.md). Created 5 sub-goals: cave-generator-noise-scale, cave-room-size-distribution, cave-corridor-width, vertical-shaft-generation, cave-spawn-room-scaling. All track: noita, depend on this goal, areas: worldgen. Unverified: implementation of sub-goals; deterministic digests will change when sub-goals execute.
 
+
+### cave-generator-noise-scale: Lower carve frequency and threshold for wider corridors and chambers
+- status: todo
+- priority: 80
+- track: noita
+- depends: cave-navigation-bugfix
+- areas: worldgen
+- why: The current FBM noise frequencies (0.06–0.08) and thresholds (0.38–0.45) produce fine-grained, fragmented empty regions. Lowering frequency and threshold will create larger contiguous open spaces that meet the ≥5 cell corridor and ≥15×15 chamber targets.
+- scope: Adjust `carveFrequency` and `carveThreshold` per biome band in `CaveBiomeConfig.defaultForHeight` and `collapsedMine`. Target frequency ~0.02–0.04, threshold ~0.25–0.35. Preserve deterministic seeding and band transition interpolation. Update `CaveWorldGenTests` determinism matrices after changes.
+- acceptance:
+  - Generated caves show main corridors ≥5 cells wide in the majority of seeds.
+  - Chamber-like regions ≥15×15 cells appear in each biome band.
+  - `CaveWorldGenTests` pass with updated digests (deterministic replay unchanged for same seeds).
+  - Material placement budgets still respected (no budget overruns).
+
+### cave-room-size-distribution: Procedurally place varied chambers ≥15×15 across the level
+- status: todo
+- priority: 78
+- track: noita
+- depends: cave-navigation-bugfix
+- areas: worldgen
+- why: Only the spawn pad room exists (fixed 14×12), below the 15×15 target. Noita-like caves need multiple chambers of varied sizes for combat, exploration, and secrets.
+- scope: Add a chamber placement pass in `CaveWorldGenerator.generate` after noise carving and before connectivity repair. Place 3–6 chambers per level with sizes 15×15 to 30×30, distributed across biome bands. Carve chambers into solid rock, respecting clearance from spawn/goal. Integrate with connectivity repair so chambers connect to the main component.
+- acceptance:
+  - Each generated level contains 3+ chambers ≥15×15 cells (verified across 10 seeds).
+  - Chamber sizes vary (not all identical).
+  - Chambers connect to the main cave network (reachable from spawn).
+  - No chamber overlaps spawn/goal safety radius (6 cells Chebyshev).
+
+### cave-corridor-width: Widen connectivity tunnels to ≥5 cells for character fit
+- status: todo
+- priority: 82
+- track: noita
+- depends: cave-navigation-bugfix
+- areas: worldgen
+- why: Connectivity repair carves 1×2 cell L-shaped tunnels, but the character body is 5×9 cells. Tunnels are physically impassable and must be widened.
+- scope: Parameterize tunnel width in `repairConnectivity` (and the fallback `carveDirectRoute`) to ≥5 cells wide × ≥3 cells high. Use a configurable `tunnelWidth` and `tunnelHeight` (default 5×3). Ensure widened tunnels do not carve through protected materials (water, lava, etc.) and that `sealHazards` restores containment after widening.
+- acceptance:
+  - All connectivity tunnels are ≥5 cells wide and ≥3 cells high.
+  - Character (5×9) can traverse any tunnel without getting stuck (verified by pathfinding test).
+  - Protected materials remain sealed after tunnel carving (sealHazards test passes).
+  - Deterministic digests updated; `CaveWorldGenTests` pass.
+
+### vertical-shaft-generation: Add vertical descent shafts ≥7 wide × ≥32 deep connecting regions
+- status: todo
+- priority: 79
+- track: noita
+- depends: cave-navigation-bugfix
+- areas: worldgen
+- why: Only one fixed shaft exists (cols 8–14, depth 32–48). Noita-like descent needs multiple shafts connecting chambers across biome bands and levels.
+- scope: Add a shaft placement pass in `CaveWorldGenerator.generate` after chamber placement. Place 2–4 vertical shafts per level, width ≥7 cells, depth ≥32 cells, connecting chambers or main corridors across bands. Shafts carve through solid rock; walls use 2-cell flank thickness. Ensure shafts connect to the main component and respect spawn/goal clearance.
+- acceptance:
+  - Each level has 2+ shafts ≥7×32 cells connecting different vertical regions.
+  - Shafts connect chambers/corridors across biome bands (surface→underground→deep).
+  - Shaft walls are 2 cells thick; interior is empty.
+  - Character can descend through shafts (verified by pathfinding test).
+
+### cave-spawn-room-scaling: Scale spawn pad room to ≥15×15 with combat clearance
+- status: todo
+- priority: 81
+- track: noita
+- depends: cave-navigation-bugfix
+- areas: worldgen
+- why: The spawn room is fixed at 14×12 (cols 8–21, rows pf+1…pf+12), below the 15×15 chamber target and too small for combat.
+- scope: Update `CaveSpawnTemplate` constants: expand `roomRightColInterior` to achieve ≥15×15 interior (e.g., cols 6–21 = 16 wide, rows pf+1…pf+16 = 16 tall). Adjust `bodyLeft`, flank walls, right wall, and clearance radius accordingly. Ensure the shaft band (cols 8–14, width 7) remains unchanged. Update template layout math and termination scan.
+- acceptance:
+  - Spawn room interior ≥15×15 cells (verified in layout struct).
+  - Character (5×9) has ≥3 cells clearance on all sides for combat movement.
+  - Shaft band (cols 8–14, width 7) unchanged; termination scan works.
+  - `CaveSpawnReplayTests` pass with updated layout expectations.
 
 ### cpu-freeze-bugfix: Game freezes at 100% CPU after a few seconds
 - status: todo

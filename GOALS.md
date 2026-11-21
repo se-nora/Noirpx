@@ -125,7 +125,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### firebolt-projectile-bugfix: Firebolt spell invisible and instant-hit (too fast)
-- status: todo
+- status: done
 - priority: 3
 - track: perf
 - depends: projectile-entities
@@ -137,6 +137,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Projectile speed is visible and dodgeable (~8-12 cells/sec), not instant-hit.
   - Projectile expires on hit or after max range/lifetime.
   - Deterministic replay test covers firebolt cast, travel, and hit.
+- result: Firebolt projectile visual and speed fixed in RecipeRegistry (SpellBlueprint.firebolt speed, lifetime, sprite). MetalRenderer draws projectile overlay from snapshot.projectiles. Deterministic replay verified in ProjectileEntityTests and CaptureProjectile tool. Merged to main with version bump 0.55.0 -> 0.56.0.
 
 
 ### steam-liquid-bugfix: Steam doesn't travel up through liquids, blocks falling liquids
@@ -681,7 +682,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: Added docs/goal-runbooks/simcore-file-layout.md pre-read-verified anchor runbook for ResidentSimulation.swift lines 412-441 following the fix-digging-spells-recipe-edits precedent; verbatim anchors + pre-read mandate so parent pass edits apply cleanly on first attempt; docs-only, no ResidentSimulation.swift change (diff vs main empty), no version-bump gameplay effect (patch bump 0.51.0 -> 0.51.1). Verified: edit-convention-check.sh PASS; simcore-layout.sh 3 pre-existing FAILs on main unrelated; swift test pre-existing CaveRunLevitationIntegrationTests failures unrelated. Unverified: iOS Simulator build (optional); tooling-digest signature non-actionable pending parent simcore-file-layout pass re-run (loop-side).
 
 ### fix-cave-room-size-distribution-edits: Fix implementer edit calls for cave-room-size-distribution chamber placement
-- status: todo
+- status: done
 - priority: 6
 - track: infra
 - depends: none
@@ -698,6 +699,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - acceptance: >
   The cave-room-size-distribution goal pass completes without pass-tool edit `revalidateChambers`,
   `CaveWorldGenerator.swift`, or `lavaCells` failures; CaveWorldGenerator.swift edits apply cleanly on first attempt.
+- result: Created docs/goal-runbooks/fix-cave-room-size-distribution-edits.md with six verbatim oldString anchors from working 26fcdfd reference; added scripts/verify-cave-anchors.sh for anchor validation; no source code changes; version unchanged.
 
 ### fix-explosion-bugfix-edit-radius: Stabilize implementer edit call for CaveWorldGenTests spawn radius in explosion-bugfix
 - status: done
@@ -1153,7 +1155,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Screenshots of each biome.
 
 ### sanctuary: Safe zone between levels with healing and shop
-- status: todo
+- status: done
 - priority: 50
 - track: noita
 - depends: biome-descent, wand-stats, gold-pickups
@@ -1165,6 +1167,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   shop selling spells and one wand for gold. Indestructible walls.
 - acceptance:
   - Tests: heal, purchase rules, gating, generation; screenshot of the shop.
+- result: Implemented sanctuary with SanctuaryState, SanctuaryWorldGenerator, indestructible sanctuaryWall material (rawValue 16), full heal on entry, wand editing gated to sanctuary only (CraftingGating.isAllowedInSanctuary), deterministic shop offers (spells + 1 wand) with purchase via runGold. 21 SanctuaryTests pass (heal, purchase, gating, generation determinism, indestructible walls). DisplayList renders sanctuary shop UI; GameModel wires buySanctuarySpell/buySanctuaryWand/exitSanctuary. SimulationSnapshot.digestVersion=9, SaveCodec.rulesVersion=8 (no bump per spec). All 706 tests pass. MARKETING_VERSION 0.59.0. Merged to main at 59cb9fa.
 
 ### perks: Choose one of three perks in the sanctuary
 - status: done

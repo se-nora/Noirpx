@@ -1,4 +1,0 @@
-module SimulationCore {
-header "SimulationCore-Swift.h"
-export *
-}

@@ -212,7 +212,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Material placement budgets still respected (no budget overruns).
 
 ### cave-room-size-distribution: Procedurally place varied chambers ≥15×15 across the level
-- status: todo
+- status: done
 - priority: 78
 - track: noita
 - depends: cave-navigation-bugfix
@@ -224,6 +224,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Chamber sizes vary (not all identical).
   - Chambers connect to the main cave network (reachable from spawn).
   - No chamber overlaps spawn/goal safety radius (6 cells Chebyshev).
+- result: Chamber placement pass implemented in CaveWorldGenerator.generate (commit 26fcdfd). Places 3-6 chambers per level (15×15 to 30×30) across biome bands with spawn/goal safety clearance. Connectivity verified via CaveWorldGenTests.testConnectivityStillHolds. Fixed chamber revalidation logic for natural spawn/goal (commit cbcd4bd). Merged to main.
 
 ### cave-corridor-width: Widen connectivity tunnels to ≥5 cells for character fit
 - status: todo

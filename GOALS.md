@@ -635,7 +635,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   attempt; the tooling digest no longer lists this signature as actionable.
 
 ### fix-explosion-bugfix-edit-radius: Stabilize implementer edit call for CaveWorldGenTests spawn radius in explosion-bugfix
-- status: todo
+- status: done
 - priority: 10
 - track: infra
 - depends: none
@@ -658,6 +658,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   `XCTAssertGreaterThan(dgx * dgx + dgy * dgy, N * N,` failures;
   CaveWorldGenTests.swift edits apply cleanly; the tooling digest no longer
   lists this signature as actionable.
+- result: Test file already has correct `6 * 6` content on main; implementer oldString must match exact formatting (16-space indent, 36-space continuation). No code changes required; pre-existing simcore-layout FAILs on main (Crawler/CreatureSpawn/CaveWorldGenerator top-level type counts) are unrelated. Verified: swift test --parallel -c release green.
 
 ## Performance
 

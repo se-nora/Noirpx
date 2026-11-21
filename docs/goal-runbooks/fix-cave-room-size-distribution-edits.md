@@ -8,20 +8,19 @@ Status: committed deliverable of goal `fix-cave-room-size-distribution-edits` (i
 
 `Sources/SimulationCore/World/CaveWorldGenerator.swift` — target path relative to the repo root.
 
-Reference (26fcdfd working version): `/Users/nora/Noirpx-worktrees/cave-room-size-distribution/Sources/SimulationCore/World/CaveWorldGenerator.swift`
+Reference (current main): `/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorldGenerator.swift`
 
-## Self-check grep table (run against the 26fcdfd reference file before any edit)
+## Self-check grep table (run against the current main file before any edit)
 
 ```sh
-F=/Users/nora/Noirpx-worktrees/cave-room-size-distribution/Sources/SimulationCore/World/CaveWorldGenerator.swift
-grep -c '' "$F"                                          # 2482 (file has no trailing newline)
-grep -n 'func generateInspected' "$F"                    # line 489
-grep -n 'placeChambers(' "$F" | head -1                  # line 758
-grep -n 'let lavaCells = placeLava' "$F"                 # line 857
-grep -n 'sealHazards(grid: &grid' "$F"                   # lines 869, 878 (TWO hits)
-grep -n 'internal func generateWithChambers' "$F"        # line 2417
-grep -n 'if !placedChambers.isEmpty {' "$F" | head -2    # lines 770, 897 (second is revalidation block start)
-grep -n 'Post-pass chamber revalidation' "$F"            # line 892 (unique comment)
+F=/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorldGenerator.swift
+grep -c '' "$F"                                          # 2392 (file has no trailing newline)
+grep -n 'func generateInspected' "$F"                    # line 1338
+grep -n 'placeChambers(' "$F" | head -1                  # line 475 (def), line 860 (call)
+grep -n 'let lavaCells = placeLava' "$F"                 # line 1182
+grep -n 'sealHazards(grid: &grid' "$F"                   # line 1196 (single occurrence)
+grep -n 'func generateWithChambers' "$F"                 # line 1346
+grep -n 'revalidateChambers' "$F"                        # lines 643 (def), 1277 (call)
 ```
 
 Line numbers above are guidance only; verbatim strings are the anchors.
@@ -30,101 +29,143 @@ Line numbers above are guidance only; verbatim strings are the anchors.
 
 Before every `edit`, re-`read` the file immediately before editing and copy `oldString` exactly from the fresh read (whitespace, indentation, line endings). Line numbers above are guidance only; verbatim strings are the anchors. After a failed edit, re-read before retrying. Never call `edit` with `oldString == newString` (AGENTS.md: a no-op is forbidden). No `oldString`/`newString` block in this runbook may contain an ellipsis — every block is complete text, character-for-character.
 
-## Verbatim anchor strings (copied verbatim from 26fcdfd reference)
+## Verbatim anchor strings (copied verbatim from current main)
 
-### Anchor 1 — `generateInspected` signature (line 489)
-
-```
-    func generateInspected(stampSpawnTemplate: Bool, capturePrePass: Bool, capturePostTemplate: Bool = false) -> (world: CaveWorld, prePass: [[Material]]?, postTemplate: [[Material]]?, chambers: [CaveChamber]) {
-```
-
-### Anchor 2 — `placeChambers` call site (lines 758–766)
+### Anchor 1 — `generateInspected` signature (line 1338)
 
 ```
-        placeChambers(
-            grid: &grid,
-            w: w, h: h,
-            biomeConfig: biomeConfig,
-            originX: originX, originY: originY,
-            seed: seed,
-            layout: layout,
-            placedChambers: &placedChambers
-        )
+    func generateInspected(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?) {
 ```
 
-### Anchor 3 — `placeLava` call + `lavaCells` binding (lines 857–858) — no `chamberCells` param
+### Anchor 2 — `placeChambers` call site (lines 860–872)
 
 ```
+            placeChambers(
+                grid: &grid,
+                width: w,
+                height: h,
+                originX: originX,
+                originY: originY,
+                biomeConfig: biomeConfig,
+                layout: templateLayout!,
+                spawn: safetySpawn,
+                goal: safetyGoal,
+                seed: seed,
+                chambers: &placedChambers,
+                chamberCells: &chamberCells
+            )
+```
+
+### Anchor 3 — `placeLava` call + `lavaCells` binding (lines 1182–1185) — includes `chamberCells` param
+
+```
+        // Lava: rare deep pools walled by solid rock.
         let lavaCells = placeLava(grid: &grid, width: w, height: h, originX: originX, originY: originY,
-                                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget)
+                                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
+                                  chamberCells: chamberCells)
 ```
 
-### Anchor 4 — `sealHazards` call sites (lines 869–870 and 878–879) — TWO occurrences
-
-First occurrence (after material placement, before safety margin):
+### Anchor 4 — `sealHazards` call site (line 1196–1198) — SINGLE occurrence
 
 ```
+        // Restore the containment of the placed hazards after carving.
         sealHazards(grid: &grid, width: w, height: h,
                     lavaCells: lavaCells, gunpowderCells: gunpowderCells)
 ```
 
-Second occurrence (after fallback direct route carve):
+### Anchor 5 — `generateWithChambers` function (lines 1346–1349) — 2 params, 3 return values
 
 ```
-            sealHazards(grid: &grid, width: w, height: h,
-                        lavaCells: lavaCells, gunpowderCells: gunpowderCells)
-```
-
-### Anchor 5 — `generateWithChambers` function (lines 2431–2438) — internal, 4 return values, 3 params
-
-```
-    internal func generateWithChambers(
-        stampSpawnTemplate: Bool = true,
-        capturePrePass: Bool = false,
-        capturePostTemplate: Bool = false
-    ) -> (world: CaveWorld, prePass: [[Material]]?, postTemplate: [[Material]]?, chambers: [CaveChamber]) {
-        let (world, prePass, postTemplate, chambers) = generateInspected(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass, capturePostTemplate: capturePostTemplate)
-        return (world, prePass, postTemplate, chambers)
+    public func generateWithChambers(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?, chambers: [CaveChamber]) {
+        let (world, prePassGrid, chambers) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
+        return (world, prePassGrid, chambers)
     }
 ```
 
-### Anchor 6 — Inline chamber revalidation block (lines 892–948) — replaces `revalidateChambers`
+### Anchor 6 — `revalidateChambers` function definition (lines 643–699) and call site (lines 1277–1286)
+
+Function definition:
 
 ```
-            if !placedChambers.isEmpty {
-                var survivingChambers: [CaveChamber] = []
-                for chamber in placedChambers {
-                    var violates = false
-                    for y in chamber.interior.minY...chamber.interior.maxY {
-                        for x in chamber.interior.minX...chamber.interior.maxX {
-                            let dxSpawn = x - finalSpawnCell.0
-                            let dySpawn = y - finalSpawnCell.1
-                            let dxGoal = x - finalGoalCell.0
-                            let dyGoal = y - finalGoalCell.1
-                            let distSpawn = max(abs(dxSpawn), abs(dySpawn))
-                            let distGoal = max(abs(dxGoal), abs(dyGoal))
-                            if distSpawn <= 6 || distGoal <= 6 {
-                                violates = true
-                                break
-                            }
-                        }
-                        if violates { break }
-                    }
-                    if violates {
-                        // Fill chamber interior with solid
-                        for y in chamber.interior.minY...chamber.interior.maxY {
-                            for x in chamber.interior.minX...chamber.interior.maxX {
-                                grid[y][x] = .solid
-                            }
-                        }
-                    } else {
-                        survivingChambers.append(chamber)
+    /// Post-pass revalidation: ensure chambers respect the FINAL spawn/goal safety radius.
+    /// Any chamber cell (including walls) within Chebyshev-6 of the final spawn or goal
+    /// is filled entirely with .solid.
+    private func revalidateChambers(
+        grid: inout [[Material]],
+        width: Int,
+        height: Int,
+        originX: Int,
+        originY: Int,
+        spawn: (Int, Int),
+        goal: (Int, Int),
+        chambers: inout [CaveChamber],
+        chamberCells: inout Set<Int>
+    ) {
+        let safetyRadius = 6
+        // spawn/goal are already grid coordinates (0..w-1, 0..h-1)
+        let spawnGX = spawn.0
+        let spawnGY = spawn.1
+        let goalGX = goal.0
+        let goalGY = goal.1
+
+        print("  DEBUG revalidateChambers: spawn=(\(spawnGX),\(spawnGY)), goal=(\(goalGX),\(goalGY)), chambers=\(chambers.count)")
+
+        var validChambers: [CaveChamber] = []
+        for chamber in chambers {
+            // Check ALL chamber cells (interior + wall ring) against FINAL spawn/goal
+            var violates = false
+            // print("    REVALIDATE CHECK: chamber interior=\(chamber.interior), wallRect=\(chamber.wallRect)")
+            for gy in chamber.wallRect.minY...chamber.wallRect.maxY {
+                for gx in chamber.wallRect.minX...chamber.wallRect.maxX {
+                    let ds = max(abs(gx - spawnGX), abs(gy - spawnGY))
+                    let dg = max(abs(gx - goalGX), abs(gy - goalGY))
+                    if ds <= safetyRadius || dg <= safetyRadius {
+                        violates = true
+                        // print("    REVALIDATE FAIL: chamber wallRect=\(chamber.wallRect), cell=(\(gx),\(gy)), ds=\(ds), dg=\(dg), spawn=(\(spawnGX),\(spawnGY))")
+                        break
                     }
                 }
-                placedChambers = survivingChambers
-                // Second connectivity repair after revalidation to connect any isolated chambers.
-                repairConnectivity(grid: &grid, width: w, height: h)
+                if violates { break }
             }
+            if !violates {
+                // print("    REVALIDATE PASS: chamber interior=\(chamber.interior)")
+            }
+            if violates {
+                // Fill chamber interior and wall ring with solid
+                let wallRect = chamber.wallRect
+                for gy in wallRect.minY...wallRect.maxY {
+                    for gx in wallRect.minX...wallRect.maxX {
+                        grid[gy][gx] = .solid
+                        chamberCells.remove(gy * width + gx)
+                    }
+                }
+                // print("    REVALIDATE REMOVED chamber: interior=\(chamber.interior)")
+            } else {
+                validChambers.append(chamber)
+            }
+        }
+        chambers = validChambers
+        // print("  DEBUG revalidateChambers: remaining=\(chambers.count)")
+    }
+```
+
+Call site:
+
+```
+        // Post-chamber-placement revalidation: ensure chambers respect the
+        // FINAL spawn and goal safety radius. Fill violating chambers with solid.
+        if !placedChambers.isEmpty {
+            revalidateChambers(
+                grid: &grid,
+                width: w,
+                height: h,
+                originX: originX,
+                originY: originY,
+                spawn: finalSpawnCell2,
+                goal: finalGoalCell2,
+                chambers: &placedChambers,
+                chamberCells: &chamberCells
+            )
 ```
 
 ## Verification script reference
@@ -143,7 +184,7 @@ The script checks the six anchors against the current `Sources/SimulationCore/Wo
 - No version bump (this goal is docs-only, no visual/gameplay effect; `MARKETING_VERSION` unchanged by this goal).
 - No loop-machinery or implementer-agent edits.
 - No no-op `edit` calls.
-- No chamber size logic modifications — the parent `fix-cave-room-size-distribution` goal owns the gameplay change; this runbook only records the six verbatim anchors from the 26fcdfd working baseline so that parent pass edits apply cleanly.
+- No chamber size logic modifications — the parent `fix-cave-room-size-distribution` goal owns the gameplay change; this runbook only records the six verbatim anchors from the current main baseline so that parent pass edits apply cleanly.
 
 ## What the parent `fix-cave-room-size-distribution` pass must still do
 

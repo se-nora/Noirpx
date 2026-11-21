@@ -33,12 +33,12 @@ public struct CaveRun {
     public var seed: UInt64
     public let size: CaveWorldSize
     public var world: CaveWorld
-    public private(set) var character: FixtureCharacter
+    public internal(set) var character: FixtureCharacter
     public private(set) var outcome: Outcome = .playing
     public private(set) var simulation: Simulation
 
     public let maxHealth: Int = 3
-    public private(set) var health: Int = 3
+    public internal(set) var health: Int = 3
     public private(set) var damageProtectionTimer: Int = 0
     /// Gold collected this run (picked up from gold cells and creature drops).
     public private(set) var runGold: Int = 0
@@ -85,6 +85,20 @@ public struct CaveRun {
 
     /// Sanctuary state for the safe zone between levels.
     public var sanctuaryState: SanctuaryState = .notInSanctuary
+
+    // MARK: - Perk fields
+
+    /// Active perks selected this run.
+    public internal(set) var activePerks: Set<PerkType> = []
+
+    /// Perk: max health bonus (added to base maxHealth of 3).
+    public internal(set) var perkMaxHealthBonus: Int = 0
+
+    /// Perk: faster mana regen multiplier (1.0 or 1.5).
+    public internal(set) var perkFasterManaRegenMultiplier: Double = 1.0
+
+    /// Base wand mana regen values captured at first perk apply (for idempotent revert).
+    public internal(set) var baseWandManaRegen: [UInt8] = []
 
     /// Creates a new cave run for the given seed and world size.
     /// Verified sizes are 256×128 and 128×64. Seeds 1, 2, 3, 4, 42, 64 are tested.
@@ -284,7 +298,7 @@ public struct CaveRun {
         // damage so one blast cannot stack with other hits in one tick). Damage is
         // distance-scaled from the blast center to the nearest character body cell.
         if let explosion {
-            if damageProtectionTimer == 0 {
+            if damageProtectionTimer == 0 && !character.perkExplosionImmunity {
                 var damage = 0
                 for cell in characterBody {
                     let distance = max(abs(cell.x - explosion.center.x),
@@ -326,8 +340,9 @@ public struct CaveRun {
 
     /// Collects gold cells touched by the character's body. Gold blocks the
     /// character, so contact means orthogonal adjacency between a character
-    /// body cell and a gold cell. Collected cells are removed (enqueued as
-    /// `.empty` for the next tick) and `runGold` is incremented once per cell.
+    /// body cell and a gold cell. With gold magnet perk, radius is doubled.
+    /// Collected cells are removed (enqueued as `.empty` for the next tick)
+    /// and `runGold` is incremented once per cell.
     private mutating func collectGold() {
         func materialAt(_ pos: CellPosition) -> Material {
             simulation.materialForGameplay(at: pos)
@@ -335,18 +350,18 @@ public struct CaveRun {
         let body = character.bodyCells
         var goldToCollect: [CellPosition] = []
 
+        let magnetRadius = Int((1.0 * character.perkGoldMagnetMultiplier).rounded())
+        // Collect within Chebyshev distance `magnetRadius`
         for cell in body {
-            let neighbors = [
-                CellPosition(x: cell.x - 1, y: cell.y),
-                CellPosition(x: cell.x + 1, y: cell.y),
-                CellPosition(x: cell.x, y: cell.y - 1),
-                CellPosition(x: cell.x, y: cell.y + 1),
-            ]
-            for neighbor in neighbors {
-                guard Simulation.coordinateBounds.contains(neighbor.x),
-                      Simulation.coordinateBounds.contains(neighbor.y) else { continue }
-                if materialAt(neighbor) == .gold {
-                    goldToCollect.append(neighbor)
+            for dx in -magnetRadius...magnetRadius {
+                for dy in -magnetRadius...magnetRadius {
+                    if dx == 0 && dy == 0 { continue }
+                    let neighbor = CellPosition(x: cell.x + dx, y: cell.y + dy)
+                    guard Simulation.coordinateBounds.contains(neighbor.x),
+                          Simulation.coordinateBounds.contains(neighbor.y) else { continue }
+                    if materialAt(neighbor) == .gold {
+                        goldToCollect.append(neighbor)
+                    }
                 }
             }
         }
@@ -408,13 +423,19 @@ public struct CaveRun {
         if damageProtectionTimer == 0 {
             let materialAt: (CellPosition) -> Material = { simulation.materialForGameplay(at: $0) }
             if let hazard = CaveRun.hazardMaterialAt(character.position, materialAt: materialAt) {
-                lastDamageCause = CaveRun.hazardDamageCause(hazard)
-                health = max(health - 1, 0)
-                damageProtectionTimer = 30
-                if health == 0 {
-                    causeOfDeath = lastDamageCause
-                    outcome = .died
-                    return
+                // Fire immunity perk blocks fire, lava, and acid damage
+                let isFireHazard = (hazard == .fire || hazard == .lava || hazard == .acid)
+                if isFireHazard && character.perkFireImmunity {
+                    // Immunity: no damage, no protection timer
+                } else {
+                    lastDamageCause = CaveRun.hazardDamageCause(hazard)
+                    health = max(health - 1, 0)
+                    damageProtectionTimer = 30
+                    if health == 0 {
+                        causeOfDeath = lastDamageCause
+                        outcome = .died
+                        return
+                    }
                 }
             }
         }
@@ -481,7 +502,7 @@ public struct CaveRun {
         let shopInventory = SanctuaryShopGenerator.generate(seed: seed, level: level, unlockedSpellIds: unlockedSpellIds)
 
         // Apply full heal.
-        health = maxHealth
+        health = maxHealth + perkMaxHealthBonus
 
         // Update world, simulation, character for sanctuary.
         world = sanctuaryWorld
@@ -496,6 +517,9 @@ public struct CaveRun {
             try? simulation.enqueue(SimulationCommand(tick: 1, position: pos, material: sanctuaryWorld.cells[pos]!))
         }
         _ = try? simulation.advance()
+
+        // Reapply active perks to the new character.
+        reapplyActivePerks()
 
         // Set sanctuary state with entered tick (using CaveRun.currentTick getter).
         sanctuaryState = .inSanctuary(
@@ -523,8 +547,69 @@ public struct CaveRun {
         next.flask = self.flask
         next.sanctuaryState = .notInSanctuary
         next.level = nextLevelIndex
+        next.activePerks = self.activePerks
+        next.perkMaxHealthBonus = self.perkMaxHealthBonus
+        next.perkFasterManaRegenMultiplier = self.perkFasterManaRegenMultiplier
+        next.baseWandManaRegen = self.baseWandManaRegen
+        next.health = self.health
+
+        // Reapply active perks to the new level (idempotent, will cap health at new max).
+        next.reapplyActivePerks()
 
         return next
+    }
+
+    // MARK: - Perk methods
+
+    /// Selects a perk for this run. Returns false if already selected.
+    /// Immediately applies the perk effect.
+    public mutating func selectPerk(_ type: PerkType) -> Bool {
+        guard !activePerks.contains(type) else { return false }
+        activePerks.insert(type)
+
+        // Capture base wand mana regen on first perk selection.
+        if baseWandManaRegen.isEmpty {
+            baseWandManaRegen = wands.map { $0.manaRegenPerTick }
+        }
+
+        // One-time heal on maxHealth selection.
+        if type == .maxHealth {
+            let newMax = maxHealth + 1 // perkMaxHealthBonus will be 1 after apply
+            health = min(health + 1, newMax)
+        }
+
+        let effect = PerkEffectFactory.make(for: type)
+        effect.apply(to: &self)
+        return true
+    }
+
+    /// Reapplies all active perk effects from scratch (idempotent).
+    /// Resets all perk fields to baseline, then reapplies each effect.
+    public mutating func reapplyActivePerks() {
+        // Reset perk fields to baseline.
+        perkMaxHealthBonus = 0
+        perkFasterManaRegenMultiplier = 1.0
+        character.perkFireImmunity = false
+        character.perkExplosionImmunity = false
+        character.perkExtraLevitationMultiplier = 1.0
+        character.perkGoldMagnetMultiplier = 1.0
+
+        // Restore wand mana regen from captured base values.
+        for (i, baseRegen) in baseWandManaRegen.enumerated() where i < wands.count {
+            wands[i].manaRegenPerTick = baseRegen
+        }
+
+        // Reapply each active perk's effect.
+        for perkType in activePerks.sorted(by: { $0.description < $1.description }) {
+            let effect = PerkEffectFactory.make(for: perkType)
+            effect.apply(to: &self)
+        }
+
+        // Cap health at new max after reapply.
+        let newMax = maxHealth + perkMaxHealthBonus
+        if health > newMax {
+            health = newMax
+        }
     }
 
     /// Test helper: sets character health directly.

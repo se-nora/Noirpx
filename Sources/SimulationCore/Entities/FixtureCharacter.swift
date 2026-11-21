@@ -30,6 +30,25 @@ public struct FixtureCharacter: Equatable, Sendable {
     /// while holding jump airborne; recharges while grounded.
     public internal(set) var levitationEnergy = FixtureCharacter.maxLevitationEnergy
 
+    // MARK: - Perk fields
+
+    /// Fire immunity perk: when true, fire/lava/acid damage is nullified.
+    public var perkFireImmunity = false
+
+    /// Explosion immunity perk: when true, explosion damage is nullified.
+    public var perkExplosionImmunity = false
+
+    /// Extra levitation perk: multiplies max levitation energy by 1.5.
+    public var perkExtraLevitationMultiplier: Double = 1.0
+
+    /// Gold magnet perk: multiplies gold pickup radius by 2.0.
+    public var perkGoldMagnetMultiplier: Double = 1.0
+
+    /// Effective maximum levitation energy including perk multiplier.
+    public var effectiveMaxLevitationEnergy: Int {
+        Int((Double(FixtureCharacter.maxLevitationEnergy) * perkExtraLevitationMultiplier).rounded())
+    }
+
     /// Camera center for viewport tracking (body center).
     public var cameraCenter: CellPosition {
         CellPosition(x: position.x + Self.width / 2, y: position.y + Self.height / 2)

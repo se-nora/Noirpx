@@ -124,6 +124,21 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Deterministic replay test runs a deep cave (256x128+) for 5000+ ticks without spurious death.
 
 
+### firebolt-projectile-bugfix: Firebolt spell invisible and instant-hit (too fast)
+- status: todo
+- priority: 3
+- track: perf
+- depends: projectile-entities
+- areas: sim-rules, renderer, spells, entities
+- why: The firebolt spell has no visible projectile and appears to hit targets instantly. The projectile speed is likely too high (or the visual is missing entirely), making it feel like a hitscan weapon rather than a projectile spell. Firebolt should have a visible projectile with a sensible travel speed that allows dodging and visual feedback.
+- scope: Find the firebolt spell definition (SpellBlueprint.firebolt or similar) and its projectile parameters (speed, lifetime, visual). Ensure a projectile entity is spawned with a visible sprite/particle in FixturePixels/MetalRenderer, and that its velocity is tuned to a visible, dodgeable speed (e.g., 8-12 cells/sec). Verify the projectile renders each tick and expires correctly.
+- acceptance:
+  - Firebolt casts a visible projectile (sprite/particle) that travels from caster to target.
+  - Projectile speed is visible and dodgeable (~8-12 cells/sec), not instant-hit.
+  - Projectile expires on hit or after max range/lifetime.
+  - Deterministic replay test covers firebolt cast, travel, and hit.
+
+
 ### noita-gap-analysis: Compare current game to Noita and add missing goals
 - status: todo
 - priority: 75

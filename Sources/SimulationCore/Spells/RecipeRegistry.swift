@@ -44,7 +44,7 @@ public struct RecipeRegistry: Sendable {
 public extension RecipeRegistry {
     static let standard: RecipeRegistry = {
         let recipes = [
-            // firebolt: [.fire, .fire, .fire, nil, .magicLiquid, nil, nil, nil, nil] — gravityFactor=0, speed=768 (3.0 cells/tick)
+            // firebolt: [.fire, .fire, .fire, nil, .magicLiquid, nil, nil, nil, nil] — gravityFactor=0, speed=256 (1.0 cells/tick)
             Recipe(
                 id: "firebolt",
                 pattern: [.fire, .fire, .fire, nil, .magicLiquid, nil, nil, nil, nil],
@@ -70,7 +70,7 @@ public extension RecipeRegistry {
                         SpellFootprintCell(offset: CellPosition(x:  1, y:  1), material: .fire, isPrimary: true),
                     ]),
                     gravityFactor: 0,
-                    speed: 768,
+                    speed: 256,
                     explosionRadius: 0,
                     explosionPower: 0
                 )

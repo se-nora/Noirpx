@@ -25,31 +25,31 @@ final class ProjectileEntityTests: XCTestCase {
 
     func testStraightFlightPath() throws {
         var sim = makeSimulation()
-        let blueprint = fireboltBlueprint() // gravityFactor=0, speed=768 (3.0 cells/tick)
+        let blueprint = fireboltBlueprint() // gravityFactor=0, speed=256 (1.0 cells/tick)
         let origin = CellPosition(x: 0, y: 0)
         let target = CellPosition(x: 10, y: 0)
         _ = sim.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
 
-        // After 1 tick: position ≈ 3 cells
+        // After 1 tick: position ≈ 1 cell
         try sim.advance()
         var snapshot = sim.snapshot
         XCTAssertEqual(snapshot.projectiles.count, 1)
         let p1 = snapshot.projectiles[0]
-        XCTAssertEqual(p1.cell.x, 3)
+        XCTAssertEqual(p1.cell.x, 1)
         XCTAssertEqual(p1.cell.y, 0)
 
-        // After 2 ticks: position ≈ 6 cells
+        // After 2 ticks: position ≈ 2 cells
         try sim.advance()
         snapshot = sim.snapshot
         let p2 = snapshot.projectiles[0]
-        XCTAssertEqual(p2.cell.x, 6)
+        XCTAssertEqual(p2.cell.x, 2)
         XCTAssertEqual(p2.cell.y, 0)
 
-        // After 3 ticks: position ≈ 9 cells
+        // After 3 ticks: position ≈ 3 cells
         try sim.advance()
         snapshot = sim.snapshot
         let p3 = snapshot.projectiles[0]
-        XCTAssertEqual(p3.cell.x, 9)
+        XCTAssertEqual(p3.cell.x, 3)
         XCTAssertEqual(p3.cell.y, 0)
     }
 
@@ -92,25 +92,25 @@ final class ProjectileEntityTests: XCTestCase {
 
     func testSolidCollision() throws {
         var sim = makeSimulation()
-        let blueprint = fireboltBlueprint() // gravityFactor=0, speed=768
+        let blueprint = fireboltBlueprint() // gravityFactor=0, speed=256 (1.0 cells/tick)
         let origin = CellPosition(x: 0, y: 0)
         let target = CellPosition(x: 10, y: 0)
         _ = sim.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
 
-        // Place solid wall at x=5
-        try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 5, y: 0), material: .solid))
+        // Place solid wall at x=2
+        try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 2, y: 0), material: .solid))
 
-        // Tick 1: wall placed, projectile moves to x=3
+        // Tick 1: wall placed, projectile moves to x=1
         try sim.advance()
-        // Tick 2: projectile moves from x=3 to x=6, Bresenham hits wall at x=5
+        // Tick 2: projectile moves from x=1 to x=2, Bresenham hits wall at x=2
         try sim.advance()
 
         // Projectile should be removed (impacted)
         let snapshot = sim.snapshot
         XCTAssertEqual(snapshot.projectiles.count, 0)
 
-        // Footprint should be applied at impact cell (5,0) - firebolt has 3x3 footprint
-        let material = sim.material(at: CellPosition(x: 5, y: 0))
+        // Footprint should be applied at impact cell (2,0) - firebolt has 3x3 footprint
+        let material = sim.material(at: CellPosition(x: 2, y: 0))
         XCTAssertEqual(material, .fire)
     }
 
@@ -162,13 +162,14 @@ final class ProjectileEntityTests: XCTestCase {
     func testWorldEdgeCollision() throws {
         var sim = makeSimulation()
         let blueprint = fireboltBlueprint()
-        let origin = CellPosition(x: 999_995, y: 0)
-        let target = CellPosition(x: 1_000_010, y: 0) // beyond world edge
+        // Start at 999,999, target beyond world edge (1,000,001 is out of bounds)
+        let origin = CellPosition(x: 999_999, y: 0)
+        let target = CellPosition(x: 1_000_010, y: 0)
         _ = sim.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
 
-        // Tick 1: projectile moves toward edge
+        // Tick 1: projectile moves to 1,000,000 (still in bounds)
         try sim.advance()
-        // Tick 2: projectile hits world edge at x=1_000_000
+        // Tick 2: projectile moves to 1,000,001 (out of bounds) -> hits world edge
         try sim.advance()
         let snapshot = sim.snapshot
 
@@ -229,23 +230,24 @@ final class ProjectileEntityTests: XCTestCase {
         let target = CellPosition(x: 10, y: 0)
         _ = sim.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
 
-        // Place solid wall at x=3 for early impact
-        try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 3, y: 0), material: .solid))
+        // Place solid wall at x=2 for early impact (speed 256 = 1 cell/tick)
+        try sim.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 2, y: 0), material: .solid))
 
         // Fill command budget with paint commands at tick 2 (maxSpellCommandsPerTick = 148)
         for i in 0..<150 {
             try sim.enqueue(SimulationCommand(tick: 2, position: CellPosition(x: i, y: 10), material: .sand))
         }
 
-        // Tick 1: wall placed, projectile moves
+        // Tick 1: wall placed, projectile moves to x=1
         try sim.advance()
-        // Tick 2: 150 paint commands + footprint spell commands (firebolt has 9 cells)
+        // Tick 2: projectile moves to x=2, hits wall, footprint applied
+        // 150 paint commands + footprint spell commands (firebolt has 9 cells)
         // Budget is 148, spell commands take precedence
         try sim.advance()
 
         // Footprint commands (spell) should be applied, paint commands dropped
-        // Firebolt footprint is 3x3 at impact (3,0) = 9 cells
-        let material = sim.material(at: CellPosition(x: 3, y: 0))
+        // Firebolt footprint is 3x3 at impact (2,0) = 9 cells
+        let material = sim.material(at: CellPosition(x: 2, y: 0))
         XCTAssertEqual(material, .fire)
 
         // Most paint commands should be dropped (budget 148 - 9 spell = 139 paint max)
@@ -257,5 +259,97 @@ final class ProjectileEntityTests: XCTestCase {
         }
         // At most 139 paint commands should apply
         XCTAssertLessThanOrEqual(paintCount, 139)
+    }
+
+    /// Deterministic replay test for firebolt: fixed seed, cast firebolt, verify
+    /// projectile positions per tick, and verify impact at expected tick.
+    func testFireboltDeterministicReplay() throws {
+        // Use a fixed seed for deterministic behavior
+        let seed: UInt64 = 42
+
+        // Run 1: place a wall at maxRange (12) to simulate hitting a target at max range
+        var sim1 = Simulation(seed: seed)
+        let blueprint1 = RecipeRegistry.blueprintById["firebolt"]!
+        let origin = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 12, y: 0) // maxRange = 12
+        _ = sim1.spawnProjectile(blueprint: blueprint1, origin: origin, target: target)
+
+        // Place solid wall at maxRange to cause impact
+        try sim1.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 12, y: 0), material: .solid))
+
+        var positions1: [CellPosition] = []
+        for _ in 0..<15 {
+            try sim1.advance()
+            if let p = sim1.snapshot.projectiles.first {
+                positions1.append(p.cell)
+            } else {
+                positions1.append(CellPosition(x: -1, y: -1)) // marker for "expired"
+                break
+            }
+        }
+        let finalSnapshot1 = sim1.snapshot
+
+        // Run 2 (same seed, same operations)
+        var sim2 = Simulation(seed: seed)
+        let blueprint2 = RecipeRegistry.blueprintById["firebolt"]!
+        _ = sim2.spawnProjectile(blueprint: blueprint2, origin: origin, target: target)
+        try sim2.enqueue(SimulationCommand(tick: 1, position: CellPosition(x: 12, y: 0), material: .solid))
+
+        var positions2: [CellPosition] = []
+        for _ in 0..<15 {
+            try sim2.advance()
+            if let p = sim2.snapshot.projectiles.first {
+                positions2.append(p.cell)
+            } else {
+                positions2.append(CellPosition(x: -1, y: -1))
+                break
+            }
+        }
+        let finalSnapshot2 = sim2.snapshot
+
+        // Verify identical projectile positions each tick
+        XCTAssertEqual(positions1, positions2, "Projectile positions must be identical across runs with same seed")
+
+        // With speed=256 (1 cell/tick), wall at x=12:
+        // Tick 1-11: positions (1,0) through (11,0)
+        // Tick 12: moves to (12,0), hits wall, projectile removed
+        // Snapshot after tick 12 shows no projectile
+        let expectedPositions = (1...11).map { CellPosition(x: $0, y: 0) }
+        XCTAssertEqual(Array(positions1.prefix(11)), expectedPositions, "Firebolt should travel 1 cell per tick for 11 ticks before impact")
+
+        // After 11 recorded positions, 12th advance causes impact and removal
+        XCTAssertEqual(positions1.count, 12, "11 position records + 1 expiry marker")
+        XCTAssertEqual(finalSnapshot1.projectiles.count, 0, "Projectile should be removed after impact")
+
+        // Verify footprint was applied at impact cell (12,0) - 3x3 fire footprint
+        let impactMaterial = sim1.material(at: CellPosition(x: 12, y: 0))
+        XCTAssertEqual(impactMaterial, .fire, "Fire footprint should be at impact cell")
+    }
+
+    /// Test firebolt lifetime expiry (no collision, expires after maxRange * 4 ticks)
+    func testFireboltLifetimeExpiry() throws {
+        var sim = Simulation(seed: 123)
+        let blueprint = RecipeRegistry.blueprintById["firebolt"]!
+        let origin = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 100, y: 0) // far target, no walls
+        _ = sim.spawnProjectile(blueprint: blueprint, origin: origin, target: target)
+
+        // Firebolt: maxRange=12, lifetime=48 ticks, speed=256 (1 cell/tick)
+        // On tick 48: lifetime reaches 0 after moving to x=48, then removed
+        // Snapshot after tick 48 shows no projectile, so we record 47 positions (1-47)
+        var positions: [CellPosition] = []
+        for _ in 0..<50 {
+            try sim.advance()
+            if let p = sim.snapshot.projectiles.first {
+                positions.append(p.cell)
+            } else {
+                break
+            }
+        }
+
+        // Should record 47 positions (ticks 1-47), projectile reaches x=48 on tick 48 but is removed
+        XCTAssertEqual(positions.count, 47, "Projectile should record 47 positions before lifetime expiry removal")
+        XCTAssertEqual(positions.last?.x, 47, "Last recorded position should be x=47")
+        XCTAssertEqual(sim.snapshot.projectiles.count, 0, "Projectile should be removed after lifetime expiry")
     }
 }

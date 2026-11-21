@@ -120,6 +120,7 @@ public extension SimulationCore.Material {
         case .gunpowder: return "Gunpowder"
         case .gold: return "Gold"
         case .magicLiquid: return "Magic liquid"
+        case .sanctuaryWall: return "Sanctuary wall"
         }
     }
 }

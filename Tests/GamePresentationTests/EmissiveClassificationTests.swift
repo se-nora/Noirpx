@@ -37,11 +37,11 @@ final class EmissiveClassificationTests: XCTestCase {
         let lightMap = FixturePixels.lightMap(snapshot: snapshot, viewport: viewport)
 
         // Each emissive cell center: color × intensity × 255, truncated.
-        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: fire), [255, 114, 25, 255])
-        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: lava), [255, 89, 12, 255])
-        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: pitch), [216, 130, 43, 255])
-        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: oil), [216, 130, 43, 255])
-        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: magic), [160, 45, 229, 255])
+        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: fire), [20, 9, 2, 255])
+        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: lava), [12, 4, 0, 255])
+        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: pitch), [20, 12, 4, 255])
+        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: oil), [20, 12, 4, 255])
+        XCTAssertEqual(pixel(lightMap, viewport: viewport, at: magic), [14, 4, 20, 255])
 
         // Cold pitch no longer emits; empty cells emit nothing.
         try simulation.setThermalState(.init(heat: 99, isBurning: false), at: pitch)

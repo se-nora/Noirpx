@@ -300,7 +300,7 @@ final class WorldTests: XCTestCase {
         XCTAssertEqual(try cell(first.snapshot, -1, -1), .sand)
         XCTAssertEqual(try cell(first.snapshot, 0, -1), .water)
         XCTAssertEqual(try cell(first.snapshot, 1, -1), .sand)
-        XCTAssertEqual(first.snapshot.digest, 1_605_581_135_124_147_7366)
+        XCTAssertEqual(first.snapshot.digest, 2_786_919_474_650_328_833)
     }
 
     func testEquivalentWorldsIgnoreChunkInsertionOrder() throws {

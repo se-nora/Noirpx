@@ -35,4 +35,6 @@ public enum SaveError: Error, Equatable, Sendable {
     case invalidCommandFlag(UInt8)
     case invalidGameplayField(SaveField)
     case digestMismatch(stored: UInt64, recomputed: UInt64)
+    /// Save attempted while sanctuary is active. Sanctuary state is not persisted.
+    case sanctuaryActive
 }

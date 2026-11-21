@@ -171,6 +171,7 @@ public enum FixturePixels {
         case .gunpowder: return 0xff555555
         case .gold:     return 0xff33ccff
         case .magicLiquid: return 0xffcc3399
+        case .sanctuaryWall: return 0xff808080
         }
     }
 

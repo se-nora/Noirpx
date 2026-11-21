@@ -109,6 +109,7 @@ private func craftingSlotMaterialColor(_ m: SimulationCore.Material) -> Color {
     case .pitch: return .black
     case .solid: return .gray
     case .empty: return .clear
+    case .sanctuaryWall: return .gray
     }
 }
 

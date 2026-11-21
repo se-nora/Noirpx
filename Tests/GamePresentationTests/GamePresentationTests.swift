@@ -81,9 +81,9 @@ final class GamePresentationTests: XCTestCase {
     private static func isBackgroundColor(_ pixel: [UInt8]) -> Bool { pixel == backgroundColor }
     func testMaterialBrushPalette() {
         // drawable = all Materials except .empty, in enum declaration order
-        XCTAssertEqual(MaterialBrush.drawable.count, 15)
+        XCTAssertEqual(MaterialBrush.drawable.count, 16)
         XCTAssertEqual(MaterialBrush.drawable.first, .solid)
-        XCTAssertEqual(MaterialBrush.drawable.last, .magicLiquid)
+        XCTAssertEqual(MaterialBrush.drawable.last, .sanctuaryWall)
 
         // CRITICAL: drawable MUST auto-derive from Material.allCases.
         // Adding a new Material enum case automatically makes it drawable

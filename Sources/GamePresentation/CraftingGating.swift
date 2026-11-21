@@ -12,4 +12,13 @@ public enum CraftingGating {
     public static func isAllowed(_ outcome: CaveRun.Outcome?) -> Bool {
         outcome != nil && outcome != .playing
     }
+
+    /// Returns true when wand editing is allowed in the sanctuary.
+    /// Only true when sanctuaryState is .inSanctuary(...).
+    public static func isAllowedInSanctuary(_ sanctuaryState: SanctuaryState) -> Bool {
+        if case .inSanctuary = sanctuaryState {
+            return true
+        }
+        return false
+    }
 }

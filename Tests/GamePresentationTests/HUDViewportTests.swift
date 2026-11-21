@@ -50,8 +50,8 @@ final class HUDViewportTests: XCTestCase {
             let buttons = descendants(view).filter {
                 String(describing: type(of: $0)).contains("FocusRingView")
             }
-            // 4 run/info + 1 erase + 15 discovered = 20
-            XCTAssertEqual(buttons.count, 4 + 1 + 15)
+            // 4 run/info + 1 erase + 16 discovered = 21 (includes sanctuaryWall)
+            XCTAssertEqual(buttons.count, 4 + 1 + 16)
 
             // Verify vertical scroll view content width
             let verticalScroll = try XCTUnwrap(allScrollViews.first)

@@ -8,36 +8,59 @@ final class CaveRunLevelTransitionTests: XCTestCase {
 
     // MARK: - Level increment via nextLevel()
 
-    /// nextLevel() advances from level 1 to level 2, changes biome to
-    /// collapsed mine, mixes the seed, and regenerates the world.
+    /// nextLevel() advances from level 1 to sanctuary (level stays 1, biome becomes "sanctuary"),
+    /// then exitSanctuary() advances to level 2 with collapsed mine biome.
     func testNextLevelAdvancesAndChangesBiome() throws {
         var run = try CaveRun(seed: 1, width: 128, height: 64)
         XCTAssertEqual(run.level, 1)
         XCTAssertEqual(run.biomeName, "surface")
 
         run.levelComplete = true
-        let next = run.nextLevel()
-        XCTAssertNotNil(next)
-        XCTAssertEqual(run.level, 2)
-        XCTAssertEqual(run.biomeName, "collapsed mine")
-        XCTAssertNotEqual(run.world.seed, 1)
+        // First call: enters sanctuary
+        guard var sanctuary = run.nextLevel(unlockedSpellIds: []) else {
+            XCTFail("nextLevel should return sanctuary run")
+            return
+        }
+        XCTAssertEqual(sanctuary.level, 1) // level unchanged during sanctuary
+        XCTAssertEqual(sanctuary.biomeName, "sanctuary")
+        XCTAssertNotEqual(sanctuary.sanctuaryState, .notInSanctuary)
+
+        // Exit sanctuary: advances to level 2
+        guard let nextLevel = sanctuary.exitSanctuary() else {
+            XCTFail("exitSanctuary should return next level run")
+            return
+        }
+        XCTAssertEqual(nextLevel.level, 2)
+        XCTAssertEqual(nextLevel.biomeName, "collapsed mine")
+        XCTAssertEqual(nextLevel.sanctuaryState, .notInSanctuary)
+        XCTAssertNotEqual(nextLevel.world.seed, 1)
     }
 
-    /// Level 1 uses the surface biome config, level 2 uses collapsed mine.
+    /// Level 1 uses the surface biome config, sanctuary is between levels.
     func testBiomeChangesPerLevel() throws {
         var run = try CaveRun(seed: 7, width: 128, height: 64)
         XCTAssertEqual(run.biomeName, "surface")
 
         run.levelComplete = true
-        _ = run.nextLevel()
-        XCTAssertEqual(run.level, 2)
-        XCTAssertEqual(run.biomeName, "collapsed mine")
+        guard var sanctuary = run.nextLevel(unlockedSpellIds: []) else {
+            XCTFail("nextLevel should return sanctuary run")
+            return
+        }
+        XCTAssertEqual(sanctuary.biomeName, "sanctuary")
+
+        // After exiting sanctuary, level 2 uses collapsed mine biome.
+        guard let nextLevel = sanctuary.exitSanctuary() else {
+            XCTFail("exitSanctuary should return next level run")
+            return
+        }
+        XCTAssertEqual(nextLevel.level, 2)
+        XCTAssertEqual(nextLevel.biomeName, "collapsed mine")
     }
 
     /// nextLevel() does nothing when levelComplete is false.
     func testNextLevelNoopWhenIncomplete() throws {
         var run = try CaveRun(seed: 7, width: 128, height: 64)
-        XCTAssertNil(run.nextLevel())
+        XCTAssertNil(run.nextLevel(unlockedSpellIds: []))
         XCTAssertEqual(run.level, 1)
     }
 

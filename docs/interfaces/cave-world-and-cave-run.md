@@ -125,9 +125,32 @@ CaveRun.init(seed: UInt64, width: Int = 256, height: Int = 128, biomeConfig: Cav
 - Hazard materials never placed within Chebyshev distance 6 of spawn/goal
 - Band config validated at init: contiguous, full coverage, multiplier > 0
 
+### Chamber placement
+
+A chamber placement pass runs after initial connectivity repair and before material
+placement (sand, pools, pockets, veins). It carves 3–6 chambers of interior size
+15×15 to 30×30 cells into solid rock, distributed across biome bands.
+
+- **Feasibility gate**: If no band has height ≥ 17 rows (chamber 15 + wall ring 2),
+  the pass is skipped entirely. At 64×48 (band height = 16) generation is
+  bit-identical to pre-chamber behavior.
+- **Chamber count**: 3–6, derived from seeded RNG (`3 + hash2(0xC4A900, seed) % 4`).
+- **Band distribution**: Round-robin across feasible bands (bottom-to-top order, then cycle).
+- **Size**: 15–30 per dimension, capped by band height minus 2. RNG per chamber with
+  salts `0xC4A901 + band*100 + idx*1000`.
+- **Position**: Random within band and world borders (1...w-2 × 1...h-2), with
+  bounded retries (max 50 attempts, attempt-indexed salts `chamberSalt + attempt*10000`).
+- **Validation**: Wall ring must be inside band rowRange and world borders; no overlap
+  with other chamber wall rings; Chebyshev distance > 6 from template spawn/goal.
+- **Carving**: Interior cells set to `.empty`, 1-cell wall ring set to `.solid`.
+- **Post-pass revalidation**: After final spawn/goal are chosen (template or fallback),
+  re-check safety radius against FINAL positions. Violating chambers are filled solid.
+- **Second connectivity repair**: After revalidation, `repairConnectivity` runs again
+  to connect any isolated chambers to the main cave network.
+
 ### Digest version
 
-`SimulationSnapshot.digestVersion` bumped from 6 → 7. Same seed + size + config →
+`SimulationSnapshot.digestVersion` bumped from 6 → 7 (biome bands), 7 → 8 (digging/explosive spells), 8 → 9 (debris particles), 9 → 10 (chamber placement). Same seed + size + config →
 identical digest; changing config → different digest (intentional).
 
 No host features are claimed.

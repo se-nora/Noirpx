@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>13</integer>
+	<key>logs</key>
+	<dict>
+		<key>67A02669-90F4-4556-B25D-810727CD2915</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>67A02669-90F4-4556-B25D-810727CD2915.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>Noirpx project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>Noirpx</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project Noirpx with scheme Noirpx and configuration Release</string>
+			<key>timeStartedRecording</key>
+			<real>816960059.84057999</real>
+			<key>timeStoppedRecording</key>
+			<real>816960060.44944298</real>
+			<key>title</key>
+			<string>Building project Noirpx with scheme Noirpx and configuration Release</string>
+			<key>uniqueIdentifier</key>
+			<string>67A02669-90F4-4556-B25D-810727CD2915</string>
+		</dict>
+		<key>C9BE16E0-D7CE-457E-A1D9-9B89C1EDC22D</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>C9BE16E0-D7CE-457E-A1D9-9B89C1EDC22D.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>35</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>Noirpx project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>Noirpx</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project Noirpx with scheme Noirpx and configuration Release</string>
+			<key>timeStartedRecording</key>
+			<real>816994738.99471498</real>
+			<key>timeStoppedRecording</key>
+			<real>816994799.77795196</real>
+			<key>title</key>
+			<string>Building project Noirpx with scheme Noirpx and configuration Release</string>
+			<key>uniqueIdentifier</key>
+			<string>C9BE16E0-D7CE-457E-A1D9-9B89C1EDC22D</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

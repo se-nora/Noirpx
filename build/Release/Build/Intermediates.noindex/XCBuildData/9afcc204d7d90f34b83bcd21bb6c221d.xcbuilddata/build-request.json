@@ -1,0 +1,64 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildOnly"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "c8e985961a2e4736f86b5b75473200ea75d292f74331dd4584566b72d42df8c1"
+    }
+  ],
+  "containerPath" : "/Users/nora/Noirpx-worktrees/integration-main/Noirpx.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "build",
+    "activeArchitecture" : "arm64",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : false,
+      "hostTargetedPlatform" : null,
+      "platform" : "macosx",
+      "sdk" : "macosx27.2",
+      "sdkVariant" : "macos",
+      "supportedArchitectures" : [
+        "arm64e",
+        "arm64",
+        "x86_64"
+      ],
+      "targetArchitecture" : "arm64"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Products",
+      "derivedDataPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release",
+      "indexDataStoreFolderPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Release",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "build",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_XOJIT_PREVIEWS" : "YES"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "launch",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}

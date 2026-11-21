@@ -388,7 +388,7 @@ final class CaveRunTests: XCTestCase {
             verticalVelocity: 0,
             verticalRemainder: 0
         )
-        let fallLimit = mutatedWorld.spawn.y - termination.descent - 4
+        let fallLimit = mutatedWorld.extents.minY - 4
 
         // Use internal restoring initializer
         let run = CaveRun(
@@ -490,7 +490,7 @@ final class CaveRunTests: XCTestCase {
             verticalVelocity: 0,
             verticalRemainder: 0
         )
-        let fallLimit = mutatedWorld.spawn.y - termination.descent - 4
+        let fallLimit = mutatedWorld.extents.minY - 4
 
         var run = CaveRun(
             seed: 42, size: mutatedWorld.size, world: mutatedWorld,
@@ -1227,6 +1227,27 @@ final class CaveRunTests: XCTestCase {
         try run.advance(horizontal: 0, jump: false)
         XCTAssertEqual(run.health, 0)
         XCTAssertEqual(run.outcome, .died)
+    }
+
+    /// Continuous descent through a 256×128 cave for 2000+ ticks must not trigger
+    /// `fellBelowLimit` death. The fall limit is 4 cells below the world's bottom
+    /// extent (world.extents.minY - 4), so legitimate cave space must be safe.
+    func testDeepDescentNoSpuriousDeath() throws {
+        var run = try CaveRun(seed: 42, width: 256, height: 128)
+
+        // Descend continuously for 2000 ticks with no horizontal input and no jumps.
+        // The character should fall through the shaft and continue into the cave
+        // without hitting the fall limit (which is world.extents.minY - 4).
+        for tick in 0..<2000 {
+            try run.advance(horizontal: 0, jump: false)
+            if run.outcome == .died && run.causeOfDeath == .fellBelowLimit {
+                XCTFail("Character fell below limit at tick \(tick): position y=\(run.character.position.y), fallLimit=\(run.fallLimit)")
+            }
+        }
+
+        // Character must still be alive after 2000 ticks of descent.
+        XCTAssertEqual(run.outcome, .playing, "Character should not die from falling below limit during deep descent")
+        XCTAssertNotEqual(run.causeOfDeath, .fellBelowLimit, "fellBelowLimit should not be triggered for legitimate cave descent")
     }
 
     private func p(_ x: Int, _ y: Int) -> CellPosition { .init(x: x, y: y) }

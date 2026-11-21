@@ -220,7 +220,7 @@ final class ProjectileEntityTests: XCTestCase {
         // Digest equality (world-only, same as before)
         XCTAssertEqual(digest1, digest2)
         // Digest version is constant
-        XCTAssertEqual(SimulationSnapshot.digestVersion, 9)
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 10)
     }
 
     func testCommandBudgetWithProjectiles() throws {

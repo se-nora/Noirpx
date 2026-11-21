@@ -219,8 +219,8 @@ final class SimulationDebrisTests: XCTestCase {
         // Actually, we can't easily create a snapshot without debris from the same world
         // But we can verify the digest doesn't include debris by checking that
         // two snapshots with same world but different debris have same digest
-        // For now, verify digestVersion is 9
-        XCTAssertEqual(SimulationSnapshot.digestVersion, 9, "Digest version must be 9")
+        // For now, verify digestVersion is 10
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 10, "Digest version must be 10")
     }
 
     // MARK: - Boundary Tests

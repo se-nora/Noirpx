@@ -1,0 +1,12 @@
+Target dependency graph (5 targets)
+Target 'Noirpx' in project 'Noirpx'
+➜ Explicit dependency on target 'SimulationCore-product' in project 'Noirpx'
+➜ Explicit dependency on target 'GamePresentation-product' in project 'Noirpx'
+Target 'GamePresentation-product' in project 'Noirpx'
+➜ Explicit dependency on target 'GamePresentation' in project 'Noirpx'
+➜ Explicit dependency on target 'SimulationCore' in project 'Noirpx'
+Target 'GamePresentation' in project 'Noirpx'
+➜ Explicit dependency on target 'SimulationCore' in project 'Noirpx'
+Target 'SimulationCore-product' in project 'Noirpx'
+➜ Explicit dependency on target 'SimulationCore' in project 'Noirpx'
+Target 'SimulationCore' in project 'Noirpx' (no dependencies)

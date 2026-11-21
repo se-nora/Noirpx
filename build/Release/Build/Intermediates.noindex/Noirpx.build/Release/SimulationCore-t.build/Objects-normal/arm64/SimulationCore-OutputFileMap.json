@@ -1,0 +1,501 @@
+{
+  "" : {
+    "const-values" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.swiftconstvalues",
+    "dependencies" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.d",
+    "diagnostics" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.dia",
+    "emit-module-dependencies" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary-emit-module.dia",
+    "pch" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.swiftdeps"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/BlastFlash.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BlastFlash.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BlastFlash.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BlastFlash.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ChimeWarden.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChimeWarden.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChimeWarden.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChimeWarden.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/DebrisParticle.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticle.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticle.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticle.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/DebrisParticleSnapshot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticleSnapshot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticleSnapshot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/DebrisParticleSnapshot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ExplosionConstants.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionConstants.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionConstants.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionConstants.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ExplosionDamageEvent.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionDamageEvent.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionDamageEvent.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionDamageEvent.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ExplosionInput.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionInput.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionInput.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionInput.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ExplosionResult.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionResult.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionResult.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionResult.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/FixtureCharacter.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixtureCharacter.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixtureCharacter.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixtureCharacter.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ProjectileBlueprint.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileBlueprint.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileBlueprint.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileBlueprint.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ProjectileEntity.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileEntity.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileEntity.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileEntity.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/ProjectileSnapshot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSnapshot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSnapshot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSnapshot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/AcidBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/AcidBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/AcidBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/AcidBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/BloodBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BloodBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BloodBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BloodBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/EmptyBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/EmptyBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/EmptyBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/EmptyBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/FireBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/FlameBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlameBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlameBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlameBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/FlammableBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlammableBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlammableBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FlammableBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/GoldBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/GunpowderBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GunpowderBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GunpowderBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GunpowderBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/IceBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/IceBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/IceBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/IceBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/LavaBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LavaBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LavaBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LavaBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/LiquidMovementBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LiquidMovementBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LiquidMovementBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/LiquidMovementBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/MagicLiquidBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MagicLiquidBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MagicLiquidBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MagicLiquidBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/Material.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Material.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Material.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Material.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/MaterialAction.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialAction.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialAction.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialAction.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/MaterialBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/MaterialMovement.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialMovement.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialMovement.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaterialMovement.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/MovingBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MovingBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MovingBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MovingBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/OilBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/OilBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/OilBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/OilBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/PitchBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PitchBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PitchBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PitchBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/ReactiveBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ReactiveBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ReactiveBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ReactiveBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/SanctuaryWallBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWallBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWallBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWallBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/SandBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SandBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SandBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SandBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/SlimeBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SlimeBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SlimeBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SlimeBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/SolidBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SolidBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SolidBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SolidBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/SteamBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SteamBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SteamBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SteamBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Materials/WaterBehavior.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WaterBehavior.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WaterBehavior.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WaterBehavior.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Math/CellPosition.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CellPosition.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CellPosition.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CellPosition.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Math/FixedPoint.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixedPoint.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixedPoint.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FixedPoint.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Math/GravityFactor.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GravityFactor.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GravityFactor.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GravityFactor.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Math/ProjectileSpeed.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSpeed.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSpeed.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ProjectileSpeed.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Persistence/SaveCodec.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveCodec.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveCodec.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveCodec.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Persistence/SaveError.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveError.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveError.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SaveError.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/BeaconCourse.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconCourse.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconCourse.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconCourse.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/BeaconRun.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRun.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRun.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRun.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/BeaconRunSession.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRunSession.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRunSession.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/BeaconRunSession.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/CaveRun.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveRun.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveRun.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveRun.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Crawler.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Crawler.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Crawler.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Crawler.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Creature.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Creature.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Creature.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Creature.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/CreatureSpawn.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CreatureSpawn.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CreatureSpawn.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CreatureSpawn.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Flask.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Flask.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Flask.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Flask.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/HeadlessFixture.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/HeadlessFixture.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/HeadlessFixture.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/HeadlessFixture.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/ExplosionImmunityEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionImmunityEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionImmunityEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExplosionImmunityEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/ExtraLevitationEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExtraLevitationEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExtraLevitationEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ExtraLevitationEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/FasterManaRegenEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FasterManaRegenEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FasterManaRegenEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FasterManaRegenEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/FireImmunityEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireImmunityEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireImmunityEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/FireImmunityEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/GoldMagnetEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldMagnetEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldMagnetEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/GoldMagnetEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/MaxHealthEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaxHealthEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaxHealthEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/MaxHealthEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/PerkEffect.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffect.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffect.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffect.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/PerkEffectFactory.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffectFactory.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffectFactory.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkEffectFactory.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/PerkGenerator.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkGenerator.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkGenerator.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkGenerator.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/PerkOffer.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkOffer.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkOffer.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkOffer.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Perks/PerkType.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkType.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkType.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/PerkType.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/ResidentSimulation.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulation.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulation.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulation.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/ResidentSimulationError.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulationError.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulationError.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSimulationError.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/ResidentSnapshot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSnapshot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSnapshot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentSnapshot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/ResidentTickReport.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentTickReport.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentTickReport.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ResidentTickReport.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SanctuaryPurchaseResult.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryPurchaseResult.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryPurchaseResult.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryPurchaseResult.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SanctuaryShopInventory.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopInventory.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopInventory.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopInventory.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SanctuaryShopOffer.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopOffer.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopOffer.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopOffer.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SanctuaryState.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryState.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryState.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryState.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/Simulation.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Simulation.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Simulation.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Simulation.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SimulationCommand.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCommand.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCommand.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCommand.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SimulationError.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationError.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationError.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationError.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Session/SimulationSnapshot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationSnapshot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationSnapshot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationSnapshot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/CastStartResult.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CastStartResult.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CastStartResult.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CastStartResult.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/CraftingGrid.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingGrid.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingGrid.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingGrid.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/CraftingSlot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingSlot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingSlot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CraftingSlot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/ManaPool.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ManaPool.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ManaPool.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ManaPool.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/Recipe.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Recipe.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Recipe.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Recipe.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/RecipeRegistry.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/RecipeRegistry.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/RecipeRegistry.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/RecipeRegistry.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/SanctuaryShopGenerator.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopGenerator.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopGenerator.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryShopGenerator.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/Spell.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Spell.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Spell.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Spell.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/SpellFootprint.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SpellFootprint.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SpellFootprint.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SpellFootprint.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/Wand.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Wand.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Wand.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/Wand.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Spells/WandController.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WandController.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WandController.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/WandController.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveSpawnTemplate.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveSpawnTemplate.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveSpawnTemplate.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveSpawnTemplate.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorld.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorld.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorld.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorld.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorldExtents.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldExtents.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldExtents.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldExtents.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorldGenerator.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldGenerator.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldGenerator.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldGenerator.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/CaveWorldSize.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldSize.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldSize.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/CaveWorldSize.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/ChunkPosition.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkPosition.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkPosition.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkPosition.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/ChunkRegion.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkRegion.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkRegion.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkRegion.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/ChunkSnapshot.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkSnapshot.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkSnapshot.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ChunkSnapshot.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/SanctuaryWorldGenerator.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWorldGenerator.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWorldGenerator.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SanctuaryWorldGenerator.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/SimulationGrid.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationGrid.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationGrid.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationGrid.o"
+  },
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/World/ThermalCellState.swift" : {
+    "index-unit-output-path" : "/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ThermalCellState.o",
+    "llvm-bc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ThermalCellState.bc",
+    "object" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/ThermalCellState.o"
+  }
+}

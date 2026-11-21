@@ -22,8 +22,8 @@ final class CaveWorldMatrixCache: @unchecked Sendable {
         if let cached = cache[key] { return cached }
         let gen = CaveWorldGenerator(seed: seed, width: width, height: height)
         let result = gen.generateInspected(stampSpawnTemplate: true, capturePrePass: true)
-        cache[key] = result
-        return result
+        cache[key] = (result.world, result.prePass)
+        return cache[key]!
     }
 
     func worldNoStamp(for seed: UInt64, width: Int, height: Int) -> CaveWorld {

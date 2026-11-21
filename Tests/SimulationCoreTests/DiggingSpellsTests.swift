@@ -429,7 +429,7 @@ final class DiggingSpellsTests: XCTestCase {
 
         XCTAssertEqual(snap1, snap2)
         XCTAssertEqual(digest1, digest2)
-        XCTAssertEqual(SimulationSnapshot.digestVersion, 9)
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 10)
     }
 
     func testBombDeterministicReplay() throws {
@@ -461,7 +461,7 @@ final class DiggingSpellsTests: XCTestCase {
 
         XCTAssertEqual(snap1, snap2)
         XCTAssertEqual(digest1, digest2)
-        XCTAssertEqual(SimulationSnapshot.digestVersion, 9)
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 10)
     }
 
     // MARK: - Crafting Match Tests

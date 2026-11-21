@@ -153,8 +153,9 @@ public struct CaveRun {
             verticalRemainder: 0
         )
 
-        // Fall limit: 4 cells below the goal depth (shaft end) as a safety margin
-        self.fallLimit = world.spawn.y - termination.descent - 4
+        // Fall limit: 4 cells below the world's bottom extent (actual world boundary)
+        // Use world.extents.minY which is the minimum Y of any non-empty cell (includes border walls)
+        self.fallLimit = world.extents.minY - 4
 
         // Spawn deterministic creatures using the final stamped world for validation.
         spawnCreatures(layout: layout, termination: termination, materialAt: { x, y in

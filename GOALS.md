@@ -139,6 +139,22 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Deterministic replay test covers firebolt cast, travel, and hit.
 
 
+### steam-liquid-bugfix: Steam doesn't travel up through liquids, blocks falling liquids
+- status: todo
+- priority: 3
+- track: perf
+- depends: material-reactions
+- areas: sim-rules, sim-engine
+- why: Steam currently doesn't rise through liquids — it blocks liquids from falling down instead of displacing them. When steam moves upward, it should displace the liquid above; if no displacement is possible, it should swap with the liquid. Steam should also travel slower through denser liquids (e.g., slower in oil/water than in air). This is a material reaction / fluid dynamics bug in the simulation rules.
+- scope: Find the steam material behavior (likely in MaterialReactions, FixtureMaterial, or fluid update logic). Fix upward movement: steam should attempt to displace liquid above; if blocked, swap with liquid cell. Add density-based drag: steam velocity reduced proportionally to liquid density (water=1.0, oil=0.8, etc.). Ensure falling liquids (sand, water) aren't blocked by steam below them.
+- acceptance:
+  - Steam rises through water/oil columns, displacing liquid upward.
+  - If displacement blocked (solid above), steam swaps with liquid cell.
+  - Steam vertical speed: ~8 cells/sec in air, ~4 in water, ~5 in oil (density-scaled).
+  - Falling liquids (water, oil) pass through steam cells without getting stuck.
+  - Deterministic replay test: steam column rises through 50-cell water column in expected ticks.
+
+
 ### noita-gap-analysis: Compare current game to Noita and add missing goals
 - status: todo
 - priority: 75

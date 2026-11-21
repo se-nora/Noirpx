@@ -110,7 +110,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### cave-depth-death-bugfix: Cave run kills player at depth without fall damage
-- status: todo
+- status: done
 - priority: 2
 - track: perf
 - depends: none
@@ -122,6 +122,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Fall damage still works correctly (validated by fall-damage-bugfix criteria).
   - No new death triggers added for depth/position.
   - Deterministic replay test runs a deep cave (256x128+) for 5000+ ticks without spurious death.
+- result: Fixed in commit ea9ad23 (merged as d5771ee). Changed fallLimit calculation in CaveRun.swift from shaft-relative (spawn.y - termination.descent - 4) to world-boundary-based (world.extents.minY - 4). Updated testFallPastLimitIsDeath and added testDeepDescentNoSpuriousDeath (5500 ticks continuous descent in 256x128 cave). Version bumped to 0.62.0. All 734 tests pass, macOS Release build succeeds.
 
 
 ### firebolt-projectile-bugfix: Firebolt spell invisible and instant-hit (too fast)

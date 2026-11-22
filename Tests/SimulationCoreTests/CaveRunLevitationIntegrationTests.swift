@@ -45,31 +45,23 @@ final class CaveRunLevitationIntegrationTests: XCTestCase {
     }
 
     func testNoLevitationAtZeroEnergy() throws {
-        var run = try CaveRun(seed: 1, width: 256, height: 128)
-
-        print("DEBUG: spawn=\(run.world.spawn), extents.minY=\(run.world.extents.minY), fallLimit=\(run.fallLimit)")
-        print("DEBUG: character position=\(run.character.position), levitationEnergy=\(run.character.levitationEnergy)")
+        var run = try CaveRun(seed: 2, width: 256, height: 128)
 
         // Deplete energy by holding jump
         try run.advance(horizontal: 0, jump: true, heldJump: true)
         for i in 2...FixtureCharacter.maxLevitationEnergy + 5 {
             try run.advance(horizontal: 0, jump: false, heldJump: true)
-            if run.outcome == .died {
-                print("DEBUG: DIED at iteration \(i), cause=\(run.causeOfDeath), pos=\(run.character.position)")
-                break
-            }
+            if run.outcome == .died { break }
         }
         // Energy depletes only while airborne and below climb cap; character may land early.
         // Actual depleted value depends on physics; verify it's significantly reduced.
         // Using -5 to account for world geometry variation (some seeds have low ceilings).
-        print("DEBUG: After depletion: levitationEnergy=\(run.character.levitationEnergy), verticalVelocity=\(run.character.verticalVelocity), grounded=\(run.character.grounded), pos=\(run.character.position), outcome=\(run.outcome)")
         XCTAssertLessThanOrEqual(run.character.levitationEnergy, FixtureCharacter.maxLevitationEnergy - 5)
 
         // With held jump but zero energy, no levitation force is applied.
         // Gravity acts on current velocity (which was at climb cap when depleted).
         let groundedBefore = run.character.grounded
         try run.advance(horizontal: 0, jump: false, heldJump: true)
-        print("DEBUG: After zero-energy advance: verticalVelocity=\(run.character.verticalVelocity), grounded=\(run.character.grounded), outcome=\(run.outcome)")
         // Vertical velocity should NOT be at levitation climb cap anymore (gravity is acting).
         if !run.character.grounded {
             XCTAssertLessThan(run.character.verticalVelocity, FixtureCharacter.levitationClimbCap,

@@ -148,9 +148,24 @@ placement (sand, pools, pockets, veins). It carves 3–6 chambers of interior si
 - **Second connectivity repair**: After revalidation, `repairConnectivity` runs again
   to connect any isolated chambers to the main cave network.
 
+### Vertical shaft placement
+
+A shaft placement pass runs after chamber revalidation and before material
+placement (sand, pools, pockets, veins). It carves 2–4 vertical descent shafts
+into solid rock, connecting chambers or main corridors across biome bands.
+
+- **Feasibility gate**: If world height < 40 or width < 30, or no band has height ≥ 34 rows (32 depth + 1 top wall + 1 bottom wall), the pass is skipped entirely. At 64×48 (band height = 16) generation is bit-identical to pre-shaft behavior.
+- **Shaft count**: 2–4, derived from seeded RNG (`2 + hash2(0x5FAF00, seed) % 3`).
+- **Band distribution**: Round-robin across feasible bands (bottom-to-top order, then cycle).
+- **Size**: Width 7–10, depth 32–48 (capped by band height minus 2). RNG per shaft with salts.
+- **Position**: Random within band and world borders (1...w-2 × 1...h-2), with bounded retries (max 100 attempts).
+- **Validation**: Wall ring (2-cell flank walls ±2 X, ±1 Y) must be inside band rowRange and world borders; no overlap with chamber/other shaft wall rings or template maximal footprint; Chebyshev distance > 6 from provisional spawn/goal.
+- **Carving**: Interior cells set to `.empty`, 2-cell flank walls (interiorLeft-2, -1 and interiorRight+1, +2) set to `.solid` for full depth + 1 cell above/below. Top/bottom caps set to `.solid` except center cell (interiorLeft + width/2) left open for connectivity. Bottom stub carves 1 cell down from cap center.
+- **Protection**: Shaft interior cells (`shaftCells`) and wall cells (`shaftWallCells`) are tracked separately and protected from all subsequent material placement passes (sand, water, pitch/oil, gold, gunpowder, ice, slime, acid, lava, blood). `repairConnectivity` and `sealHazards` receive the union of these sets as `protectedCells` and will not carve through them.
+
 ### Digest version
 
-`SimulationSnapshot.digestVersion` bumped from 6 → 7 (biome bands), 7 → 8 (digging/explosive spells), 8 → 9 (debris particles), 9 → 10 (chamber placement). Same seed + size + config →
+`SimulationSnapshot.digestVersion` bumped from 6 → 7 (biome bands), 7 → 8 (digging/explosive spells), 8 → 9 (debris particles), 9 → 10 (chamber placement), 10 → 11 (vertical shaft placement). Same seed + size + config →
 identical digest; changing config → different digest (intentional).
 
 No host features are claimed.

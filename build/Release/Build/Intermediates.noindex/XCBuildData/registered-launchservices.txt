@@ -1,0 +1,1 @@
+/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Products/Release/Noirpx.app

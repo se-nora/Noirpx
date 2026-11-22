@@ -136,6 +136,9 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
             // Only move upward or sideways, never down.
             if dy < 0 { continue }
 
+            let dx = destination.x - source.x
+            let isStraightUp = (dx == 0 && dy == 1)
+
             if targetMaterial == .empty {
                 // Move into empty cell.
                 return MaterialAction(
@@ -168,8 +171,8 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
                             (source, .zero)
                         ]
                     )
-                } else {
-                    // Displacement blocked by solid - swap with liquid.
+                } else if isStraightUp {
+                    // Displacement blocked by solid - swap with liquid (straight up only).
                     return MaterialAction(
                         writes: [
                             (source, targetMaterial),
@@ -179,7 +182,7 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
                         thermalTransfers: [(source, destination)],
                         thermalWrites: [
                             (destination, state),
-                            (source, thermal(source)) // liquid gets source thermal (usually zero)
+                            (source, .zero)
                         ]
                     )
                 }

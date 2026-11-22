@@ -2078,12 +2078,7 @@ public struct CaveWorldGenerator: Sendable {
     private func shouldSkipEdgeMargin(context: BandContext, material: Material) -> Bool {
         let margin = context.band.densities[material]?.edgeMargin ?? 0
         guard margin > 0 else { return false }
-        let gy = 0 // placeholder; caller must pass row. Using band edges only.
-        _ = gy
-        let lower = context.band.rowRange.lowerBound
-        let upper = context.band.rowRange.upperBound
-        // Skip within margin cells of band edges (not transition rows).
-        // Caller is responsible for row-specific checks.
+        // Caller is responsible for row-specific checks using band.rowRange bounds.
         return false
     }
 

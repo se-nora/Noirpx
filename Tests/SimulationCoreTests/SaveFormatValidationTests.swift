@@ -15,9 +15,9 @@ final class SaveFormatValidationTests: XCTestCase {
         for version: UInt16 in [0, 2, .max] {
             assertThrows(replaced16(version, at: 4, in: bytes), SaveError.unknownFormatVersion(version))
         }
-// rulesVersion is now 8, so version 7 and 9 should be rejected
-        assertThrows(replaced16(7, at: 8, in: bytes), SaveError.unsupportedRulesVersion(7))
-        assertThrows(replaced16(9, at: 8, in: bytes), SaveError.unsupportedRulesVersion(9))
+// rulesVersion is now 9, so version 8 and 10 should be rejected
+        assertThrows(replaced16(8, at: 8, in: bytes), SaveError.unsupportedRulesVersion(8))
+        assertThrows(replaced16(10, at: 8, in: bytes), SaveError.unsupportedRulesVersion(10))
         // digestVersion is now 13, so version 10 and 12 should be rejected
         assertThrows(replaced16(10, at: 10, in: bytes), SaveError.unsupportedDigestVersion(10))
         assertThrows(replaced16(12, at: 10, in: bytes), SaveError.unsupportedDigestVersion(12))

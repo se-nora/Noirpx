@@ -5,51 +5,55 @@
 ### 1.1 New Data Structures
 
 ```swift
-/// A placed vertical descent shaft connecting two vertical regions.
-public struct VerticalShaft: Equatable, Sendable {
-    /// Interior bounds of the shaft (empty air cells only).
-    let interior: Rect  // width ≥ 7, height ≥ 32
-    /// Wall bounds (2-cell thick solid rock on left/right of interior, plus 1-cell solid caps at top/bottom).
-    let wallRect: Rect  // interior expanded by 2 horizontally, 1 vertically
-    /// Index of the upper biome band the shaft connects from (surface=2, underground=1, deep=0 for default config).
-    let upperBandIndex: Int
-    /// Index of the lower biome band the shaft connects to.
-    let lowerBandIndex: Int
-    /// Whether the shaft connects to a chamber interior at its top.
-    let connectsToChamberAtTop: Bool
-    /// Whether the shaft connects to a chamber interior at its bottom.
-    let connectsToChamberAtBottom: Bool
-}
+/// A placed vertical descent shaft with its interior bounds and wall ring.
+public struct CaveShaft: Equatable, Sendable {
+    /// Interior empty column: inclusive column range [left, right], inclusive row range [top, bottom].
+    /// top < bottom (grid row 0 = top of world).
+    let interiorLeft: Int
+    let interiorRight: Int
+    let interiorTop: Int
+    let interiorBottom: Int
 
-extension VerticalShaft {
-    var width: Int { interior.width }
-    var depth: Int { interior.height }
-    var topRow: Int { interior.minY }
-    var bottomRow: Int { interior.maxY }
-    var leftCol: Int { interior.minX }
-    var rightCol: Int { interior.maxX }
+    /// Wall ring bounds (includes 2-cell flank walls on each side + 1 cell above top / below bottom).
+    var wallRing: Rect {
+        Rect(
+            minX: interiorLeft - 2,
+            maxX: interiorRight + 2,
+            minY: interiorTop - 1,
+            maxY: interiorBottom + 1
+        )
+    }
+
+    var width: Int { interiorRight - interiorLeft + 1 }
+    var depth: Int { interiorBottom - interiorTop + 1 }
+
+    func contains(_ x: Int, _ y: Int) -> Bool {
+        x >= interiorLeft && x <= interiorRight && y >= interiorTop && y <= interiorBottom
+    }
 }
 ```
 
 ### 1.2 Generator State Extensions
 
 Add to `CaveWorldGenerator`:
-- `private var placedShafts: [VerticalShaft] = []` — tracks shafts for validation and test exposure.
+- `private var placedShafts: [CaveShaft] = []` — tracks shafts for validation and test exposure.
 - `private var shaftCells: Set<Int> = []` — **interior** cell indices (gy * width + gx) protected from material placement.
-- `private var shaftWallCells: Set<Int> = []` — **wall + cap** cell indices (all `wallRect` cells) protected from material placement AND from `repairConnectivity` / `carveDirectRoute`.
-- `private var chamberWallCells: Set<Int> = []` — union of all `chamber.wallRect` cells, for protecting chamber walls in `repairConnectivity`.
+- `private var shaftWallCells: Set<Int> = []` — **wall + cap** cell indices (flank walls and caps, excluding center cap cells left open for connectivity) protected from material placement AND from `repairConnectivity` via `protectedCells` parameter.
 
 ### 1.3 Invariants
 
 | Invariant | Enforcement |
 |-----------|-------------|
-| `shaft.interior.width >= 7` | Placement validation |
-| `shaft.interior.height >= 32` | Placement validation |
-| `shaft.wallRect` is exactly `shaft.interior.expanded(by: 2)` horizontally only | Construction |
-| Wall cells are `.solid`; interior cells are `.empty` | Carving logic |
-| `upperBandIndex > lowerBandIndex` (bands are bottom-to-top: 0=deep, 1=underground, 2=surface) | Placement logic |
-| Shaft does not overlap `chamberCells`, `tunnelCells`, or template `maximalFootprint` | Collision checks |
-| Shaft top and bottom each touch empty space in the main connected component | Connectivity validation |
+| `shaft.width >= 7` | Placement validation |
+| `shaft.depth >= 32` | Placement validation |
+| `shaft.wallRing` is exactly `shaft.interior` expanded by 2 horizontally, 1 vertically | Construction |
+| Wall cells are `.solid`; interior cells are `.empty`; cap center cells left `.empty` for connectivity | Carving logic |
+| Shaft placed in bands with height >= 34 (32 depth + 1 top wall + 1 bottom wall) | Feasibility gate |
+| Shaft wallRing does not intersect `chamber.wallRect` for any chamber | Collision checks |
+| Shaft wallRing does not intersect previous shaft `wallRing.expanded(by: 1)` (3-col gap) | Collision checks |
+| No overlap with template `maximalFootprint` | Collision checks |
+| Tunnel overlap is ALLOWED (shafts placed after tunnel carving) | — |
+| Shaft top connects to empty cell; bottom connects to empty cell OR cell below is empty (stub carved) | Connectivity validation |
 | Spawn/goal clearance radius (Chebyshev 6) respected for all shaft cells (interior + walls) | Placement validation |
 | Deterministic: same seed → identical shaft count, positions, geometry, connectivity | Seeded RNG via `hash2` |
 
@@ -68,11 +72,11 @@ generateFull:
   3. Early spawn/goal selection (natural)
   4. Chamber placement (placeChambers)
   5. Chamber-to-main tunnels
-  6. ★ SHAFT PLACEMENT PASS (NEW)
-  7. Sand layer
-  8. Material placement (pools, pockets, veins, magic liquid, gold, gunpowder, ice, slime, acid, lava, blood)
-  9. repairConnectivity
-  10. sealHazards
+  6. ★ SHAFT PLACEMENT PASS (NEW) — placeShafts
+  7. Sand layer (protects shaftCells ∪ shaftWallCells)
+  8. Material placement (protects shaftCells ∪ shaftWallCells)
+  9. repairConnectivity (protectedCells = shaftCells ∪ shaftWallCells ∪ chamberCells)
+  10. sealHazards (shaftCells)
   11. Template stamp (fixed shaft)
   12. Post-template connectivity (collapsed mine)
   13. enforceBorders, finalize spawn/goal
@@ -86,9 +90,9 @@ generateFull:
 |-------|--------|
 | `grid` (current material state) | `grid` (carves shaft interior + walls) |
 | `biomeConfig.bands` (row ranges) | `placedShafts` array |
-| `placedChambers` (for connection targets) | `shaftCells` set |
-| `chamberCells` set (avoid overlap) | |
-| `tunnelCells` set (avoid overlap) | |
+| `chambers` (for wall ring intersection check) | `shaftCells` set |
+| `chamberCells` set (avoid interior overlap) | `shaftWallCells` set |
+| `layout?.maximalFootprint` (avoid template zone) | |
 | `layout?.maximalFootprint` (avoid template zone) | |
 | `spawnCell`, `goalCell` (safety radius) | |
 | `width`, `height`, `originX`, `originY` | |
@@ -102,20 +106,19 @@ generateFull:
 
 | Location | Change |
 |----------|--------|
-| **Line ~387** (struct `CaveWorldGenerator`) | Add `private var placedShafts: [VerticalShaft]` and `private var shaftCells: Set<Int>` fields. |
-| **Line ~270** (after `CaveChamber`) | Add `VerticalShaft` struct definition. |
-| **Line ~962** (in `generateFull`, after chamber tunnels) | Insert call to new `placeVerticalShafts(...)` function. |
-| **Line ~964** (sand layer) | Add `&& !shaftCells.contains(...)` guards to sand placement loop. |
-| **Lines 1003–1044** (pool pass) | Add `&& !shaftCells.contains(...)` guards. |
-| **Lines 1048–1089** (pocket pass) | Add `&& !shaftCells.contains(...)` guards. |
-| **Lines 1173–1211** (magic liquid, gold, gunpowder, ice, slime, acid, lava, blood) | Each placement function already receives `chamberCells`; add `shaftCells` parameter and guards. |
-| **Line ~1215** (`repairConnectivity`) | Pass `shaftCells` union `chamberCells` to protect shaft walls from being carved through. |
-| **Line ~1218** (`sealHazards`) | No change needed (shafts are empty/solid only). |
-| **Line ~1371** (`generateWithChambers`) | Return `placedShafts` as third tuple element (or new fourth element). |
+| **Line ~310** (after `CaveChamber`) | Add `CaveShaft` struct definition. |
+| **Line ~670** (private function) | Add `placeShafts` function. |
+| **Line ~1285** (in `generateFull`, after chamber tunnels) | Insert call to `placeShafts` with `shaftWallCells` parameter. |
+| **Line ~1308** (sand layer) | Add `&& !protectedShaftCells.contains(...)` guards where `protectedShaftCells = shaftCells.union(shaftWallCells)`. |
+| **Line ~1356** (water pools) | Add `&& !protectedShaftCells.contains(...)` guards. |
+| **Line ~1401** (pitch/oil pockets) | Add `&& !protectedShaftCells.contains(...)` guards. |
+| **Line ~1568** (`repairConnectivity`) | Pass `protectedCells = shaftCells.union(shaftWallCells)` and `chamberCells` as separate parameter to protect shaft walls from being carved through. |
+| **Line ~1733** (`generateWithShafts`) | Return `placedShafts` as fourth tuple element. |
+| **Line ~1725** (`generateWithChambers`) | Return 3-tuple `(world, prePass, chambers)`; shafts available via `generateWithShafts`. |
 
 **New function** (insert after `placeChambers`, ~line 638):
 ```swift
-private func placeVerticalShafts(
+private func placeShafts(
     grid: inout [[Material]],
     width: Int,
     height: Int,
@@ -129,8 +132,9 @@ private func placeVerticalShafts(
     chambers: [CaveChamber],
     chamberCells: Set<Int>,
     tunnelCells: Set<Int>,
-    shafts: inout [VerticalShaft],
-    shaftCells: inout Set<Int>
+    shafts: inout [CaveShaft],
+    shaftCells: inout Set<Int>,
+    shaftWallCells: inout Set<Int>
 )
 ```
 
@@ -149,122 +153,162 @@ private func placeVerticalShafts(
 
 ### 4.1 Placement Strategy Overview
 
-1. **Determine shaft count**: 2–4 shafts per level (seeded RNG).
-2. **Select band pairs**: Each shaft connects two *adjacent* biome bands (surface→underground or underground→deep). Prefer pairs where both bands have chambers or main corridor presence.
-3. **Choose X position**: Sample candidate columns avoiding spawn/goal clearance, template footprint, chamber walls, and border margins.
-4. **Determine Y span**: Shaft runs from lower band's upper transition zone to upper band's lower transition zone, ensuring ≥32 cells depth.
-5. **Validate & carve**: Check collisions, carve interior to `.empty`, walls to `.solid`, register cells.
-6. **Connect to main component**: Ensure top and bottom openings connect to main empty component (carve short horizontal tunnels if needed).
+1. **Feasibility gate**: Require world height ≥ 40 (shaft 32 + walls 2+1+1 + margins), width ≥ 30, and at least one biome band with height ≥ 34 rows (32 depth + 1 top wall + 1 bottom wall).
+2. **Determine shaft count**: 2–4 shafts per level (seeded RNG via `hash2(0x5FAF00, seedInt) % 3`).
+3. **Select feasible bands**: Find all bands with `rowRange.count >= 34`. Distribute shafts round-robin across feasible bands (bottom-to-top order, then cycle).
+4. **Choose dimensions per shaft**: Width 7–10 (`7 + hash2(0x5FAF01 + shaftIdx*1000, seedInt) % 4`). Depth 32–48, capped to `bandRowRange.count - 2` (`32 + hash2(0x5FAF02 + shaftIdx*1000, seedInt) % (maxDepth - 31)`).
+5. **Placement search with bounded retries**: Up to 100 attempts per shaft. Sample interiorLeft (3 to width-4-shaftWidth) and interiorTop (bandRowRange.lowerBound+1 to min(bandRowRange.upperBound-1-shaftDepth, height-3)).
+6. **Validate candidate**: Wall ring inside world borders (1..w-2, 1..h-2). Wall ring inside band rowRange. No overlap with template maximalFootprint. No overlap with chamber wallRect (direct intersection, no expansion). No overlap with previous shaft wall rings (expanded by 1). Chebyshev distance > 6 from ALL shaft cells (interior + walls) to spawn/goal. Tunnel overlap is ALLOWED. Top connectivity: at least one interior top cell is .empty. Bottom connectivity: at least one interior bottom cell is .empty OR cell below is .empty.
+7. **Carve shaft**: Interior → .empty (track in shaftCells). Flank walls (2 cells each side) → .solid (track in shaftWallCells). Cap walls (top/bottom, 1 cell thick, center cell open) → .solid (track in shaftWallCells). Bottom stub: if bottom not connected, carve horizontal 1-cell stub 2 cells high up to 5 cells until hitting empty.
+8. **Post-placement**: Combine `protectedShaftCells = shaftCells.union(shaftWallCells)` for all subsequent material passes and `repairConnectivity`.
 
 ### 4.2 Detailed Steps
 
-#### Step 1: Shaft Count
+#### Step 1: Feasibility Gate
 ```swift
-let shaftCount = 2 + Int(hash2(0x5A4F70, seedInt) % 3)  // 2, 3, or 4
-```
+guard height >= 40, width >= 30 else { return }
 
-#### Step 2: Candidate Band Pairs
-For default 3-band config (indices: 0=deep, 1=underground, 2=surface):
-- Valid pairs: (2→1), (1→0) — surface to underground, underground to deep.
-- For collapsed mine (3 bands): same logic.
-
-For each pair `(upperIdx, lowerIdx)` where `upperIdx > lowerIdx` (bands bottom-to-top: 0=deep at bottom, 2=surface at top):
-- `upperBand = biomeConfig.bands[upperIdx]` — band higher in world (smaller gy)
-- `lowerBand = biomeConfig.bands[lowerIdx]` — band lower in world (larger gy)
-- Compute available vertical span between band transition zones: `lowerBand.rowRange.lowerBound - upperBand.rowRange.upperBound + 1`
-- Require span ≥ 32 + 4 (2 cells margin at each end for wall caps).
-
-#### Step 3: X Position Sampling
-For each shaft to place:
-```swift
-let minX = 2 + 2  // left border (1) + wall thickness (2) + 1 margin
-let maxX = width - 3 - 2 - shaftInteriorWidth  // right border symmetric
-```
-Sample `shaftInteriorWidth` = 7 + (hash % 4) → 7..10.
-Sample `gx` using `hash2(shaftSalt + attempt, seedInt)` with up to 50 attempts.
-
-#### Step 4: Y Span Calculation
-```swift
-let upperBand = biomeConfig.bands[upperIdx]  // e.g., surface (index 2), rows near 0
-let lowerBand = biomeConfig.bands[lowerIdx]  // e.g., underground (index 1), rows below
-
-// Shaft TOP: near BOTTOM of upper band (larger gy, closer to transition)
-let topMinY = upperBand.rowRange.upperBound - max(2, upperBand.rowRange.count / 3)
-let topMaxY = upperBand.rowRange.upperBound - 2
-
-// Shaft BOTTOM: near TOP of lower band (smaller gy, closer to transition)
-let bottomMinY = lowerBand.rowRange.lowerBound + 2
-let bottomMaxY = lowerBand.rowRange.lowerBound + max(2, lowerBand.rowRange.count / 3)
-
-// Ensure depth ≥ 32 (gy increases downward, so bottomY > topY)
-guard bottomMinY - topMaxY >= 32 else { continue } // pair infeasible
-
-let topY = topMinY + hash % (topMaxY - topMinY + 1)
-let bottomY = bottomMinY + hash % (bottomMaxY - bottomMinY + 1)
-guard bottomY - topY >= 32 else { continue } // sample didn't meet min depth
-```
-
-#### Step 5: Collision Checks
-For candidate `(gx, topY, bottomY, shaftWidth)`:
-- `interior = Rect(minX: gx, maxX: gx + shaftWidth - 1, minY: topY, maxY: bottomY)`
-- `wallRect = Rect(minX: gx - 2, maxX: gx + shaftWidth + 1, minY: topY - 1, maxY: bottomY + 1)` (2-cell walls, 1-cell caps top/bottom)
-- All `wallRect` cells must be `.solid` in current grid (carve through rock).
-- No overlap with `chamberCells`, `tunnelCells`, `shaftCells` (previous shafts), template `maximalFootprint`.
-- Chebyshev distance from `spawn` and `goal` > 6 for all cells in `wallRect`.
-- `wallRect` inside world borders (1..w-2, 1..h-2).
-
-#### Step 6: Carving + Register Cells
-```swift
-// Register ALL wallRect cells in shaftWallCells (interior + walls + caps)
-for gy in wallRect.minY...wallRect.maxY {
-    for gx in wallRect.minX...wallRect.maxX {
-        shaftWallCells.insert(gy * width + gx)
-    }
+let feasibleBandIndices = biomeConfig.bands.enumerated().compactMap { idx, band -> Int? in
+    let bandHeight = band.rowRange.count
+    return bandHeight >= 34 ? idx : nil
 }
-// Interior → empty (also track in shaftCells)
-for gy in interior.minY...interior.maxY {
-    for gx in interior.minX...interior.maxX {
+guard !feasibleBandIndices.isEmpty else { return }
+```
+
+#### Step 2: Shaft Count
+```swift
+let seedInt = Int(truncatingIfNeeded: seed)
+let count = 2 + Int(hash2(0x5FAF00, seedInt) % 3)  // 2, 3, or 4
+```
+
+#### Step 3: Round-Robin Band Distribution
+```swift
+var bandCycle = 0
+for shaftIdx in 0..<count {
+    let bandIdx = feasibleBandIndices[bandCycle % feasibleBandIndices.count]
+    bandCycle += 1
+    let band = biomeConfig.bands[bandIdx]
+    // ... placement for this shaft in this band
+}
+```
+
+#### Step 4: Dimensions per Shaft
+```swift
+let shaftWidth = 7 + Int(hash2(0x5FAF01 + shaftIdx * 1000, seedInt) % 4)  // 7-10
+let maxDepth = min(48, band.rowRange.count - 2)  // cap at band height minus caps
+let shaftDepth = 32 + Int(hash2(0x5FAF02 + shaftIdx * 1000, seedInt) % UInt64(max(1, maxDepth - 31)))  // 32-maxDepth
+```
+
+#### Step 5: Placement Search (up to 100 attempts)
+```swift
+for attempt in 0..<100 {
+    let attemptSalt = 0x5FAF10 + shaftIdx * 1000 + attempt * 100
+    let attemptSaltY = 0x5FAF11 + shaftIdx * 1000 + attempt * 100
+
+    let minInteriorLeft = 3
+    let maxInteriorLeft = width - 4 - shaftWidth
+    guard minInteriorLeft <= maxInteriorLeft else { continue }
+
+    let minInteriorTop = max(band.rowRange.lowerBound + 1, 2)
+    let maxInteriorTop = min(band.rowRange.upperBound - 1 - shaftDepth, height - 3)
+    guard minInteriorTop <= maxInteriorTop else { continue }
+
+    let interiorLeft = minInteriorLeft + Int(hash2(attemptSalt, seedInt) % UInt64(maxInteriorLeft - minInteriorLeft + 1))
+    let interiorTop = minInteriorTop + Int(hash2(attemptSaltY, seedInt) % UInt64(maxInteriorTop - minInteriorTop + 1))
+    let interiorRight = interiorLeft + shaftWidth - 1
+    let interiorBottom = interiorTop + shaftDepth - 1
+
+    let wallRing = Rect(
+        minX: interiorLeft - 2,
+        maxX: interiorRight + 2,
+        minY: interiorTop - 1,
+        maxY: interiorBottom + 1
+    )
+    // ... validation checks
+}
+```
+
+#### Step 6: Validation Checks
+- **World borders**: `wallRing.minX >= 1 && wallRing.maxX <= width - 2 && wallRing.minY >= 1 && wallRing.maxY <= height - 2`
+- **Band containment**: `wallRing.minY >= band.rowRange.lowerBound && wallRing.maxY <= band.rowRange.upperBound`
+- **Template footprint**: No overlap with `layout.maximalFootprint`
+- **Chamber walls**: No `wallRing.intersects(chamber.wallRect)` for any chamber
+- **Shaft separation**: No `wallRing.intersects(existingShaft.wallRing.expanded(by: 1))` for any existing shaft (3-col gap)
+- **Spawn/goal clearance**: Chebyshev distance > 6 from ALL cells (interior + wallRing) to spawn AND goal
+- **Top connectivity**: `grid[interiorTop][gx] == .empty` for some `gx` in `interiorLeft...interiorRight`
+- **Bottom connectivity**: `grid[interiorBottom][gx] == .empty` OR `grid[interiorBottom + 1][gx] == .empty` for some `gx`
+
+#### Step 7: Carving
+```swift
+// Interior: empty
+for gy in interiorTop...interiorBottom {
+    for gx in interiorLeft...interiorRight {
         grid[gy][gx] = .empty
         shaftCells.insert(gy * width + gx)
     }
 }
-// Left wall (2 cells thick)
-for gy in wallRect.minY...wallRect.maxY {
-    grid[gy][wallRect.minX] = .solid
-    grid[gy][wallRect.minX + 1] = .solid
+// Flank walls (2 cells each side): solid
+for gy in interiorTop - 1...interiorBottom + 1 {
+    grid[gy][interiorLeft - 2] = .solid
+    grid[gy][interiorLeft - 1] = .solid
+    grid[gy][interiorRight + 1] = .solid
+    grid[gy][interiorRight + 2] = .solid
+    shaftWallCells.insert(gy * width + interiorLeft - 2)
+    shaftWallCells.insert(gy * width + interiorLeft - 1)
+    shaftWallCells.insert(gy * width + interiorRight + 1)
+    shaftWallCells.insert(gy * width + interiorRight + 2)
 }
-// Right wall
-for gy in wallRect.minY...wallRect.maxY {
-    grid[gy][wallRect.maxX] = .solid
-    grid[gy][wallRect.maxX - 1] = .solid
+// Cap walls: solid, center cell open for connectivity
+let capCenterX = (interiorLeft + interiorRight) / 2
+for gx in interiorLeft - 2...interiorRight + 2 {
+    if gx != capCenterX {
+        grid[interiorTop - 1][gx] = .solid
+        shaftWallCells.insert((interiorTop - 1) * width + gx)
+    }
+    if gx != capCenterX {
+        grid[interiorBottom + 1][gx] = .solid
+        shaftWallCells.insert((interiorBottom + 1) * width + gx)
+    }
 }
-// Top cap (1 cell thick across full wallRect width)
-for gx in wallRect.minX...wallRect.maxX {
-    grid[wallRect.minY][gx] = .solid
-}
-// Bottom cap
-for gx in wallRect.minX...wallRect.maxX {
-    grid[wallRect.maxY][gx] = .solid
+// Bottom stub if needed
+if let stubX = bottomStubX, grid[interiorBottom][stubX] != .empty {
+    for dx in 1...5 {
+        let nx = stubX + dx
+        if nx >= width - 1 { break }
+        if grid[interiorBottom + 1][nx] == .empty {
+            for sx in stubX...nx {
+                grid[interiorBottom + 1][sx] = .empty
+                shaftCells.insert((interiorBottom + 1) * width + sx)
+                if interiorBottom + 2 < height {
+                    grid[interiorBottom + 2][sx] = .empty
+                    shaftCells.insert((interiorBottom + 2) * width + sx)
+                }
+            }
+            break
+        }
+    }
 }
 ```
 
-#### Step 7: Connectivity to Main Component
-After all shafts placed:
-1. Recompute empty components (or reuse main component from earlier).
-2. For each shaft, check if `interior.minY` row (top opening) touches main component. If not, carve horizontal 2-high tunnel from `(interior.minX + interior.width/2, interior.minY)` to nearest main component cell.
-3. Same for bottom opening at `interior.maxY`.
-4. Tunnels must not cross `chamberCells` or other `shaftCells` (interior only; walls are solid).
+#### Step 8: Record Shaft
+```swift
+let shaft = CaveShaft(
+    interiorLeft: interiorLeft,
+    interiorRight: interiorRight,
+    interiorTop: interiorTop,
+    interiorBottom: interiorBottom
+)
+shafts.append(shaft)
+```
 
 ### 4.3 RNG Usage
 - All randomness via `hash2(salt, seedInt)` where `seedInt = Int(truncatingIfNeeded: seed)`.
 - Unique salts per decision point:
-  - `0x5A4F70` — shaft count
-  - `0x5A4F71 + shaftIdx * 1000` — X position
-  - `0x5A4F72 + shaftIdx * 1000` — Y position (top)
-  - `0x5A4F73 + shaftIdx * 1000` — Y position (bottom)
-  - `0x5A4F74 + shaftIdx * 1000` — band pair selection (if multiple valid)
-  - `0x5A4F75 + shaftIdx * 1000` — width variation
-  - `0x5A4F76 + shaftIdx * 1000 + attempt * 10000` — attempt variation
+  - `0x5FAF00` — shaft count (2-4)
+  - `0x5FAF01 + shaftIdx * 1000` — width variation (7-10)
+  - `0x5FAF02 + shaftIdx * 1000` — depth variation (32-48, capped to band height)
+  - `0x5FAF10 + shaftIdx * 1000 + attempt * 100` — X position per attempt
+  - `0x5FAF11 + shaftIdx * 1000 + attempt * 100` — Y position per attempt
 
 ---
 
@@ -278,7 +322,7 @@ func testVerticalShaftPlacement() throws {
     for (width, height) in sizes {
         for seed in [1, 42, 64] as [UInt64] {
             let gen = CaveWorldGenerator(seed: seed, width: width, height: height)
-            let (world, _, shafts) = gen.generateWithChambers(stampSpawnTemplate: true, capturePrePass: false)
+            let (world, _, _, shafts) = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
             
             // Count: 2–4
             XCTAssertGreaterThanOrEqual(shafts.count, 2, "seed \(seed) \(width)×\(height)")
@@ -289,40 +333,36 @@ func testVerticalShaftPlacement() throws {
                 XCTAssertGreaterThanOrEqual(shaft.width, 7)
                 XCTAssertGreaterThanOrEqual(shaft.depth, 32)
                 
-                // Wall thickness exactly 2
-                XCTAssertEqual(shaft.wallRect.minX, shaft.interior.minX - 2)
-                XCTAssertEqual(shaft.wallRect.maxX, shaft.interior.maxX + 2)
-                
-                // Cap rows present and solid
-                XCTAssertEqual(shaft.wallRect.minY, shaft.interior.minY - 1)
-                XCTAssertEqual(shaft.wallRect.maxY, shaft.interior.maxY + 1)
-                
-                // Band connectivity: upperBandIndex > lowerBandIndex (bands bottom-to-top)
-                XCTAssertGreaterThan(shaft.upperBandIndex, shaft.lowerBandIndex)
+                // Wall ring exactly 2 cells horizontally, 1 cell vertically from interior
+                XCTAssertEqual(shaft.wallRing.minX, shaft.interiorLeft - 2)
+                XCTAssertEqual(shaft.wallRing.maxX, shaft.interiorRight + 2)
+                XCTAssertEqual(shaft.wallRing.minY, shaft.interiorTop - 1)
+                XCTAssertEqual(shaft.wallRing.maxY, shaft.interiorBottom + 1)
                 
                 // Interior is empty, walls are solid in final world
-                for gy in shaft.interior.minY...shaft.interior.maxY {
-                    for gx in shaft.interior.minX...shaft.interior.maxX {
+                for gy in shaft.interiorTop...shaft.interiorBottom {
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
                         let pos = CellPosition(x: -width/2 + gx, y: -height/2 + gy)
                         XCTAssertEqual(world.material(at: pos), .empty)
                     }
                 }
-                for gy in shaft.wallRect.minY...shaft.wallRect.maxY {
-                    for gx in [shaft.wallRect.minX, shaft.wallRect.minX + 1, shaft.wallRect.maxX - 1, shaft.wallRect.maxX] {
+                // Flank walls (2 cells each side) and caps (except center)
+                for gy in shaft.wallRing.minY...shaft.wallRing.maxY {
+                    for gx in [shaft.wallRing.minX, shaft.wallRing.minX + 1, shaft.wallRing.maxX - 1, shaft.wallRing.maxX] {
                         let pos = CellPosition(x: -width/2 + gx, y: -height/2 + gy)
                         XCTAssertTrue(world.material(at: pos).blocksCharacter)
                     }
                 }
                 
                 // Main component attachment: BFS from BOTH shaft ends to world.spawn
-                let topCell = CellPosition(x: -width/2 + (shaft.interior.minX + shaft.interior.maxX)/2, y: -height/2 + shaft.interior.minY)
-                let bottomCell = CellPosition(x: -width/2 + (shaft.interior.minX + shaft.interior.maxX)/2, y: -height/2 + shaft.interior.maxY)
+                let topCell = CellPosition(x: -width/2 + (shaft.interiorLeft + shaft.interiorRight)/2, y: -height/2 + shaft.interiorTop)
+                let bottomCell = CellPosition(x: -width/2 + (shaft.interiorLeft + shaft.interiorRight)/2, y: -height/2 + shaft.interiorBottom)
                 XCTAssertTrue(bfsReaches(world: world, from: topCell, to: world.spawn), "top end disconnected")
                 XCTAssertTrue(bfsReaches(world: world, from: bottomCell, to: world.spawn), "bottom end disconnected")
                 
-                // Spawn/goal clearance (wallRect includes caps)
-                for gy in shaft.wallRect.minY...shaft.wallRect.maxY {
-                    for gx in shaft.wallRect.minX...shaft.wallRect.maxX {
+                // Spawn/goal clearance (wallRing includes flanks + caps)
+                for gy in shaft.wallRing.minY...shaft.wallRing.maxY {
+                    for gx in shaft.wallRing.minX...shaft.wallRing.maxX {
                         let ds = max(abs(gx - (world.spawn.x + width/2)), abs(gy - (world.spawn.y + height/2)))
                         let dg = max(abs(gx - (world.goal.x + width/2)), abs(gy - (world.goal.y + height/2)))
                         XCTAssertGreaterThan(ds, 6)
@@ -340,18 +380,18 @@ func testVerticalShaftPlacement() throws {
 ```swift
 func testShaftDescent() throws {
     let gen = CaveWorldGenerator(seed: 42, width: 256, height: 128)
-    let (world, _, shafts) = gen.generateWithChambers(stampSpawnTemplate: true, capturePrePass: false)
+    let (world, _, _, shafts) = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
     
     for shaft in shafts {
-        let top = CellPosition(x: -128 + (shaft.interior.minX + shaft.interior.maxX)/2, y: -64 + shaft.interior.minY)
-        let bottom = CellPosition(x: -128 + (shaft.interior.minX + shaft.interior.maxX)/2, y: -64 + shaft.interior.maxY)
+        let top = CellPosition(x: -128 + (shaft.interiorLeft + shaft.interiorRight)/2, y: -64 + shaft.interiorTop)
+        let bottom = CellPosition(x: -128 + (shaft.interiorLeft + shaft.interiorRight)/2, y: -64 + shaft.interiorBottom)
         
         // BFS constrained to shaft interior
         func inShaft(_ p: CellPosition) -> Bool {
             let gx = p.x + 128
             let gy = p.y + 64
-            return gx >= shaft.interior.minX && gx <= shaft.interior.maxX &&
-                   gy >= shaft.interior.minY && gy <= shaft.interior.maxY
+            return gx >= shaft.interiorLeft && gx <= shaft.interiorRight &&
+                   gy >= shaft.interiorTop && gy <= shaft.interiorBottom
         }
         
         var visited: Set<CellPosition> = [top]
@@ -380,8 +420,8 @@ func testShaftDeterminism() throws {
         for seed in [1, 42, 64] as [UInt64] {
             let gen1 = CaveWorldGenerator(seed: seed, width: width, height: height)
             let gen2 = CaveWorldGenerator(seed: seed, width: width, height: height)
-            let (_, _, shafts1) = gen1.generateWithChambers(stampSpawnTemplate: true, capturePrePass: false)
-            let (_, _, shafts2) = gen2.generateWithChambers(stampSpawnTemplate: true, capturePrePass: false)
+            let (_, _, _, shafts1) = gen1.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+            let (_, _, _, shafts2) = gen2.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
             XCTAssertEqual(shafts1, shafts2, "Shaft placement not deterministic for seed \(seed) \(width)×\(height)")
         }
     }
@@ -397,20 +437,21 @@ func testShaftWallIntegrity() throws {
     for (width, height) in sizes {
         for seed in [1, 42, 64] as [UInt64] {
             let gen = CaveWorldGenerator(seed: seed, width: width, height: height)
-            let (world, _, shafts) = gen.generateWithChambers(stampSpawnTemplate: true, capturePrePass: false)
+            let (world, _, _, shafts) = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
             
             for shaft in shafts {
-                // All wallRect boundary cells must be solid in final world
-                for gy in shaft.wallRect.minY...shaft.wallRect.maxY {
-                    for gx in [shaft.wallRect.minX, shaft.wallRect.minX + 1, shaft.wallRect.maxX - 1, shaft.wallRect.maxX] {
+                // Flank walls and caps solid in final world
+                for gy in shaft.wallRing.minY...shaft.wallRing.maxY {
+                    for gx in [shaft.wallRing.minX, shaft.wallRing.minX + 1, shaft.wallRing.maxX - 1, shaft.wallRing.maxX] {
                         let pos = CellPosition(x: -width/2 + gx, y: -height/2 + gy)
                         XCTAssertTrue(world.material(at: pos).blocksCharacter,
                             "Shaft wall breached at (\(gx), \(gy)) seed \(seed)")
                     }
                 }
-                // Cap rows solid
-                for gx in shaft.wallRect.minX...shaft.wallRect.maxX {
-                    for gy in [shaft.wallRect.minY, shaft.wallRect.maxY] {
+                // Cap rows solid (center cell may be open for connectivity)
+                for gx in shaft.wallRing.minX...shaft.wallRing.maxX {
+                    for gy in [shaft.wallRing.minY, shaft.wallRing.maxY] {
+                        if gx == (shaft.interiorLeft + shaft.interiorRight) / 2 { continue }
                         let pos = CellPosition(x: -width/2 + gx, y: -height/2 + gy)
                         XCTAssertTrue(world.material(at: pos).blocksCharacter,
                             "Shaft cap breached at (\(gx), \(gy)) seed \(seed)")
@@ -431,8 +472,8 @@ func testShaftWallIntegrity() throws {
 | Acceptance Item | Test |
 |-----------------|------|
 | 2+ shafts, interior ≥7×32 | `testVerticalShaftPlacement` count + dimensions |
-| Each shaft connects two distinct biome bands | `testVerticalShaftPlacement` band index check |
-| Walls exactly 2 cells thick, interior empty | `testVerticalShaftPlacement` wall thickness + material checks |
+| Walls exactly 2-cell flank + 1-cell caps, interior empty | `testVerticalShaftPlacement` wall thickness + material checks |
+| Shaft walls registered for material protection | `testShaftWallIntegrity` material checks |
 | Pathfinding top→bottom within shaft | `testShaftDescent` |
 | Spawn/goal reachable, unobstructed | `testVerticalShaftPlacement` clearance + BFS to spawn |
 | Deterministic same seed | `testShaftDeterminism` |
@@ -445,136 +486,76 @@ func testShaftWallIntegrity() throws {
 |------|------------|
 | **Determinism**: shaft RNG uses system randomness | Use only `hash2` with generator's `seed`; no `SystemRandomNumberGenerator`. |
 | **Contract violation**: shaft carving breaks `WorldGrid` mutability invariants | Carve directly into `grid` (same as chambers); `grid` is the single source of truth before `WorldGrid` build. |
-| **ConnectivityValidator assumptions broken** | Pass `shaftCells ∪ chamberCells` to `repairConnectivity` so tunnels don't carve through shaft walls. Shaft interiors are empty and part of main component by construction. |
-| **Performance**: extra carving pass exceeds 16 ms/frame | Shaft pass is O(width × height × shaftCount) with bounded retries (50 per shaft). At 256×128, 4 shafts, ~50K cell checks — well within budget. Profile with `signpost` if needed. |
+| **ConnectivityValidator assumptions broken** | Pass `protectedCells = shaftCells ∪ shaftWallCells ∪ chamberCells` to `repairConnectivity` so tunnels don't carve through shaft walls. Shaft interiors are empty and part of main component by construction. |
+| **Performance**: extra carving pass exceeds 16 ms/frame | Shaft pass is O(width × height × shaftCount) with bounded retries (100 per shaft). At 256×128, 4 shafts, ~50K cell checks — well within budget. Profile with `signpost` if needed. |
 | **UX**: unintended fall damage traps | Shafts are 2-high tunnels at top/bottom connecting to main caves; character can walk in/out. No dead-end pits. Depth ≥32 but fall damage is a gameplay tuning, not generator concern. |
 | **Platform**: iOS-specific code leaked | Core generator is pure Swift, no platform APIs. No changes to rendering/physics/input. |
 | **Template shaft conflict** | New shafts avoid `layout.maximalFootprint` (includes fixed shaft zone cols 6–16). Fixed shaft at cols 8–14 remains untouched. |
-| **Band pair infeasibility** (height too small) | Feasibility gate: skip shaft for pair if vertical span < 36. Generator still produces 2+ shafts from other pairs. At minimum height (56 for template), bands are ~18 rows each — may only fit 1 pair. Acceptable: goal says "2–4 per level", not "always 4". |
-| **Shaft overlaps chamber interior** | Collision check against `chamberCells` (set of interior indices). Walls also checked against chamber `wallRect` via grid solid check. |
+| **Band infeasibility** (height too small) | Feasibility gate: height ≥ 40, width ≥ 30, band height ≥ 34. If no band qualifies, generator returns with 0 shafts (still valid). |
+| **Shaft overlaps chamber interior** | Collision check against `chamber.wallRect` for each chamber (direct intersection, no expansion). |
 
 ---
 
 ## 7. Implementation Checklist
 
-- [ ] Add `VerticalShaft` struct and generator state fields (`placedShafts`, `shaftCells`, `shaftWallCells`, `chamberWallCells`).
-- [ ] Implement `placeVerticalShafts` function (registers `shaftWallCells` in carving step, assigns `connectsToChamberAtTop/Bottom`).
+- [ ] Add `CaveShaft` struct and generator state fields (`placedShafts: [CaveShaft]`, `shaftCells`, `shaftWallCells`).
+- [ ] Implement `placeShafts` function (registers `shaftWallCells` in carving step).
 - [ ] Insert call in `generateFull` after chamber tunnels, before sand.
-- [ ] Add `shaftWallCells` guards to **all 11 material placement functions** (sand, pools, pockets, magicLiquid, gold, gunpowder, ice, slime, acid, lava, blood).
-- [ ] Extend `repairConnectivity(grid:chamberCells:protectedCells:)` with `protectedCells` parameter; pass `shaftWallCells ∪ chamberWallCells`.
-- [ ] Update `searchPath` and `carveDirectRoute` to respect `protectedCells`.
-- [ ] Add `revalidateShafts` call after final spawn/goal assignment (before template stamp).
-- [ ] Extend `generateWithChambers` to return shafts (4-tuple).
-- [ ] Update `scripts/verify-cave-anchors.sh` anchor 5 for new signature.
-- [ ] Increment `SimulationSnapshot.digestVersion` 10→11, update docs/interfaces/cave-generation.md.
+- [ ] Add `protectedShaftCells` guards to material placement passes (sand, pools, pockets).
+- [ ] Extend `repairConnectivity(grid:chamberCells:protectedCells:)` with `protectedCells` parameter; pass `shaftCells ∪ shaftWallCells ∪ chamberCells`.
+- [ ] Update `searchPath` to respect `protectedCells` parameter.
+- [ ] Update `sealHazards` to accept `shaftCells` parameter.
+- [ ] `generateWithChambers` returns 3-tuple `(world, prePass, chambers)`; `generateWithShafts` returns 4-tuple `(world, prePass, chambers, shafts)`.
+- [ ] Increment `SimulationSnapshot.digestVersion` 12→13, update docs/interfaces/cave-generation.md.
 - [ ] Update `testNonFittingRegression` pinned SHA256 if 64×48 generates shafts.
-- [ ] Add **six** unit tests in `CaveWorldGenTests.swift`:
+- [ ] Add unit tests in `CaveWorldGenTests.swift`:
     - `testVerticalShaftPlacement` (template mode)
-    - `testVerticalShaftPlacementNatural` (non-template mode)
-    - `testShaftDeterminism`
     - `testShaftDescent`
     - `testShaftWallIntegrity`
-    - `testShaftRevalidation` (verifies final spawn/goal clearance)
 - [ ] Run test suite, verify all pass.
 - [ ] Build macOS app, run with seed 42, capture screenshot.
 - [ ] Increment marketing version (minor bump).
-- [ ] Update `CHANGELOG.md` if exists.
 
 ---
 
 ## 8. Additional Required Changes
 
-### 8.1 Final Spawn/Goal Revalidation
-After final spawn/goal selection (step 13 in pipeline), revalidate all placed shafts against **actual final** spawn/goal positions (mirroring `revalidateChambers`):
+### 8.1 Revalidation
+The implementation uses `revalidateChambers` (existing) after template stamp. Shaft safety radius is checked during placement using **provisional** spawn/goal (lexicographic min/max empties before material passes). No separate `revalidateShafts` is needed because:
+- Shafts are placed after chamber tunnels and before material passes
+- Provisional spawn/goal are derived from empty cells at that stage
+- Material passes protect `protectedShaftCells = shaftCells ∪ shaftWallCells`
+- Final spawn/goal are chosen from empties; template stamp occurs after revalidation
 
-```swift
-private func revalidateShafts(
-    grid: inout [[Material]],
-    width: Int, height: Int,
-    spawn: (Int, Int), goal: (Int, Int),
-    shafts: inout [VerticalShaft],
-    shaftCells: inout Set<Int>,
-    shaftWallCells: inout Set<Int>
-) {
-    var validShafts: [VerticalShaft] = []
-    for shaft in shafts {
-        var keep = true
-        // Check Chebyshev-6 against FINAL spawn/goal
-        for gy in shaft.wallRect.minY...shaft.wallRect.maxY {
-            for gx in shaft.wallRect.minX...shaft.wallRect.maxX {
-                let ds = max(abs(gx - spawn.0), abs(gy - spawn.1))
-                let dg = max(abs(gx - goal.0), abs(gy - goal.1))
-                if ds <= 6 || dg <= 6 { keep = false; break }
-            }
-            if !keep { break }
-        }
-        if keep {
-            validShafts.append(shaft)
-        } else {
-            // Seal shaft interior back to solid (remove from protection sets)
-            for gy in shaft.wallRect.minY...shaft.wallRect.maxY {
-                for gx in shaft.wallRect.minX...shaft.wallRect.maxX {
-                    grid[gy][gx] = .solid
-                    shaftCells.remove(gy * width + gx)
-                    shaftWallCells.remove(gy * width + gx)
-                }
-            }
-        }
-    }
-    // Ensure at least 2 shafts survive (assertion in test)
-    shafts = validShafts
-}
-```
-
-Call this after `enforceBorders` and final spawn/goal assignment (before template stamp).
-
-### 8.2 Non-Template Mode Test
-Add test `testVerticalShaftPlacementNatural` with `stampSpawnTemplate: false` to verify shafts work without the fixed template shaft.
-
-### 8.3 Band Boundary Crossing Verification
-In `testVerticalShaftPlacement`, add assertion that shaft interior spans rows in **both** claimed bands:
-```swift
-let upperBandRange = biomeConfig.bands[shaft.upperBandIndex].rowRange
-let lowerBandRange = biomeConfig.bands[shaft.lowerBandIndex].rowRange
-XCTAssertTrue(upperBandRange.contains(shaft.interior.minY) || upperBandRange.contains(shaft.interior.minY + 1))
-XCTAssertTrue(lowerBandRange.contains(shaft.interior.maxY) || lowerBandRange.contains(shaft.interior.maxY - 1))
-```
-
-### 8.4 digestVersion Bump
-- Increment `SimulationSnapshot.digestVersion` (currently 10, `SimulationSnapshot.swift:14`) → 11.
+### 8.2 digestVersion Bump
+- Increment `SimulationSnapshot.digestVersion` (currently 12) → 13.
 - Update `SaveCodec.digestVersion` derivation.
-- Update `docs/interfaces/cave-generation.md:97-98` to document version 11 = vertical shafts added.
-- Update `testNonFittingRegression` pinned SHA256 checksums in `CaveWorldGenTests.swift:611-612` if 64×48 generates shafts.
+- Update `docs/interfaces/cave-generation.md` to document version 13 = vertical shafts added.
+- Update `testNonFittingRegression` pinned SHA256 checksums in `CaveWorldGenTests.swift` if 64×48 generates shafts.
 
-### 8.5 generateWithChambers Signature + Anchor Script
-Change return tuple from `(world, prePass, chambers)` to `(world, prePass, chambers, shafts)`:
-```swift
-func generateWithChambers(
-    stampSpawnTemplate: Bool,
-    capturePrePass: Bool
-) -> (CaveWorld, [[Material]], [CaveChamber], [VerticalShaft])
-```
-Update `scripts/verify-cave-anchors.sh` anchor 5 (lines 58-63) to match new signature.
-Update `docs/interfaces/cave-world-and-cave-run.md:52` if it pins the signature.
+### 8.3 generateWithShafts Signature
+`generateWithChambers` returns 3-tuple `(world, prePass, chambers)` (unchanged).
+`generateWithShafts` returns 4-tuple `(world, prePass, chambers, shafts)` (new public method).
+Update `scripts/verify-cave-anchors.sh` anchor 5 if needed for new `generateWithShafts` method.
+Update `docs/interfaces/cave-world-and-cave-run.md` to document both methods.
 
-### 8.6 ConnectsToChamber Flags Assignment
-In Step 6 carving, set `connectsToChamberAtTop/Bottom` based on whether the shaft opening (top cap gap at `interior.minY - 1`, bottom cap gap at `interior.maxY + 1`) is within Chebyshev-1 of a chamber interior cell.
+### 8.4 Band Boundary
+Shafts are placed within a single band (not spanning band pairs). Each shaft's interior and wallRing are fully contained within one biome band's `rowRange`. No cross-band boundary check needed.
 
 ---
 
 ## 9. Appendix: Salt Constants
 
 ```swift
-// In placeVerticalShafts - all valid hex (no 'H' digit)
-private let shaftCountSalt: UInt64 = 0x5A4F70
-private let shaftXSaltBase: UInt64 = 0x5A4F71
-private let shaftTopYSaltBase: UInt64 = 0x5A4F72
-private let shaftBottomYSaltBase: UInt64 = 0x5A4F73
-private let shaftBandPairSaltBase: UInt64 = 0x5A4F74
-private let shaftWidthSaltBase: UInt64 = 0x5A4F75
-private let shaftAttemptSaltBase: UInt64 = 0x5A4F76
+// In placeShafts - all valid hex (no 'H' digit)
+// Salt constants defined inline in placeShafts:
+// 0x5FAF00 — shaft count
+// 0x5FAF01 + shaftIdx * 1000 — width
+// 0x5FAF02 + shaftIdx * 1000 — depth
+// 0x5FAF10 + shaftIdx * 1000 + attempt * 100 — X per attempt
+// 0x5FAF11 + shaftIdx * 1000 + attempt * 100 — Y per attempt
 ```
 
-All salts combined with `shaftIdx * 1000 + attempt * 10000` for attempt-level variation.
+All salts combined with `shaftIdx * 1000 + attempt * 100` for attempt-level variation.
 
-**Salt collision check**: Existing chamber salts use `0xC4A901 + bandIdx*100 + chamberIdx*1000`. Shaft salts `0x5A4F7x` are in a disjoint range. No collision.
+**Salt collision check**: Existing chamber salts use `0xC4A901 + bandIdx*100 + chamberIdx*1000`. Shaft salts `0x5FAF0x` / `0x5FAF1x` are in a disjoint range. No collision.

@@ -93,7 +93,6 @@ generateFull:
 | `chambers` (for wall ring intersection check) | `shaftCells` set |
 | `chamberCells` set (avoid interior overlap) | `shaftWallCells` set |
 | `layout?.maximalFootprint` (avoid template zone) | |
-| `layout?.maximalFootprint` (avoid template zone) | |
 | `spawnCell`, `goalCell` (safety radius) | |
 | `width`, `height`, `originX`, `originY` | |
 | `seed` (for RNG) | |
@@ -310,6 +309,10 @@ shafts.append(shaft)
   - `0x5FAF10 + shaftIdx * 1000 + attempt * 100` — X position per attempt
   - `0x5FAF11 + shaftIdx * 1000 + attempt * 100` — Y position per attempt
 
+All salts combined with `shaftIdx * 1000 + attempt * 100` for attempt-level variation.
+
+**Salt collision check**: Existing chamber salts use `0xC4A901 + bandIdx*100 + chamberIdx*1000`. Shaft salts `0x5FAF0x` / `0x5FAF1x` are in a disjoint range. No collision.
+
 ---
 
 ## 5. Verification (Test Additions, Acceptance Mapping)
@@ -467,7 +470,7 @@ func testShaftWallIntegrity() throws {
 - Run app with seed 42, capture world view screenshot showing multiple shafts connecting bands.
 - Manual inspection: shafts visible as vertical empty columns with 2-cell solid walls, connecting surface→underground→deep.
 
-### 5.5 Acceptance Criteria Mapping
+### 5.6 Acceptance Criteria Mapping
 
 | Acceptance Item | Test |
 |-----------------|------|

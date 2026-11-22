@@ -159,10 +159,11 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### noita-gap-analysis: Compare current game to Noita and add missing goals
-- status: todo
+- status: dropped
 - priority: 75
 - track: noita
 - depends: none
+- dropped-reason: Meta-goal that only creates more goals; the queue already has 9 open product goals covering the identified Noita gaps (cave worldgen, explosions, reactions, projectiles, creatures, health, levitation, wands, digging, gold, biomes, sanctuary, perks, flasks, run summary). No implementation value until those goals land.
 - areas: docs-interfaces, sim-rules, worldgen, player, spells, entities, hud
 - why: We need a systematic gap analysis comparing Noirpx's current feature set to Noita's core mechanics, to identify what's missing and prioritize the remaining work. This goal runs the comparison and creates new goals for each significant gap found.
 - scope: Play Noita (or review reference material) and enumerate missing systems: wand editing/crafting UI, biome variety, creature AI, material physics depth, spell variety, parallel worlds, boss fights, alchemy/reactions, perks, secrets. For each gap, create a new goal in GOALS.md with proper fields. Do NOT implement the gaps — just document and create goals.
@@ -172,10 +173,11 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - No implementation work done in this goal.
 
 ### sound-exploration: Explore adding sound system and create sub-goals
-- status: todo
+- status: dropped
 - priority: 80
 - track: noita
 - depends: none
+- dropped-reason: Meta-goal that only creates more goals; audio is a presentation layer that can wait until core simulation and performance budgets are met. The 9 open product goals (sim-hot-loop-allocations, sim-dirty-rects, snapshot-incremental, sim-parallel-chunks, world-streaming, plus cave worldgen fixes) take precedence.
 - areas: host, hud, sim-rules, docs-interfaces
 - why: Noita's audio (ambient cave sounds, material reactions, spell casting, creature noises, music) is a core part of its feel. Noirpx has no sound. This goal investigates what's needed (AVAudioEngine? AudioKit? custom?), creates a design, and breaks it into multiple implementation goals.
 - scope: Research audio frameworks suitable for macOS/iOS game (AVAudioEngine, AudioKit, FMOD, SoLoud). Design the sound architecture: event-driven playback from simulation (material reactions, spell casts, impacts, creature sounds), ambient loops per biome, music system. Create 5-10 sub-goals in GOALS.md (e.g., audio-engine-setup, ambient-cave-sounds, spell-cast-sounds, material-reaction-sounds, creature-sounds, music-system, ui-sounds, audio-settings). Do NOT implement — just research, design, and create goals.
@@ -730,6 +732,54 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   CaveWorldGenTests.swift edits apply cleanly; the tooling digest no longer
   lists this signature as actionable.
 - result: Test file already has correct `6 * 6` content on main; implementer oldString must match exact formatting (16-space indent, 36-space continuation). No code changes required; pre-existing simcore-layout FAILs on main (Crawler/CreatureSpawn/CaveWorldGenerator top-level type counts) are unrelated. Verified: swift test --parallel -c release green.
+
+### cave-generator-noise-scale-levitation-edit-failures: Fix edit failures and rebase conflicts in levitation/safety-radius tests (cave-generator-noise-scale)
+- status: todo
+- priority: 4
+- track: infra
+- depends: none
+- areas: tests-infra, worldgen
+- why: The cave-generator-noise-scale goal pass repeatedly fails `edit` tool oldString matching against Tests/SimulationCoreTests/CaveRunLevitationIntegrationTests.swift (3 occurrences since last mark, above the pass-tool threshold of 3), and rebase of explosion-bugfix conflicts on "test: update footprint containment and levitation tests for safety radius 12" (runlog error, 2 occurrences, last seen 2026-11-22T18:49:41+0100). These are game-repository tooling issues inside goal passes, not loop machinery.
+- scope: Align implementer edit oldStrings with actual CaveRunLevitationIntegrationTests.swift content and resolve the safety-radius-12 test rebase conflict so edits apply cleanly and rebases succeed. Do not modify autoloop.sh, goalq.py, or toolreview.py. Do not edit the game repository from this process pass.
+- acceptance:
+  - `toolreview.py list` shows the CaveRunLevitationIntegrationTests edit-failure and safety-radius rebase-conflict findings no longer recurse above threshold.
+  - cave-generator-noise-scale goal pass completes edit operations without oldString mismatch errors; explosion-bugfix rebase on main applies cleanly.
+
+### fix-steam-liquid-edit-failures: Fix repeated oldString edit failures in IceBehavior.swift (steam-liquid-bugfix)
+- status: todo
+- priority: 3
+- track: infra
+- depends: none
+- areas: sim-rules, tests-infra
+- why: The steam-liquid-bugfix goal pass repeatedly fails `edit` tool oldString matching against /Users/nora/Noirpx-worktrees/steam-liquid-bugfix/Sources/SimulationCore/Materials/IceBehavior.swift (3 occurrences since last mark, above the pass-tool threshold of 3). The oldString includes the `thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {` parameter line but does not match the file exactly. This is game-repository tooling inside a goal pass, not loop machinery.
+- scope: Align the implementer's edit oldStrings with the actual IceBehavior.swift content (whitespace, indentation, parameter signature) so edit operations succeed. Do not modify autoloop.sh, goalq.py, or toolreview.py. Do not edit the game repository from this process pass.
+- acceptance:
+  - `toolreview.py list` shows the `pass-tool :: edit :: N: thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {` finding no longer recurses above threshold.
+  - steam-liquid-bugfix goal pass completes edit operations on IceBehavior.swift without oldString mismatch errors.
+
+### vertical-shaft-generation-caveworldgen-edit-failures: Fix repeated oldString edit failures in CaveWorldGenerator.swift (vertical-shaft-generation)
+- status: todo
+- priority: 4
+- track: infra
+- depends: none
+- areas: worldgen, tests-infra
+- why: The vertical-shaft-generation goal pass repeatedly fails `edit` tool oldString matching against /Users/nora/Noirpx-worktrees/vertical-shaft-generation/Sources/SimulationCore/World/CaveWorldGenerator.swift (4 occurrences since last mark, above the pass-tool threshold of 3). The oldString "// Sand layer in shallow depressions: bottom-most empty cells of some columns." does not match the file exactly (whitespace/indentation drift). This is game-repository tooling inside a goal pass, not loop machinery.
+- scope: Re-approach the CaveWorldGenerator.swift edits by reading the current file first and matching oldStrings exactly, including whitespace and indentation, targeting the sand-layer comment edit in that file only. Do not modify autoloop.sh, goalq.py, or toolreview.py. Do not edit the game repository from this process pass.
+- acceptance:
+  - `toolreview.py list` shows the `pass-tool :: edit :: N: // Sand layer in shallow depressions` finding no longer recurses above threshold.
+  - vertical-shaft-generation goal pass completes edit operations on CaveWorldGenerator.swift without oldString mismatch errors.
+
+### vertical-shaft-generation-spec-edit-failures: Fix repeated oldString edit failures in vertical-shaft-generation-spec.md
+- status: todo
+- priority: 3
+- track: infra
+- depends: none
+- areas: docs-interfaces, worldgen
+- why: The vertical-shaft-generation goal pass repeatedly fails `edit` tool oldString matching against integration-main/vertical-shaft-generation-spec.md (4 occurrences since last mark, above the pass-tool threshold of 3). The spec file content needs to be aligned so the implementer's edits match; this is game-repository tooling inside a goal pass, not loop machinery.
+- scope: Review integration-main/vertical-shaft-generation-spec.md and align its content with what the vertical-shaft-generation implementer is trying to edit, so oldString matches succeed. Do not modify autoloop.sh, goalq.py, or toolreview.py.
+- acceptance:
+  - `toolreview.py list` shows the vertical-shaft-generation-spec.md edit-failure finding no longer recurses above threshold.
+  - vertical-shaft-generation goal pass completes edit operations without oldString mismatch errors.
 
 ## Performance
 

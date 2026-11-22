@@ -125,9 +125,47 @@ CaveRun.init(seed: UInt64, width: Int = 256, height: Int = 128, biomeConfig: Cav
 - Hazard materials never placed within Chebyshev distance 6 of spawn/goal
 - Band config validated at init: contiguous, full coverage, multiplier > 0
 
+### Chamber placement
+
+A chamber placement pass runs after initial connectivity repair and before material
+placement (sand, pools, pockets, veins). It carves 3–6 chambers of interior size
+15×15 to 30×30 cells into solid rock, distributed across biome bands.
+
+- **Feasibility gate**: If no band has height ≥ 17 rows (chamber 15 + wall ring 2),
+  the pass is skipped entirely. At 64×48 (band height = 16) generation is
+  bit-identical to pre-chamber behavior.
+- **Chamber count**: 3–6, derived from seeded RNG (`3 + hash2(0xC4A900, seed) % 4`).
+- **Band distribution**: Round-robin across feasible bands (bottom-to-top order, then cycle).
+- **Size**: 15–30 per dimension, capped by band height minus 2. RNG per chamber with
+  salts `0xC4A901 + band*100 + idx*1000`.
+- **Position**: Random within band and world borders (1...w-2 × 1...h-2), with
+  bounded retries (max 50 attempts, attempt-indexed salts `chamberSalt + attempt*10000`).
+- **Validation**: Wall ring must be inside band rowRange and world borders; no overlap
+  with other chamber wall rings; Chebyshev distance > 6 from template spawn/goal.
+- **Carving**: Interior cells set to `.empty`, 1-cell wall ring set to `.solid`.
+- **Post-pass revalidation**: After final spawn/goal are chosen (template or fallback),
+  re-check safety radius against FINAL positions. Violating chambers are filled solid.
+- **Second connectivity repair**: After revalidation, `repairConnectivity` runs again
+  to connect any isolated chambers to the main cave network.
+
+### Vertical shaft placement
+
+A shaft placement pass runs after chamber revalidation and before material
+placement (sand, pools, pockets, veins). It carves 2–4 vertical descent shafts
+into solid rock, connecting chambers or main corridors across biome bands.
+
+- **Feasibility gate**: If world height < 40 or width < 30, or no band has height ≥ 34 rows (32 depth + 1 top wall + 1 bottom wall), the pass is skipped entirely. At 64×48 (band height = 16) generation is bit-identical to pre-shaft behavior.
+- **Shaft count**: 2–4, derived from seeded RNG (`2 + hash2(0x5FAF00, seed) % 3`).
+- **Band distribution**: Round-robin across feasible bands (bottom-to-top order, then cycle).
+- **Size**: Width 7–10, depth 32–48 (capped by band height minus 2). RNG per shaft with salts.
+- **Position**: Random within band and world borders (1...w-2 × 1...h-2), with bounded retries (max 100 attempts).
+- **Validation**: Wall ring (2-cell flank walls ±2 X, ±1 Y) must be inside band rowRange and world borders; no overlap with chamber/other shaft wall rings or template maximal footprint; Chebyshev distance > 6 from provisional spawn/goal.
+- **Carving**: Interior cells set to `.empty`, 2-cell flank walls (interiorLeft-2, -1 and interiorRight+1, +2) set to `.solid` for full depth + 1 cell above/below. Top/bottom caps set to `.solid` except center cell (interiorLeft + width/2) left open for connectivity. Bottom stub carves 1 cell down from cap center.
+- **Protection**: Shaft interior cells (`shaftCells`) and wall cells (`shaftWallCells`) are tracked separately and protected from all subsequent material placement passes (sand, water, pitch/oil, gold, gunpowder, ice, slime, acid, lava, blood). `repairConnectivity` and `sealHazards` receive the union of these sets as `protectedCells` and will not carve through them.
+
 ### Digest version
 
-`SimulationSnapshot.digestVersion` bumped from 6 → 7. Same seed + size + config →
+`SimulationSnapshot.digestVersion` bumped from 6 → 7 (biome bands), 7 → 8 (digging/explosive spells), 8 → 9 (debris particles), 9 → 10 (chamber placement), 10 → 11 (vertical shaft placement). Same seed + size + config →
 identical digest; changing config → different digest (intentional).
 
 No host features are claimed.
@@ -258,6 +296,78 @@ by the test harness as `insufficientDescent`, not as a `CaveRun.Outcome`.
 `CaveRun` is not persisted. `SaveCodec` encodes only `BeaconRun`; `CaveRun`
 state is not saved or restored. This is a deliberate design: cave runs are
 session-scoped and regenerated from seed on restart.
+
+### Sanctuary (Safe Zone Between Levels)
+
+After completing a cave level, the run enters a **sanctuary** — a safe zone
+between levels where the character is fully healed, indestructible walls prevent
+damage, and a gold shop offers spells and a wand for purchase.
+
+#### Types
+
+```swift
+public enum SanctuaryState: Equatable, Sendable {
+    case notInSanctuary
+    case inSanctuary(level: Int, shopInventory: SanctuaryShopInventory, enteredAtTick: UInt64)
+}
+
+public struct SanctuaryShopInventory: Equatable, Sendable {
+    public let spellOffers: [SanctuaryShopOffer]  // 3–5 entries
+    public let wandOffer: SanctuaryShopOffer      // exactly 1 wand
+    public let generationSeed: UInt64
+}
+
+public struct SanctuaryShopOffer: Equatable, Sendable {
+    public let id: String                   // "spell:<blueprintId>" or "wand:<slot>"
+    public let spell: Spell?                // nil for wand offer
+    public let wand: Wand?                  // nil for spell offer
+    public let price: Int                   // gold cost
+    public let quantity: Int                // always 1
+}
+```
+
+#### `CaveRun` Integration
+
+- **`sanctuaryState: SanctuaryState`** — attached to `CaveRun`. When `.inSanctuary`,
+  normal level play is paused; the character cannot move, cast, or dig.
+
+- **`nextLevel(unlockedSpellIds:)`** — after level complete, generates sanctuary
+  world + shop inventory, applies full heal (`health = maxHealth`), sets
+  `sanctuaryState = .inSanctuary(...)`, and returns the sanctuary run (NOT the
+  next level).
+
+- **`enterSanctuary(unlockedSpellIds:)`** (internal) — creates the sanctuary
+  `CaveWorld` via `SanctuaryWorldGenerator`, applies full heal, builds shop
+  inventory via `SanctuaryShopGenerator.generate(seed:level:unlockedSpellIds:)`.
+
+- **`exitSanctuary(purchase: SanctuaryShopOffer?)`** — consumes purchase (if any),
+  deducts gold, grants spell/wand to active wand, generates the *actual* next
+  level world via `CaveWorldGenerator`, clears `sanctuaryState`.
+
+- **`buySanctuarySpell(index:)`** — purchases spell offer at index; validates
+  `runGold >= price`; on success deducts gold, grants spell to first empty wand
+  slot (or replaces active slot), removes offer from inventory (no restock).
+
+- **`buySanctuaryWand()`** — purchases the wand offer; validates gold; on success
+  deducts gold, replaces active wand.
+
+#### Indestructible Sanctuary Walls
+
+- **`Material.sanctuaryWall`** (raw value 16) — new material used for sanctuary
+  room borders.
+- **`isIndestructible: Bool`** property on `Material` — `true` only for
+  `sanctuaryWall`.
+- Simulation paint/dig/explosion paths check `isIndestructible` and no-op on
+  these cells.
+- `blocksCharacter = true` for sanctuary walls.
+
+#### Deterministic Generation Order
+
+1. `SanctuaryWorldGenerator.generate()` — sanctuary world (room + walls)
+2. `SanctuaryShopGenerator.generate()` — shop inventory (3–5 spells + 1 wand)
+3. `CaveWorldGenerator.generate()` — actual next level (only on `exitSanctuary`)
+
+Same `(seed, level)` → identical sanctuary world + identical shop inventory.
 
 ### Verified configurations
 

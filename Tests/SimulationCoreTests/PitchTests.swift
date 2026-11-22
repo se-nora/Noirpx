@@ -6,7 +6,7 @@ final class PitchTests: XCTestCase {
     func p(_ x: Int, _ y: Int = 0) -> CellPosition { .init(x: x, y: y) }
 
     func testIdentifiersThresholdAndReplay() throws {
-        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...15))
+        XCTAssertEqual(Material.allCases.map(\.rawValue), Array(0...16))
         XCTAssertNotNil(Material(rawValue: 7))
         XCTAssertTrue(Material.pitch.blocksCharacter)
         func run() throws -> [UInt64] {

@@ -1,0 +1,12 @@
+{
+  "/Users/nora/Noirpx-worktrees/integration-main/Sources/SimulationCore/Entities/BlastFlash.swift" : {
+    "abi-baseline-json" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore.abi.json",
+    "const-values" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.swiftconstvalues",
+    "dependencies" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.d",
+    "diagnostics" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-primary.dia",
+    "objc-header" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore-Swift.h",
+    "swiftdoc" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore.swiftdoc",
+    "swiftmodule" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore.swiftmodule",
+    "swiftsourceinfo" : "/Users/nora/Noirpx-worktrees/integration-main/build/Release/Build/Intermediates.noindex/Noirpx.build/Release/SimulationCore-t.build/Objects-normal/arm64/SimulationCore.swiftsourceinfo"
+  }
+}

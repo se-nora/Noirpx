@@ -207,4 +207,81 @@ final class FixtureCharacterTests: XCTestCase {
         try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
         XCTAssertEqual(character.lastLandingImpactVelocity, captured)
     }
+
+    // MARK: - Fall start tracking
+
+    func testFallStartYSetOnJump() throws {
+        let snapshot = try world()
+        var character = try landed(in: snapshot)
+        XCTAssertNil(character.fallStartY)
+        let preJumpY = character.position.y
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: true)
+        XCTAssertFalse(character.grounded)
+        XCTAssertEqual(character.fallStartY, preJumpY)
+    }
+
+    func testFallStartYSetOnWalkOffLedge() throws {
+        // Ground only at x=-2..6, y=-2 → walking right from x=6 goes airborne at x=7.
+        let wall = (-2...6).map { (CellPosition(x: $0, y: -2), Material.solid) }
+        var simulation = Simulation(seed: 42)
+        for (position, material) in wall {
+            try simulation.enqueue(.init(tick: 1, position: position, material: material))
+        }
+        try simulation.advance(activeChunks: ChunkRegion(x: 100...100, y: 100...100))
+        let snapshot = simulation.snapshot
+
+        var character = FixtureCharacter(position: CellPosition(x: 0, y: -1))
+        // Fall onto ground at x=0, y=-1 (ground at y=-2 supports feet at y=-1).
+        for _ in 0..<40 {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        }
+        XCTAssertEqual(character.position.x, 0)
+        XCTAssertTrue(character.grounded)
+        XCTAssertNil(character.fallStartY)
+        // Walk right until at x=6, then one more step → airborne at x=7.
+        for _ in 0..<6 {
+            try character.advance(snapshot: snapshot, horizontal: 1, jump: false)
+        }
+        XCTAssertEqual(character.position.x, 6)
+        XCTAssertTrue(character.grounded)
+        // One more step walks off the ledge.
+        try character.advance(snapshot: snapshot, horizontal: 1, jump: false)
+        XCTAssertFalse(character.grounded)
+        XCTAssertEqual(character.fallStartY, -1)
+    }
+
+    func testFallStartYClearedOnLanding() throws {
+        let snapshot = try world()
+        var character = try landed(in: snapshot)
+        XCTAssertNil(character.fallStartY)
+        // Jump: takeoff recorded.
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: true)
+        XCTAssertFalse(character.grounded)
+        XCTAssertNotNil(character.fallStartY)
+        // Land back at the same Y: fallStartY cleared on landing.
+        while !character.grounded {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        }
+        XCTAssertTrue(character.grounded)
+        XCTAssertNil(character.fallStartY)
+    }
+
+    func testFallDistanceOnLanding() throws {
+        let snapshot = try world()
+        var character = try landed(in: snapshot)
+        // Grounded, no takeoff recorded → distance 0.
+        XCTAssertEqual(character.fallDistanceOnLanding, 0)
+
+        // Jump in place: takeoff and landing at same cell Y → distance 0.
+        try character.advance(snapshot: snapshot, horizontal: 0, jump: true)
+        XCTAssertFalse(character.grounded)
+        let takeoffY = character.fallStartY!
+        XCTAssertEqual(character.fallStartY, takeoffY)
+        while !character.grounded {
+            try character.advance(snapshot: snapshot, horizontal: 0, jump: false)
+        }
+        XCTAssertTrue(character.grounded)
+        XCTAssertEqual(character.position.y, takeoffY)
+        XCTAssertEqual(character.fallDistanceOnLanding, 0)
+    }
 }

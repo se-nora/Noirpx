@@ -21,6 +21,7 @@ private func materialColor(_ m: SimulationCore.Material) -> Color {
     case .pitch: return .black
     case .solid: return .gray
     case .empty: return .clear
+    case .sanctuaryWall: return .gray
     }
 }
 
@@ -44,6 +45,12 @@ public struct HUDControls: View {
     private let maxHealth: Int?
     private let energy: Int?
     private let maxEnergy: Int?
+    // Flask additions
+    private let flaskContents: [SimulationCore.Material: Int]
+    private let flaskCapacity: Int
+    private let onCollectFluid: () -> Void
+    private let onPourFluid: () -> Void
+    private let onThrowFlask: () -> Void
 
     public init(selected: SimulationCore.Material, restart: @escaping () -> Void, newRun: @escaping () -> Void,
                 diagnostics: @escaping () -> Void, help: @escaping () -> Void,
@@ -58,7 +65,12 @@ public struct HUDControls: View {
                 health: Int?,
                 maxHealth: Int?,
                 energy: Int? = nil,
-                maxEnergy: Int? = nil) {
+                maxEnergy: Int? = nil,
+                flaskContents: [SimulationCore.Material: Int] = [:],
+                flaskCapacity: Int = 0,
+                onCollectFluid: @escaping () -> Void = {},
+                onPourFluid: @escaping () -> Void = {},
+                onThrowFlask: @escaping () -> Void = {}) {
         self.selected = selected
         self.restart = restart
         self.newRun = newRun
@@ -76,6 +88,11 @@ public struct HUDControls: View {
         self.maxHealth = maxHealth
         self.energy = energy
         self.maxEnergy = maxEnergy
+        self.flaskContents = flaskContents
+        self.flaskCapacity = flaskCapacity
+        self.onCollectFluid = onCollectFluid
+        self.onPourFluid = onPourFluid
+        self.onThrowFlask = onThrowFlask
     }
 
     /// Discovered drawable materials, sorted by Material.rawValue for stable order.
@@ -133,6 +150,17 @@ public struct HUDControls: View {
             }
             // Wand slot bar + mana
             WandSlotHUD(wand: wand, manaPool: manaPool, onCycleSlot: onCycleWandSlot)
+
+            // Flask controls (cave only; shown when capacity > 0)
+            if flaskCapacity > 0 {
+                FlaskHUD(
+                    contents: flaskContents,
+                    capacity: flaskCapacity,
+                    onCollect: onCollectFluid,
+                    onPour: onPourFluid,
+                    onThrow: onThrowFlask
+                )
+            }
 
             ViewThatFits(in: .horizontal) {
                 HStack { runButtons }
@@ -245,6 +273,53 @@ private struct PaletteItem {
     let material: SimulationCore.Material
     let title: String
     let keyEquivalent: KeyEquivalent?
+}
+
+/// Compact flask display: fill bar, material swatches, and collect/pour/throw buttons.
+private struct FlaskHUD: View {
+    let contents: [SimulationCore.Material: Int]
+    let capacity: Int
+    let onCollect: () -> Void
+    let onPour: () -> Void
+    let onThrow: () -> Void
+
+    var body: some View {
+        let total = contents.values.reduce(0, +)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text("Flask")
+                    .font(.system(size: 12))
+                Text("\(total)/\(capacity)")
+                    .font(.system(size: 12))
+                Button(action: onCollect) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 12))
+                }
+                Button(action: onPour) {
+                    Image(systemName: "drop")
+                        .font(.system(size: 12))
+                }
+                Button(action: onThrow) {
+                    Image(systemName: "drop.circle")
+                        .font(.system(size: 12))
+                }
+            }
+            if total > 0 {
+                HStack(spacing: 4) {
+                    ForEach(contents.sorted(by: { $0.key.rawValue < $1.key.rawValue }), id: \.key) { material, count in
+                        VStack(spacing: 2) {
+                            Circle()
+                                .fill(materialColor(material))
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().stroke(Color.gray.opacity(0.4), lineWidth: 1))
+                            Text("\(count)")
+                                .font(.system(size: 10))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #endif

@@ -22,10 +22,32 @@ public struct FixtureCharacter: Equatable, Sendable {
     internal var verticalVelocity = 0
     public private(set) var lastLandingImpactVelocity = 0
     internal var verticalRemainder = 0
+    /// Y cell position when the character left the ground. Set on jump or
+    /// walking off a ledge; cleared on landing. Runtime-only, not saved.
+    internal var fallStartY: Int? = nil
 
     /// Current levitation energy in ticks (0...maxLevitationEnergy). Drains
     /// while holding jump airborne; recharges while grounded.
     public internal(set) var levitationEnergy = FixtureCharacter.maxLevitationEnergy
+
+    // MARK: - Perk fields
+
+    /// Fire immunity perk: when true, fire/lava/acid damage is nullified.
+    public var perkFireImmunity = false
+
+    /// Explosion immunity perk: when true, explosion damage is nullified.
+    public var perkExplosionImmunity = false
+
+    /// Extra levitation perk: multiplies max levitation energy by 1.5.
+    public var perkExtraLevitationMultiplier: Double = 1.0
+
+    /// Gold magnet perk: multiplies gold pickup radius by 2.0.
+    public var perkGoldMagnetMultiplier: Double = 1.0
+
+    /// Effective maximum levitation energy including perk multiplier.
+    public var effectiveMaxLevitationEnergy: Int {
+        Int((Double(FixtureCharacter.maxLevitationEnergy) * perkExtraLevitationMultiplier).rounded())
+    }
 
     /// Camera center for viewport tracking (body center).
     public var cameraCenter: CellPosition {
@@ -57,14 +79,23 @@ public struct FixtureCharacter: Equatable, Sendable {
     }
 
     /// Internal restoring initializer for save decoding.
+    /// fallStartY is runtime-only and not persisted; default nil.
     init(position: CellPosition, grounded: Bool, verticalVelocity: Int, verticalRemainder: Int, lastLandingImpactVelocity: Int = 0,
-         levitationEnergy: Int = FixtureCharacter.maxLevitationEnergy) {
+         levitationEnergy: Int = FixtureCharacter.maxLevitationEnergy, fallStartY: Int? = nil) {
         self.position = position
         self.grounded = grounded
         self.verticalVelocity = verticalVelocity
         self.verticalRemainder = verticalRemainder
         self.lastLandingImpactVelocity = lastLandingImpactVelocity
         self.levitationEnergy = levitationEnergy
+        self.fallStartY = fallStartY
+    }
+
+    /// Fall distance in cells from takeoff to landing. Computed from fallStartY
+    /// (cell Y at takeoff) and position.y (cell Y at landing). Returns 0 if no
+    /// takeoff was recorded (e.g., already grounded).
+    var fallDistanceOnLanding: Int {
+        fallStartY.map { $0 - position.y } ?? 0
     }
 
     /// Advances after the material tick. Jump is a one-tick press, not a held state.
@@ -78,8 +109,11 @@ public struct FixtureCharacter: Equatable, Sendable {
             }
         }
 
+        // Capture pre-advance grounded state for takeoff/landing transition detection.
+        let wasGroundedBefore = self.grounded
         let wasGrounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
         grounded = wasGrounded
+
         if grounded && verticalVelocity <= 0 {
             verticalVelocity = 0
             verticalRemainder = 0
@@ -102,6 +136,12 @@ public struct FixtureCharacter: Equatable, Sendable {
         if grounded && levitationEnergy < Self.maxLevitationEnergy {
             levitationEnergy = min(levitationEnergy + Self.levitationRechargePerTick, Self.maxLevitationEnergy)
         }
+
+        // Takeoff: transitioned from grounded to airborne this tick. Record the
+        // cell Y at the moment of leaving ground (position.y hasn't changed yet).
+        if wasGroundedBefore && !grounded {
+            fallStartY = position.y
+        }
         verticalRemainder += verticalVelocity
         let steps = verticalRemainder / 4
         verticalRemainder %= 4
@@ -112,6 +152,7 @@ public struct FixtureCharacter: Equatable, Sendable {
                 if try blocked(dx: 0, dy: direction, snapshot: snapshot) {
                     if direction < 0 {
                         lastLandingImpactVelocity = abs(verticalVelocity)
+                        fallStartY = nil
                         didCaptureLanding = true
                     }
                     verticalVelocity = 0
@@ -125,6 +166,7 @@ public struct FixtureCharacter: Equatable, Sendable {
         grounded = try blocked(dx: 0, dy: -1, snapshot: snapshot)
         if grounded && !wasGrounded && !didCaptureLanding {
             lastLandingImpactVelocity = abs(verticalVelocity)
+            fallStartY = nil
         }
     }
 

@@ -485,6 +485,84 @@ final class CaveWorldGenTests: XCTestCase {
         XCTAssertEqual(comboCount, 64, "Expected 64 seeds")
     }
 
+    // MARK: - Vertical shaft placement (goal: vertical-shaft-generation)
+
+    /// Reads a grid-space cell from a generated world (world coordinates are
+    /// offset by `-size/2` in both axes).
+    private func gridMaterial(_ world: CaveWorld, gx: Int, gy: Int,
+                              width: Int, height: Int) -> Material {
+        world.material(at: CellPosition(x: -width / 2 + gx, y: -height / 2 + gy))
+    }
+
+    func testShaftPlacementCountAndFlankWalls() throws {
+        let width = 256, height = 128
+        for seed in [UInt64(1), 2, 7, 42] {
+            let gen = CaveWorldGenerator(seed: seed, width: width, height: height)
+            let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+            let shafts = result.shafts
+            XCTAssertGreaterThanOrEqual(shafts.count, 2, "seed \(seed): expected at least 2 shafts")
+            XCTAssertLessThanOrEqual(shafts.count, 4, "seed \(seed): expected at most 4 shafts")
+
+            for (i, shaft) in shafts.enumerated() {
+                XCTAssertGreaterThanOrEqual(shaft.width, 7, "seed \(seed) shaft \(i): width < 7")
+                XCTAssertLessThanOrEqual(shaft.width, 10, "seed \(seed) shaft \(i): width > 10")
+                XCTAssertGreaterThanOrEqual(shaft.depth, 32, "seed \(seed) shaft \(i): depth < 32")
+                XCTAssertLessThanOrEqual(shaft.depth, 48, "seed \(seed) shaft \(i): depth > 48")
+
+                for gy in shaft.interiorTop...shaft.interiorBottom {
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
+                        // Interior stays empty in the final world and in the pre-pass grid.
+                        XCTAssertEqual(
+                            gridMaterial(result.world, gx: gx, gy: gy, width: width, height: height), .empty,
+                            "seed \(seed) shaft \(i): interior (\(gx),\(gy)) not empty in world")
+                        if let prePass = result.prePass {
+                            XCTAssertEqual(prePass[gy][gx], .empty,
+                                           "seed \(seed) shaft \(i): interior (\(gx),\(gy)) not empty in pre-pass")
+                        }
+                    }
+                    // Two-cell solid flank walls on each side of the interior.
+                    for dx in [shaft.interiorLeft - 2, shaft.interiorLeft - 1,
+                               shaft.interiorRight + 1, shaft.interiorRight + 2] {
+                        XCTAssertEqual(
+                            gridMaterial(result.world, gx: dx, gy: gy, width: width, height: height), .solid,
+                            "seed \(seed) shaft \(i): flank (\(dx),\(gy)) not solid")
+                    }
+                }
+            }
+        }
+    }
+
+    func testShaftFeasibilityGate() throws {
+        // Every biome band must be >= 34 rows for a 32-deep shaft plus walls.
+        // Worlds whose bands are shorter (or worlds under 40 rows / 30 cols)
+        // must place no shafts.
+        for (width, height) in [(64, 48), (128, 64), (96, 96), (256, 64)] {
+            let gen = CaveWorldGenerator(seed: 5, width: width, height: height)
+            let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+            XCTAssertTrue(result.shafts.isEmpty, "Expected no shafts at \(width)×\(height)")
+        }
+        // 256×128 has 43-row bands, so the gate must open.
+        let gen = CaveWorldGenerator(seed: 5, width: 256, height: 128)
+        let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+        XCTAssertFalse(result.shafts.isEmpty, "Expected shafts at 256×128")
+    }
+
+    func testShaftDeterministicReplayAndDigestVersion() throws {
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 13,
+                       "Digest version must be 13 after vertical shaft placement")
+
+        let gen1 = CaveWorldGenerator(seed: 9, width: 256, height: 128)
+        let gen2 = CaveWorldGenerator(seed: 9, width: 256, height: 128)
+        let r1 = gen1.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+        let r2 = gen2.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+        XCTAssertEqual(r1.world, r2.world, "Same-seed worlds differ")
+        XCTAssertEqual(r1.shafts, r2.shafts, "Same-seed shaft layouts differ")
+
+        let r3 = CaveWorldGenerator(seed: 10, width: 256, height: 128)
+            .generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+        XCTAssertNotEqual(r1.shafts, r3.shafts, "Different seeds should produce different shaft layouts")
+    }
+
     func testFootprintContainmentMatrix() throws {
         try skipUnlessSlowTier()
         var comboCount = 0
@@ -608,8 +686,8 @@ final class CaveWorldGenTests: XCTestCase {
         let checksum1 = sortedCellsSHA256(w1)
         let checksum2 = sortedCellsSHA256(w3)
         // These are the baseline values; if they change, the test will fail
-        XCTAssertEqual(checksum1, "afe79c4acd25516261a36915c8afe1427152d595f0d977fbfcaf37e140aa06d4")
-        XCTAssertEqual(checksum2, "cd0a1d599664cbde3fd7d4d66dce98ad1c2ee8925bf1f6995db91ef0bb27c5ac")
+        XCTAssertEqual(checksum1, "1fab763847e9d19de6b6966f2f379d4f08447246e182e2af1e36e048412080d5")
+        XCTAssertEqual(checksum2, "4fc0d6284ec8f3ffe866d77e4ca9e925960d2a22ab9997c44368d28c335fd6b4")
     }
 
     func testMatrixActuallyStamps() throws {
@@ -886,6 +964,113 @@ final class CaveWorldGenTests: XCTestCase {
                                      biomeConfig: CaveBiomeConfig.defaultForHeight(128)))
         XCTAssertNoThrow(try CaveRun(seed: 1, width: 128, height: 64,
                                      biomeConfig: CaveBiomeConfig.defaultForHeight(64)))
+    }
+
+    /// Collapsed mine config generates a valid world with expected hazard materials present.
+    func testCollapsedMineGeneration() throws {
+        let gen = CaveWorldGenerator(seed: 11, width: 128, height: 64,
+                                     biomeConfig: .collapsedMine(height: 64))
+        let result = gen.generateInspected(stampSpawnTemplate: true, capturePrePass: false)
+        let world = result.world
+        let counts = world.materialCounts
+
+        // Collapsed mine should have significant hazard presence.
+        var hazardCount = 0
+        for mat in [Material.lava, Material.acid, Material.gunpowder] {
+            hazardCount += counts[mat, default: 0]
+        }
+        XCTAssertGreaterThan(hazardCount, 0, "collapsed mine should contain hazard materials")
+
+        // World should have a valid spawn and goal.
+        XCTAssertNotEqual(world.spawn, world.goal, "spawn and goal should differ")
+        XCTAssertEqual(world.material(at: world.spawn), Material.empty, "spawn should be empty")
+        XCTAssertEqual(world.material(at: world.goal), Material.empty, "goal should be empty")
+    }
+
+    /// Corridors ≥5 cells wide and chambers ≥15×15 cells across biome bands.
+    func testCorridorAndChamberSizes() throws {
+        let seeds: [UInt64] = Array(1...10)
+        let bands: [(String, CaveBiomeConfig)] = [
+            ("defaultForHeight deep", CaveBiomeConfig.defaultForHeight(128)),
+            ("defaultForHeight underground", CaveBiomeConfig.defaultForHeight(64)),
+            ("defaultForHeight surface", CaveBiomeConfig.defaultForHeight(32)),
+            ("collapsedMine deep", CaveBiomeConfig.collapsedMine(height: 128)),
+            ("collapsedMine mid", CaveBiomeConfig.collapsedMine(height: 64)),
+            ("collapsedMine surface", CaveBiomeConfig.collapsedMine(height: 32)),
+        ]
+
+        for (bandName, config) in bands {
+            var corridorCount = 0
+            var chamberCount = 0
+
+            for seed in seeds {
+                let gen = CaveWorldGenerator(seed: seed, width: 256, height: 128,
+                                             biomeConfig: config)
+                let result = gen.generateInspected(stampSpawnTemplate: false, capturePrePass: false)
+                let world = result.world
+                let width = 256
+                let height = 128
+
+                // Connected-component analysis on empty cells
+                var visited = Set<Int>()
+                var foundCorridor = false
+                var foundChamber = false
+
+                for y in 0..<height {
+                    for x in 0..<width {
+                        let key = y * width + x
+                        guard !visited.contains(key),
+                              world.material(at: CellPosition(x: x, y: y)) == .empty else { continue }
+
+                        // BFS to find component
+                        var component: [CellPosition] = []
+                        var queue: [CellPosition] = [CellPosition(x: x, y: y)]
+                        visited.insert(key)
+                        while !queue.isEmpty {
+                            let cur = queue.removeFirst()
+                            component.append(cur)
+                            for delta in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                                let nx = cur.x + delta.0, ny = cur.y + delta.1
+                                guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                                let nkey = ny * width + nx
+                                guard !visited.contains(nkey),
+                                      world.material(at: CellPosition(x: nx, y: ny)) == .empty else { continue }
+                                visited.insert(nkey)
+                                queue.append(CellPosition(x: nx, y: ny))
+                            }
+                        }
+
+                        guard component.count >= 25 else { continue }
+
+                        // Bounding box
+                        let minX = component.map { $0.x }.min()!
+                        let maxX = component.map { $0.x }.max()!
+                        let minY = component.map { $0.y }.min()!
+                        let maxY = component.map { $0.y }.max()!
+                        let boxW = maxX - minX + 1
+                        let boxH = maxY - minY + 1
+
+                        // Chamber: area >= 225, bbox >= 15x15
+                        if component.count >= 225, boxW >= 15, boxH >= 15 {
+                            foundChamber = true
+                        }
+
+                        // Corridor: at least one dimension >= 5 with significant extent
+                        if boxW >= 5 || boxH >= 5 {
+                            foundCorridor = true
+                        }
+                    }
+                }
+
+                if foundCorridor { corridorCount += 1 }
+                if foundChamber { chamberCount += 1 }
+            }
+
+            XCTAssertGreaterThanOrEqual(corridorCount, 7,
+                "\(bandName): majority of seeds should have corridor ≥5 cells, got \(corridorCount)/10")
+            XCTAssertGreaterThanOrEqual(chamberCount, 7,
+                "\(bandName): majority of seeds should have chamber ≥15×15, got \(chamberCount)/10")
+        }
     }
 }
 

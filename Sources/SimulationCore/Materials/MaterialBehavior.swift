@@ -17,6 +17,7 @@ class MaterialBehavior: @unchecked Sendable {
     static let gunpowder = GunpowderBehavior()
     static let gold = GoldBehavior()
     static let magicLiquid = MagicLiquidBehavior()
+    static let sanctuaryWall = SanctuaryWallBehavior()
 
     static func forMaterial(_ material: Material) -> MaterialBehavior {
         switch material {
@@ -36,6 +37,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder
         case .gold: return gold
         case .magicLiquid: return magicLiquid
+        case .sanctuaryWall: return sanctuaryWall
         }
     }
 

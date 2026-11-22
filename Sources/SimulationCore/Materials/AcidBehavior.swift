@@ -14,7 +14,7 @@ final class AcidBehavior: LiquidMovementBehavior, @unchecked Sendable {
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         let cardinals = [(0, -1), (-1, 0), (1, 0), (0, 1)]
         let candidates = cardinals.map { CellPosition(x: source.x + $0.0, y: source.y + $0.1) }
-            .filter { canVisit($0) && (material($0) == .solid || material($0) == .sand) }
+            .filter { canVisit($0) && (material($0) == .solid || material($0) == .sand || material($0) == .acid) }
         let dissolve = !candidates.isEmpty && direction == 1
             && ((source.x & 3) == 0)
         if dissolve {

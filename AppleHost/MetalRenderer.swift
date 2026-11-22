@@ -56,7 +56,7 @@ final class MetalRenderer: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard let viewport = FixtureViewport(drawableWidth: Double(view.drawableSize.width),
                                              drawableHeight: Double(view.drawableSize.height),
-                                             center: character.cameraCenter, longEdgeCells: 200,
+                                             center: character.cameraCenter, longEdgeCells: LiveViewport.longEdgeCells,
                                              worldBounds: worldBounds) else { return }
         if lastDrawableSize != view.drawableSize {
             lastDrawableSize = view.drawableSize

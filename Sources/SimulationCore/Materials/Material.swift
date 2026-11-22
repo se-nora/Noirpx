@@ -16,9 +16,20 @@ public enum Material: UInt8, CaseIterable, Sendable {
     case gunpowder = 13
     case gold = 14
     case magicLiquid = 15
+    case sanctuaryWall = 16
+
+    /// Whether this material cannot be destroyed by paint, dig, or explosion.
+    /// Only `sanctuaryWall` is indestructible.
+    public var isIndestructible: Bool {
+        switch self {
+        case .sanctuaryWall: return true
+        default: return false
+        }
+    }
+
     public var blocksCharacter: Bool {
         switch self {
-        case .solid, .sand, .pitch, .ice, .gunpowder, .gold: return true
+        case .solid, .sand, .pitch, .ice, .gunpowder, .gold, .sanctuaryWall: return true
         case .empty, .water, .fire, .oil, .steam, .lava, .acid, .blood, .slime, .magicLiquid: return false
         }
     }

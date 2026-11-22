@@ -121,15 +121,15 @@ public enum FixturePixels {
         -> (r: Float, g: Float, b: Float, intensity: Float, radius: Float)? {
         switch material {
         case .fire:
-            return (1.00, 0.45, 0.10, 1.00, 6)
+            return (1.00, 0.45, 0.10, 0.08, 8)
         case .lava:
-            return (1.00, 0.35, 0.05, 1.00, 8)
+            return (1.00, 0.35, 0.05, 0.05, 6)
         case .pitch where isBurning:
-            return (1.00, 0.60, 0.20, 0.85, 5)
+            return (1.00, 0.60, 0.20, 0.08, 8)
         case .oil where isBurning:
-            return (1.00, 0.60, 0.20, 0.85, 5)
+            return (1.00, 0.60, 0.20, 0.08, 8)
         case .magicLiquid:
-            return (0.70, 0.20, 1.00, 0.90, 6)
+            return (0.70, 0.20, 1.00, 0.08, 6)
         default:
             return nil
         }
@@ -171,6 +171,7 @@ public enum FixturePixels {
         case .gunpowder: return 0xff555555
         case .gold:     return 0xff33ccff
         case .magicLiquid: return 0xffcc3399
+        case .sanctuaryWall: return 0xff808080
         }
     }
 
@@ -290,6 +291,17 @@ public enum FixturePixels {
             pixels[y * width + x] = color.littleEndian
         }
 
+        // Draw debris particles on top of projectiles (single pixel tinted by material).
+        // Sort by ID for deterministic order-independence.
+        for particle in snapshot.debris.sorted(by: { $0.id < $1.id }) {
+            let cell = particle.cell
+            let x = cell.x - viewport.center.x + width / 2
+            let y = height / 2 - 1 - cell.y + viewport.center.y
+            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+            let color = materialColor(particle.material)
+            pixels[y * width + x] = color.littleEndian
+        }
+
         // Draw creatures as colored rects (crawler = dark red, brighter when attacking).
         for creature in creatures where creature.alive {
             let color: UInt32 = creature.state == .attack ? 0xffcc4444 : 0xffaa3333
@@ -301,6 +313,17 @@ public enum FixturePixels {
                     pixels[y * width + x] = color.littleEndian
                 }
             }
+        }
+
+        // Blast flash overlay (presentation only): draw flash cells in flash
+        // color, clipped to the viewport. Excluded from the snapshot digest
+        // and save format.
+        let flashColor = materialColor(.fire)
+        for cell in snapshot.blastFlash.cells {
+            let x = cell.x - viewport.center.x + width / 2
+            let y = height / 2 - 1 - cell.y + viewport.center.y
+            guard (0..<width).contains(x), (0..<height).contains(y) else { continue }
+            pixels[y * width + x] = flashColor.littleEndian
         }
 
         return (pixels.withUnsafeBytes { Array($0) }, renderedChunks)

@@ -14,11 +14,43 @@ final class GameModel: ObservableObject {
     @Published private(set) var castAim: CellPosition?
     @Published private(set) var hoverCell: CellPosition?
 
+    /// Flask contents exposed to HUD. `[:]` when no active run.
+    @Published private(set) var flaskContents: [SimulationCore.Material: Int] = [:]
+    /// Flask capacity exposed to HUD. `0` when no active run.
+    @Published private(set) var flaskCapacity: Int = 0
+
+    /// Session best (in-memory only, reset on app launch): deepest level reached.
+    @Published private(set) var sessionBestLevel: Int = 1
+    /// Session best depth (in-memory only, reset on app launch).
+    @Published private(set) var sessionBestDepth: Int = 0
+
+    /// Simulation tick at which the current run started; play time = snapshot.tick - runStartTick.
+    private var runStartTick: UInt64 = 0
+    /// Latched once the current run's death has been captured into session best.
+    private var runDeathCaptured = false
+
+    /// Last non-nil hover cell for fluid interaction when hover clears (iOS touch end).
+    private var lastHoverCell: CellPosition?
+    /// The cell at which flask actions target (hover cell or last known hover).
+    private var flaskAimCell: CellPosition? {
+        hoverCell ?? lastHoverCell
+    }
     /// Material name under the cursor, derived from the current snapshot so it
     /// tracks changes (falling sand, burning out) without re-aiming.
     var hoveredMaterialName: String? {
         guard let cell = hoverCell, let snapshot else { return nil }
         return MaterialProbe.name(at: cell, in: snapshot)
+    }
+
+    /// Elapsed run ticks (snapshot.tick - runStartTick), 0 when no active run.
+    var playTimeTicks: UInt64 {
+        guard let run = caveRun else { return 0 }
+        return run.simulation.snapshot.tick - runStartTick
+    }
+
+    /// Cause of death for the current run, or nil if the run is still playing.
+    var causeOfDeath: String? {
+        caveRun?.causeOfDeath.map { $0.displayName }
     }
 
     func setHover(_ position: CellPosition?) {
@@ -38,6 +70,12 @@ final class GameModel: ObservableObject {
         CraftingGating.isAllowed(caveRun?.outcome)
     }
 
+    /// Returns true when wand editing is allowed in sanctuary.
+    var isSanctuaryWandEditAllowed: Bool {
+        guard let run = caveRun else { return false }
+        return CraftingGating.isAllowedInSanctuary(run.sanctuaryState)
+    }
+
     var caveRun: CaveRun?
     @Published private(set) var worldBounds: FixtureViewport.CellRange? = nil
     private var scheduler = FixedTickScheduler()
@@ -48,13 +86,27 @@ final class GameModel: ObservableObject {
     private var caveRunSession = CaveRunSession()
 
     private struct CaveRunSession {
-        private(set) var seed: UInt64
-        private(set) var wands: [Wand] = []
+        var seed: UInt64
+        var wands: [Wand] = []
+        var level: Int = 1
         init(seed: UInt64 = 42) { self.seed = seed }
-        func restart() throws -> CaveRun { try CaveRun(seed: seed, width: 256, height: 128) }
+        func restart() throws -> CaveRun { 
+            let config = CaveBiomeConfig.defaultForHeight(128)
+            return try CaveRun(seed: seed, width: 256, height: 128, level: 1, biomeConfig: config)
+        }
         mutating func newRun() throws -> CaveRun {
             let next = seed &+ 0x9e3779b97f4a7c15
-            let run = try CaveRun(seed: next, width: 256, height: 128)
+            let config = CaveBiomeConfig.defaultForHeight(128)
+            let run = try CaveRun(seed: next, width: 256, height: 128, level: 1, biomeConfig: config)
+            seed = next
+            level = 1
+            return run
+        }
+        mutating func advanceLevel() throws -> CaveRun {
+            level += 1
+            let next = seed &+ 0x9e3779b97f4a7c15 &* UInt64(level)
+            let config = caveBiomeConfigForLevel(level, height: 128)
+            let run = try CaveRun(seed: next, width: 256, height: 128, level: level, biomeConfig: config)
             seed = next
             return run
         }
@@ -72,10 +124,97 @@ final class GameModel: ObservableObject {
         startCaveRun(newSeed: true)
     }
 
+    /// Advances to the next cave level. Called when the character reaches the goal cell.
+    /// If not in sanctuary, enters sanctuary (generates sanctuary world + shop, applies full heal).
+    /// If in sanctuary, this should not be called directly; use exitSanctuary instead.
+    func nextLevel() {
+        guard var run = caveRun, run.isLevelComplete else { return }
+
+        // Check if we're already in sanctuary - if so, this is a programming error.
+        // Sanctuary exit should be handled via exitSanctuary().
+        if case .inSanctuary = run.sanctuaryState {
+            return
+        }
+
+        // Get unlocked spell IDs for shop generation
+        let unlockedSpellIds = RecipeRegistry.standard.recipes.map { $0.id }
+
+        guard let next = run.nextLevel(unlockedSpellIds: unlockedSpellIds) else { return }
+        caveRun = next
+        caveRunSession.seed = next.seed
+        caveRunSession.wands = next.wands
+        caveRunSession.level = next.level
+        snapshot = next.simulation.snapshot
+        updateActiveChunks()
+        scanAndDiscover()
+        clearControls()
+
+        // If we entered sanctuary, don't rewire wandController (no active wand in sanctuary).
+        // The UI will show the shop instead.
+        if next.sanctuaryState == .notInSanctuary {
+            let activeWand = next.activeWand
+            wandController = WandController(wand: activeWand,
+                                            manaPool: ManaPool(
+                                                maximum: activeWand.manaMax,
+                                                regenerationPerTick: activeWand.manaRegenPerTick,
+                                                startingMana: activeWand.manaMax))
+        }
+    }
+
+    /// Core-owned purchase API for sanctuary shop offers.
+    /// Forwards to CaveRun.purchaseSanctuaryOffer, updates UI on success.
+    func purchaseSanctuaryOffer(_ id: String) {
+        guard var run = caveRun else { return }
+        guard case .inSanctuary = run.sanctuaryState else { return }
+        let result = run.purchaseSanctuaryOffer(id)
+        switch result {
+        case .success:
+            caveRun = run
+            snapshot = run.simulation.snapshot
+            updateActiveChunks()
+            scanAndDiscover()
+        case .insufficientGold, .invalidOffer:
+            // No state change on failure
+            break
+        }
+    }
+
+    /// Exits the sanctuary, generating the actual next level.
+    func exitSanctuary() {
+        guard var run = caveRun else { return }
+        guard case .inSanctuary = run.sanctuaryState else { return }
+        guard let next = run.exitSanctuary() else { return }
+        caveRun = next
+        caveRunSession.seed = next.seed
+        caveRunSession.wands = next.wands
+        caveRunSession.level = next.level
+        snapshot = next.simulation.snapshot
+        updateActiveChunks()
+        scanAndDiscover()
+        clearControls()
+
+        // Rewire wandController to the new run's active wand
+        let activeWand = next.activeWand
+        wandController = WandController(wand: activeWand,
+                                        manaPool: ManaPool(
+                                            maximum: activeWand.manaMax,
+                                            regenerationPerTick: activeWand.manaRegenPerTick,
+                                            startingMana: activeWand.manaMax))
+    }
+
     private func startCaveRun(newSeed: Bool) {
+        // Capture session best from the previous run before it is replaced.
+        if let previous = caveRun, previous.outcome == .died {
+            let depth = previous.world.spawn.y - previous.character.position.y
+            sessionBestLevel = max(sessionBestLevel, previous.level)
+            sessionBestDepth = max(sessionBestDepth, depth)
+        }
+
         do {
             let run = try newSeed ? caveRunSession.newRun() : caveRunSession.restart()
             caveRun = run
+            runStartTick = run.simulation.snapshot.tick
+            runDeathCaptured = false
             snapshot = run.simulation.snapshot
             updateActiveChunks()
             scanAndDiscover()
@@ -86,6 +225,10 @@ final class GameModel: ObservableObject {
             renderedChunks = nil
             renderGeneration += 1
             showCraftingGrid = false
+
+            // Publish initial flask state.
+            flaskContents = run.flask.contents
+            flaskCapacity = run.flask.capacity
 
             // Rewire wandController to this run's active wand and stats.
             let activeWand = run.activeWand
@@ -151,6 +294,41 @@ final class GameModel: ObservableObject {
         heldInput.setPaintHeld(held, cell: cell)
     }
 
+    // MARK: - Flask / fluid
+
+    /// Collect one cell of liquid at the cursor cell into the flask.
+    func collectFluid() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        if run.collectFluid(at: cell) {
+            caveRun = run
+            updateFluidPublished()
+        }
+    }
+
+    /// Pour one cell from the flask at the cursor cell.
+    func pourFluid() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        if run.pourFluid(at: cell) {
+            caveRun = run
+            updateFluidPublished()
+        }
+    }
+
+    /// Throw (shatter) the flask at the cursor cell, spilling all contents.
+    func throwFlask() {
+        guard var run = caveRun, let cell = hoverCell, errorMessage == nil else { return }
+        run.throwFlask(at: cell)
+        caveRun = run
+        updateFluidPublished()
+    }
+
+    private func updateFluidPublished() {
+        guard let run = caveRun else { return }
+        flaskContents = run.flask.contents
+        flaskCapacity = run.flask.capacity
+        snapshot = run.simulation.snapshot
+    }
+
     func updatePaintHeldCell(_ cell: CellPosition?) {
         heldInput.updatePaintCell(cell)
     }
@@ -175,7 +353,7 @@ final class GameModel: ObservableObject {
         let extents = run.world.extents
         worldBounds = FixtureViewport.CellRange(x: extents.minX...extents.maxX, y: extents.minY...extents.maxY)
         guard let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                             center: run.character.cameraCenter, longEdgeCells: 200,
+                                             center: run.character.cameraCenter, longEdgeCells: LiveViewport.longEdgeCells,
                                              worldBounds: worldBounds) else {
             activeChunks = nil
             worldBounds = nil
@@ -338,8 +516,15 @@ final class GameModel: ObservableObject {
                 caveRun = run
                 updateActiveChunks()
                 snapshot = run.simulation.snapshot
+                updateFluidPublished()
                 scanAndDiscover()
                 if run.outcome != .playing {
+                    if run.outcome == .died, !runDeathCaptured {
+                        runDeathCaptured = true
+                        let depth = run.world.spawn.y - run.character.position.y
+                        sessionBestLevel = max(sessionBestLevel, run.level)
+                        sessionBestDepth = max(sessionBestDepth, depth)
+                    }
                     clearControls()
                     break
                 }

@@ -64,6 +64,8 @@ public struct DisplayListState: Equatable, Sendable {
     public let tick: UInt64
     public let depth: Int?
     public let outcome: DisplayOutcome?
+    public let level: Int?
+    public let biomeName: String?
 
     // Cave HUD
     public let health: Int?
@@ -71,6 +73,15 @@ public struct DisplayListState: Equatable, Sendable {
     public let energy: Int?
     public let maxEnergy: Int?
     public let runGold: Int
+    public let flaskContents: [Material: Int]
+    public let flaskCapacity: Int
+
+    // Run summary
+    public let kills: Int
+    public let playTimeTicks: UInt64
+    public let causeOfDeath: String?
+    public let sessionBestLevel: Int
+    public let sessionBestDepth: Int
 
     // Beacon HUD
     public let collectedBeacons: Int
@@ -99,6 +110,14 @@ public struct DisplayListState: Equatable, Sendable {
     public let controls: DisplayControlScheme
     public let overlays: DisplayOverlayVisibility
 
+    // Sanctuary
+    public let sanctuaryState: SanctuaryState?
+    public let sanctuaryShopInventory: SanctuaryShopInventory?
+    public var inSanctuary: Bool {
+        if case .inSanctuary = sanctuaryState { return true }
+        return false
+    }
+
     public init(
         version: String,
         worldKind: DisplayWorldKind,
@@ -108,12 +127,21 @@ public struct DisplayListState: Equatable, Sendable {
         position: CellPosition? = nil,
         tick: UInt64,
         depth: Int? = nil,
+        level: Int? = nil,
+        biomeName: String? = nil,
         outcome: DisplayOutcome? = nil,
         health: Int? = nil,
         maxHealth: Int? = nil,
         energy: Int? = nil,
         maxEnergy: Int? = nil,
         runGold: Int = 0,
+        flaskContents: [Material: Int] = [:],
+        flaskCapacity: Int = 0,
+        kills: Int = 0,
+        playTimeTicks: UInt64 = 0,
+        causeOfDeath: String? = nil,
+        sessionBestLevel: Int = 1,
+        sessionBestDepth: Int = 0,
         collectedBeacons: Int = 0,
         warden: DisplayWarden? = nil,
         selectedMaterial: Material,
@@ -130,7 +158,9 @@ public struct DisplayListState: Equatable, Sendable {
         hoveredMaterialName: String? = nil,
         hudVisible: Bool = true,
         controls: DisplayControlScheme = .keyboard,
-        overlays: DisplayOverlayVisibility = DisplayOverlayVisibility(stats: false, help: false, crafting: false)
+        overlays: DisplayOverlayVisibility = DisplayOverlayVisibility(stats: false, help: false, crafting: false),
+        sanctuaryState: SanctuaryState? = nil,
+        sanctuaryShopInventory: SanctuaryShopInventory? = nil
     ) {
         self.version = version
         self.worldKind = worldKind
@@ -140,12 +170,21 @@ public struct DisplayListState: Equatable, Sendable {
         self.position = position
         self.tick = tick
         self.depth = depth
+        self.level = level
+        self.biomeName = biomeName
         self.outcome = outcome
         self.health = health
         self.maxHealth = maxHealth
         self.energy = energy
         self.maxEnergy = maxEnergy
         self.runGold = runGold
+        self.flaskContents = flaskContents
+        self.flaskCapacity = flaskCapacity
+        self.kills = kills
+        self.playTimeTicks = playTimeTicks
+        self.causeOfDeath = causeOfDeath
+        self.sessionBestLevel = sessionBestLevel
+        self.sessionBestDepth = sessionBestDepth
         self.collectedBeacons = collectedBeacons
         self.warden = warden
         self.selectedMaterial = selectedMaterial
@@ -163,5 +202,7 @@ public struct DisplayListState: Equatable, Sendable {
         self.hudVisible = hudVisible
         self.controls = controls
         self.overlays = overlays
+        self.sanctuaryState = sanctuaryState
+        self.sanctuaryShopInventory = sanctuaryShopInventory
     }
 }

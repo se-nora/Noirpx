@@ -15,12 +15,12 @@ final class SaveFormatValidationTests: XCTestCase {
         for version: UInt16 in [0, 2, .max] {
             assertThrows(replaced16(version, at: 4, in: bytes), SaveError.unknownFormatVersion(version))
         }
-// rulesVersion is now 6, so version 5 and 7 should be rejected
-        assertThrows(replaced16(5, at: 8, in: bytes), SaveError.unsupportedRulesVersion(5))
-        assertThrows(replaced16(7, at: 8, in: bytes), SaveError.unsupportedRulesVersion(7))
-        // digestVersion is now 7, so version 6 and 8 should be rejected
-        assertThrows(replaced16(6, at: 10, in: bytes), SaveError.unsupportedDigestVersion(6))
-        assertThrows(replaced16(8, at: 10, in: bytes), SaveError.unsupportedDigestVersion(8))
+// rulesVersion is now 9, so version 8 and 10 should be rejected
+        assertThrows(replaced16(8, at: 8, in: bytes), SaveError.unsupportedRulesVersion(8))
+        assertThrows(replaced16(10, at: 8, in: bytes), SaveError.unsupportedRulesVersion(10))
+        // digestVersion is now 13, so version 10 and 12 should be rejected
+        assertThrows(replaced16(10, at: 10, in: bytes), SaveError.unsupportedDigestVersion(10))
+        assertThrows(replaced16(12, at: 10, in: bytes), SaveError.unsupportedDigestVersion(12))
         assertThrows(replaced16(1, at: 6, in: bytes), SaveError.unsupportedFlags(1))
         assertThrows(replaced16(.max, at: 6, in: bytes), SaveError.unsupportedFlags(.max))
     }
@@ -226,12 +226,13 @@ final class SaveFormatValidationTests: XCTestCase {
         assertThrows(oversizedCellBytes, SaveError.invalidCellEntry(chunk: ChunkPosition(x: 1, y: 1), localIndex: 0))
 
         // unknown material - build save with 1 cell, corrupt material byte
+        // Use 17 since 16 is now sanctuaryWall
         var mat = buildSaveWithChunks([
             (ChunkPosition(x: 1, y: 1), [CellEntry(localIndex: 0, material: .sand)])
         ])
         let matOffset = cellCountOffset + 4 + 4
-        mat[matOffset] = 16
-        assertThrows(mat, SaveError.unknownMaterial(16))
+        mat[matOffset] = 17
+        assertThrows(mat, SaveError.unknownMaterial(17))
 
         // empty material in sparse entry
         var empty = buildSaveWithChunks([
@@ -330,8 +331,8 @@ final class SaveFormatValidationTests: XCTestCase {
 
         // unknown command material
         var badMat = bytes
-        badMat[firstCommandOffset + 16] = 16 // material byte (tick(8) + x(4) + y(4) + material(1))
-        assertThrows(badMat, SaveError.unknownMaterial(16))
+        badMat[firstCommandOffset + 16] = 17 // material byte (tick(8) + x(4) + y(4) + material(1))
+        assertThrows(badMat, SaveError.unknownMaterial(17))
 
         // command position out of range
         var oobCmd = bytes

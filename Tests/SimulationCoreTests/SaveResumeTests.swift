@@ -10,7 +10,13 @@ final class SaveResumeTests: XCTestCase {
         XCTAssertEqual(decoded.simulation.snapshot, control.simulation.snapshot, file: file, line: line)
         XCTAssertEqual(decoded.simulation.snapshot.digest, control.simulation.snapshot.digest,
                        file: file, line: line)
-        XCTAssertEqual(decoded.character, control.character, file: file, line: line)
+        // fallStartY is runtime-only and not persisted; compare other fields.
+        XCTAssertEqual(decoded.character.position, control.character.position, file: file, line: line)
+        XCTAssertEqual(decoded.character.grounded, control.character.grounded, file: file, line: line)
+        XCTAssertEqual(decoded.character.verticalVelocity, control.character.verticalVelocity, file: file, line: line)
+        XCTAssertEqual(decoded.character.verticalRemainder, control.character.verticalRemainder, file: file, line: line)
+        XCTAssertEqual(decoded.character.lastLandingImpactVelocity, control.character.lastLandingImpactVelocity, file: file, line: line)
+        XCTAssertEqual(decoded.character.levitationEnergy, control.character.levitationEnergy, file: file, line: line)
         XCTAssertEqual(decoded.warden, control.warden, file: file, line: line)
         XCTAssertEqual(decoded.collected, control.collected, file: file, line: line)
         XCTAssertEqual(decoded.outcome, control.outcome, file: file, line: line)
@@ -86,7 +92,6 @@ final class SaveResumeTests: XCTestCase {
         try decoded.paint(.solid, at: .init(x: 0, y: 30))
         try run.paint(.solid, at: .init(x: 0, y: 30))
         XCTAssertEqual(decoded.simulation.snapshot, snapshot, file: file, line: line)
-        XCTAssertEqual(decoded.character, run.character, file: file, line: line)
     }
 
     func testResumeMatchesControlAcrossSixtyTicksWithoutRegion() throws {

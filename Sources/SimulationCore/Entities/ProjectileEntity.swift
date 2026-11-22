@@ -139,4 +139,104 @@ public struct ProjectileEntity: Sendable {
     func snapshot() -> ProjectileSnapshot {
         ProjectileSnapshot(from: self)
     }
+
+    /// Advances a digging projectile one tick along its Bresenham flight path.
+    /// Removes soft materials (sand, ice, slime, gunpowder) as it passes, passes
+    /// through empty and non-diggable materials, and stops at the first `.solid`
+    /// cell or world edge without leaving a footprint.
+    ///
+    /// - Parameters:
+    ///   - canVisit: Bounds check closure (`isInBounds` for digging; world edge = stop).
+    ///   - materialAt: Material lookup closure.
+    ///   - blueprint: The projectile's blueprint (must have `.digging` flag).
+    ///   - moved: Output set receiving dug cells so the tick pass can union them.
+    /// - Returns: `(impactCell, dugCells)` where `impactCell` is non-nil when the
+    ///   projectile stopped (rock or edge) and should be removed; `dugCells` are
+    ///   cells emptied by digging this tick.
+    mutating func advanceDigging(
+        canVisit: (CellPosition) -> Bool,
+        materialAt: (CellPosition) -> Material,
+        blueprint: ProjectileBlueprint,
+        moved: inout Set<CellPosition>
+    ) -> (impactCell: CellPosition?, dugCells: [CellPosition]) {
+        guard !hasImpacted, lifetimeTicks > 0 else { return (nil, []) }
+
+        let fromCell = position.cell()
+        lifetimeTicks -= 1
+        age += 1
+
+        // Compute new position: position += velocity
+        let newPosition = FixedPoint(
+            x: position.x &+ velocity.x,
+            y: position.y &+ velocity.y
+        )
+
+        // Apply gravity AFTER movement; affects the next tick's velocity.
+        if blueprint.gravityFactor > 0 {
+            velocity.y = velocity.y &- Int32(blueprint.gravityFactor)
+        }
+
+        let toCell = newPosition.cell()
+        if fromCell == toCell {
+            position = newPosition
+            return (nil, [])
+        }
+
+        // Bresenham iteration from fromCell (exclusive) to toCell (inclusive)
+        var x = fromCell.x
+        var y = fromCell.y
+        let dx = abs(toCell.x - fromCell.x)
+        let dy = abs(toCell.y - fromCell.y)
+        let sx = fromCell.x < toCell.x ? 1 : -1
+        let sy = fromCell.y < toCell.y ? 1 : -1
+        var err = dx - dy
+
+        var dugCells: [CellPosition] = []
+        let diggable: Set<Material> = [.sand, .ice, .slime, .gunpowder]
+
+        while true {
+            let cell = CellPosition(x: x, y: y)
+
+            if cell != fromCell {
+                if !canVisit(cell) {
+                    // World edge: stop at edge cell, remove projectile, no footprint.
+                    position = FixedPoint.fromCells(x: cell.x, y: cell.y)
+                    hasImpacted = true
+                    moved.formUnion(dugCells)
+                    return (cell, dugCells)
+                }
+
+                let material = materialAt(cell)
+
+                // Indestructible guard: sanctuary walls stop digging like solid rock.
+                if material.isIndestructible {
+                    position = FixedPoint.fromCells(x: cell.x, y: cell.y)
+                    hasImpacted = true
+                    moved.formUnion(dugCells)
+                    return (cell, dugCells)
+                }
+
+                if diggable.contains(material) {
+                    dugCells.append(cell)
+                } else if material == .solid {
+                    // Rock: stop at rock cell, rock unchanged, no footprint.
+                    position = FixedPoint.fromCells(x: cell.x, y: cell.y)
+                    hasImpacted = true
+                    moved.formUnion(dugCells)
+                    return (cell, dugCells)
+                }
+                // else: pass through empty, water, fire, lava, etc.
+            }
+
+            if x == toCell.x && y == toCell.y { break }
+
+            let e2 = 2 * err
+            if e2 > -dy { err -= dy; x += sx }
+            if e2 < dx  { err += dx; y += sy }
+        }
+
+        position = newPosition
+        moved.formUnion(dugCells)
+        return (nil, dugCells)
+    }
 }

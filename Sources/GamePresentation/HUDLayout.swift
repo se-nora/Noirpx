@@ -81,6 +81,11 @@ public enum HUDLayout {
         let bottomReserved = pillHeight + pillBottomMargin
         let maxPanelHeight = max(0, height - 2 * panelTop - bottomReserved)
 
+        // SANCTUARY MODE: render sanctuary shop instead of normal HUD
+        if state.inSanctuary, let inventory = state.sanctuaryShopInventory {
+            return sanctuaryShopUI(width: width, height: height, state: state, inventory: inventory, fs: fs, lh: lh, op: op, ip: ip, pw: pw, panelX: panelX, panelTop: panelTop, contentX: contentX, contentTop: contentTop, contentInset: contentInset, maxPanelHeight: maxPanelHeight)
+        }
+
         // ---- Build text lines ----
         var lines: [HUDLine] = []
         lines.append(HUDLine(text: "NOIRPX v\(state.version)", bold: true))
@@ -91,6 +96,9 @@ public enum HUDLayout {
             lines.append(HUDLine(text: "Pos (\(pos.x), \(pos.y))"))
         }
         lines.append(HUDLine(text: "Tick \(state.tick)"))
+        if let level = state.level, let biomeName = state.biomeName {
+            lines.append(HUDLine(text: "Level \(level) • \(biomeName)"))
+        }
         if let depth = state.depth {
             lines.append(HUDLine(text: "Depth \(depth)"))
         }
@@ -99,6 +107,15 @@ public enum HUDLayout {
         lines.append(contentsOf: statusLines(state: state))
         lines.append(buildWandLine(state: state, fs: fs))
         lines.append(buildManaLine(state: state))
+        // Flask (cave only)
+        if state.worldKind == .cave, state.flaskCapacity > 0 {
+            let total = state.flaskContents.values.reduce(0, +)
+            var parts = ["Flask \(total)/\(state.flaskCapacity)"]
+            for (mat, count) in state.flaskContents.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                parts.append("\(mat.wandName) \(count)")
+            }
+            lines.append(HUDLine(text: parts.joined(separator: " ")))
+        }
         // FPS / chunks
         if let fps = state.framesPerSecond, let chunks = state.renderedChunks {
             lines.append(HUDLine(text: "FPS: \(Self.formatFPS(fps))  Chunks: \(chunks)"))
@@ -151,6 +168,37 @@ public enum HUDLayout {
             if manaRect.filled > 0 {
                 list.append(.fillRect(rect: manaRect.fill, color: .rgba(0, 120, 255, 255)))
             }
+        }
+
+        // ---- Flask fill bar (cave only) ----
+        if state.worldKind == .cave, state.flaskCapacity > 0 {
+            let barWidth = 80
+            let total = state.flaskContents.values.reduce(0, +)
+            let filled = min(barWidth * total / max(state.flaskCapacity, 1), barWidth)
+            let barBg = DisplayRect(x: contentX, y: lineTop, width: barWidth + 4, height: lh)
+            list.append(.fillRect(rect: barBg, color: .rgba(80, 80, 80, 255)))
+            list.append(.strokeRect(rect: barBg, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+            if filled > 0 {
+                let barFill = DisplayRect(x: contentX + 2, y: lineTop + 2, width: max(filled, 0), height: max(lh - 4, 1))
+                list.append(.fillRect(rect: barFill, color: .rgba(0, 200, 100, 255)))
+            }
+            // Flask swatches row (compact)
+            let swatchSize = 10
+            let swatchGap = 2
+            let swatchY = lineTop + lh + 2
+            var swatchX = contentX
+            for (mat, count) in state.flaskContents.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                let swatchRect = DisplayRect(x: swatchX, y: swatchY, width: swatchSize, height: swatchSize)
+                list.append(.fillRect(rect: swatchRect, color: .material(mat)))
+                list.append(.strokeRect(rect: swatchRect, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+                // count label
+                let label = "\(count)"
+                let labelWidth = BitmapFont.textWidth(label)
+                let labelRect = DisplayRect(x: swatchX + max(0, (swatchSize - labelWidth) / 2), y: swatchY + swatchSize + 1, width: labelWidth, height: lh)
+                list.append(.text(rect: labelRect, runs: [DisplayTextRun(text: label, color: .rgba(255, 255, 255, 255))], baselineFromTop: 6))
+                swatchX += swatchSize + swatchGap
+            }
+            lineTop += lh + swatchSize + lh + 4
         }
 
         // ---- Bottom material pill ----
@@ -249,7 +297,185 @@ public enum HUDLayout {
             list.append(contentsOf: GuideLayout.helpOverlay(width: width, height: height, state: state).items)
         }
 
+        // ---- Death summary overlay (full screen, dimmed) ----
+        if state.outcome == .died {
+            list.append(contentsOf: summaryOverlay(width: width, height: height, state: state).items)
+        }
+
         return list
+    }
+
+    // MARK: - Sanctuary Shop UI
+
+    private static func sanctuaryShopUI(
+        width: Int, height: Int, state: DisplayListState, inventory: SanctuaryShopInventory,
+        fs: Int, lh: Int, op: Int, ip: Int, pw: Int, panelX: Int, panelTop: Int,
+        contentX: Int, contentTop: Int, contentInset: Int, maxPanelHeight: Int
+    ) -> DisplayList {
+        var list = DisplayList(width: width, height: height)
+
+        // Build sanctuary shop lines
+        var lines: [HUDLine] = []
+        lines.append(HUDLine(text: "SANCTUARY", bold: true, color: .rgba(255, 215, 0))) // Gold header
+        lines.append(HUDLine(text: "Gold \(state.runGold)", bold: true))
+        lines.append(HUDLine(text: "")) // spacer
+
+        // Spell offers
+        for (index, offer) in inventory.spellOffers.enumerated() {
+            let spellName = offer.spell?.blueprint.name ?? "Unknown Spell"
+            let priceText = "\(offer.price)g"
+            lines.append(HUDLine(text: "  [\(index + 1)] \(spellName)  —  \(priceText)"))
+        }
+
+        // Wand offer
+        if let wandOffer = inventory.wandOffer, let wand = wandOffer.wand {
+            let wandDesc = "CAP:\(wand.capacity) CD:\(wand.castDelayTicks) RC:\(wand.rechargeTimeTicks) MANA:\(wand.manaMax)/\(wand.manaRegenPerTick)/tick SPREAD:\(wand.spreadDegrees)deg"
+            lines.append(HUDLine(text: "  [W] Wand: \(wandDesc)  —  \(wandOffer.price)g"))
+        }
+
+        lines.append(HUDLine(text: "")) // spacer
+        lines.append(HUDLine(text: "Press Continue to proceed"))
+
+        let maxLines = max(1, (maxPanelHeight - contentInset) / lh)
+        let shownLines = Array(lines.prefix(maxLines))
+        let panelHeight = min(maxPanelHeight, shownLines.count * lh + contentInset)
+
+        // Panel background
+        let panelRect = DisplayRect(x: panelX, y: panelTop, width: pw, height: panelHeight)
+        list.append(.roundRect(rect: panelRect, color: .rgba(0, 0, 0, 200), cornerRadius: 8))
+
+        // Text lines (clipped to panel)
+        list.append(.clip(rect: panelRect))
+        var lineTop = contentTop
+        for (lineIndex, line) in shownLines.enumerated() {
+            let tw = line.totalWidth
+            let textRect = DisplayRect(x: contentX, y: lineTop, width: max(tw, 1), height: lh)
+            list.append(.text(rect: textRect, runs: line.runs, baselineFromTop: 6))
+
+            // Add hit regions for spell offers
+            let offerCount = inventory.spellOffers.count
+            if lineIndex < offerCount {
+                let offer = inventory.spellOffers[lineIndex]
+                let buyRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: buyRect, actionTag: .buySanctuarySpell(lineIndex)))
+            }
+            // Wand offer hit region
+            if lineIndex == offerCount {
+                let buyRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: buyRect, actionTag: .buySanctuaryWand))
+            }
+            // Continue button hit region (last line)
+            if lineIndex == shownLines.count - 1 {
+                let continueRect = DisplayRect(x: contentX, y: lineTop, width: pw - 2 * (op + ip), height: lh)
+                list.append(.hitRegion(rect: continueRect, actionTag: .exitSanctuary))
+            }
+
+            lineTop += lh
+        }
+        list.append(.clip(rect: nil))
+
+        // Bottom Continue button (prominent)
+        let buttonHeight = lh + 12
+        let buttonY = panelTop + panelHeight + 8
+        let continueTitle = "Continue"
+        let bw = max(120, BitmapFont.textWidth(continueTitle) + 32)
+        let bx = (width - bw) / 2
+        let brect = DisplayRect(x: bx, y: buttonY, width: bw, height: buttonHeight)
+        list.append(.roundRect(rect: brect, color: .rgba(60, 120, 60, 255), cornerRadius: 6))
+        list.append(.strokeRect(rect: brect, color: .rgba(160, 200, 160, 255), lineWidth: 2))
+        let tRect = DisplayRect(x: bx + 16, y: buttonY, width: bw - 32, height: lh)
+        list.append(.text(rect: tRect, runs: [DisplayTextRun(text: continueTitle, color: .rgba(255, 255, 255, 255))], baselineFromTop: (buttonHeight - lh) / 2))
+        list.append(.hitRegion(rect: brect, actionTag: .exitSanctuary))
+
+        return list
+    }
+
+    // MARK: - Death summary overlay
+
+    /// Renders a dimmed full-screen summary when `outcome == .died`.
+    private static func summaryOverlay(width: Int, height: Int, state: DisplayListState) -> DisplayList {
+        var list = DisplayList(width: width, height: height)
+
+        // Dim scrim behind the summary panel.
+        list.append(.fillRect(rect: DisplayRect(x: 0, y: 0, width: width, height: height),
+                              color: .rgba(0, 0, 0, 140)))
+
+        let lh = lineHeight(forFontSize: fontSize(forHeight: height))
+        let op = outerPadding(forHeight: height)
+
+        // Panel sized to fit all lines plus padding.
+        let lineCount = summaryLines(state: state).count + 3 // header + buttons spacing
+        let panelWidth = min(300, width - 2 * op)
+        let panelHeight = lineCount * lh + 4 * op
+        let panelX = max(op, (width - panelWidth) / 2)
+        let panelY = max(op, (height - panelHeight) / 2)
+        let panelRect = DisplayRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight)
+        list.append(.roundRect(rect: panelRect, color: .rgba(0, 0, 0, 220), cornerRadius: 8))
+
+        // Text lines inside the panel.
+        let contentX = panelX + op
+        var lineTop = panelY + op
+        for line in summaryLines(state: state) {
+            let textRect = DisplayRect(x: contentX, y: lineTop, width: max(line.totalWidth, 1), height: lh)
+            list.append(.text(rect: textRect, runs: line.runs, baselineFromTop: 6))
+            lineTop += lh
+        }
+
+        // Buttons: Restart (same seed), New Run (fresh seed).
+        let buttonHeight = lh + 8
+        let buttonGap: Int = 8
+        let buttonY = lineTop + op / 2
+        let buttons: [(String, DisplayActionTag)] = [
+            ("Restart", .restart),
+            ("New Run", .newRun),
+        ]
+        var bx = contentX
+        for (title, tag) in buttons {
+            let bw = max(52, BitmapFont.textWidth(title) + 16)
+            let brect = DisplayRect(x: bx, y: buttonY, width: bw, height: buttonHeight)
+            list.append(.roundRect(rect: brect, color: .rgba(60, 60, 60, 255), cornerRadius: 4))
+            list.append(.strokeRect(rect: brect, color: .rgba(160, 160, 160, 255), lineWidth: 1))
+            let tRect = DisplayRect(x: bx + 8, y: buttonY, width: bw - 16, height: lh)
+            list.append(.text(rect: tRect, runs: [DisplayTextRun(text: title, color: .rgba(255, 255, 255, 255))], baselineFromTop: (buttonHeight - lh) / 2))
+            list.append(.hitRegion(rect: brect, actionTag: tag))
+            bx += bw + buttonGap
+        }
+
+        return list
+    }
+
+    private static func summaryLines(state: DisplayListState) -> [HUDLine] {
+        let red = DisplayColor.rgba(255, 0, 0, 255)
+        let white = DisplayColor.rgba(255, 255, 255, 255)
+
+        var lines: [HUDLine] = []
+        lines.append(HUDLine(text: "RUN ENDED — DIED", bold: true, color: red))
+
+        if let level = state.level, let biome = state.biomeName {
+            lines.append(HUDLine(text: "Level \(level) • \(biome)"))
+        } else if let level = state.level {
+            lines.append(HUDLine(text: "Level \(level)"))
+        }
+
+        if let depth = state.depth {
+            lines.append(HUDLine(text: "Depth \(depth)"))
+        }
+
+        lines.append(HUDLine(text: "Gold \(state.runGold)"))
+        lines.append(HUDLine(text: "Time \(formatPlayTime(state.playTimeTicks))"))
+        lines.append(HUDLine(text: "Kills \(state.kills)"))
+
+        let cause = state.causeOfDeath ?? "unknown"
+        lines.append(HUDLine(text: "Cause: \(cause)"))
+
+        lines.append(HUDLine(text: "Session Best: Level \(state.sessionBestLevel) / Depth \(state.sessionBestDepth)", bold: true))
+
+        return lines
+    }
+
+    private static func formatPlayTime(_ ticks: UInt64) -> String {
+        let seconds = Int(ticks / 60)
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
     // MARK: - Public layout API (convenience wrappers for test/integration)

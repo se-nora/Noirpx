@@ -13,7 +13,8 @@ final class MaterialExpansionTests: XCTestCase {
         XCTAssertEqual(Material.gunpowder.rawValue, 13)
         XCTAssertEqual(Material.gold.rawValue, 14)
         XCTAssertEqual(Material.magicLiquid.rawValue, 15)
-        XCTAssertEqual(Material.allCases.count, 16)
+        XCTAssertEqual(Material.sanctuaryWall.rawValue, 16)
+        XCTAssertEqual(Material.allCases.count, 17)
     }
 
     func testLavaMovesAndCools() throws {
@@ -75,6 +76,95 @@ final class MaterialExpansionTests: XCTestCase {
         try sim.enqueue(.init(tick: 2, position: p(0, 0), material: .ice))
         try sim.advance()
         XCTAssertEqual(try sim.snapshot.material(at: p(0, 0)), .water)
+    }
+
+    func testAcidDissolvesSandRockSolids() throws {
+        // Acid adjacent to sand with gate passing → both become empty
+        let source = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [target: .sand]
+        let acid = MaterialBehavior.forMaterial(.acid)
+        let action = acid.resolve(source: source, current: .acid, destinations: [],
+                                  direction: 1, maximumY: 10, canVisit: { _ in true },
+                                  material: { world[$0] ?? .empty }, moved: [],
+                                  secondary: [], thermal: { _ in .zero })
+        XCTAssertEqual(action.writes.map(\.1), [.empty, .empty])
+        XCTAssertEqual(action.moved, [source, target])
+
+        // Acid adjacent to solid (rock) with gate passing → both become empty
+        let world2: [CellPosition: Material] = [target: .solid]
+        let action2 = acid.resolve(source: source, current: .acid, destinations: [],
+                                   direction: 1, maximumY: 10, canVisit: { _ in true },
+                                   material: { world2[$0] ?? .empty }, moved: [],
+                                   secondary: [], thermal: { _ in .zero })
+        XCTAssertEqual(action2.writes.map(\.1), [.empty, .empty])
+        XCTAssertEqual(action2.moved, [source, target])
+    }
+
+    func testIceFreezesWater() throws {
+        // Ice at heat 0 with direction gate passes freezes adjacent water
+        let source = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [target: .water]
+        let ice = MaterialBehavior.forMaterial(.ice)
+        let action = ice.resolve(source: source, current: .ice, destinations: [],
+                                 direction: 1, maximumY: 10, canVisit: { _ in true },
+                                 material: { world[$0] ?? .empty }, moved: [],
+                                 secondary: [], thermal: { _ in ThermalCellState(heat: 0) })
+        XCTAssertEqual(action.writes.map(\.1), [.ice])
+        XCTAssertEqual(action.moved, [target])
+        // thermalWrites contains both source (ice thermal state preserved) and target (frozen water at zero)
+        XCTAssertTrue(action.thermalWrites.contains { $0.0 == target && $0.1.heat == 0 })
+    }
+
+    func testIceFreezesWaterConservation() throws {
+        // Ice → water conversion preserves cell count (water becomes ice, 1→1)
+        let source = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [target: .water]
+        let ice = MaterialBehavior.forMaterial(.ice)
+        let action = ice.resolve(source: source, current: .ice, destinations: [],
+                                 direction: 1, maximumY: 10, canVisit: { _ in true },
+                                 material: { world[$0] ?? .empty }, moved: [],
+                                 secondary: [], thermal: { _ in ThermalCellState(heat: 0) })
+        // 1 water cell → 1 ice cell, conservation preserved
+        XCTAssertEqual(action.writes.map(\.1), [.ice])
+        XCTAssertEqual(action.writes.count, 1)
+    }
+
+    func testIceDoesNotFreezeWaterWithHeat() throws {
+        // Ice with heat > 0 cannot freeze water
+        let source = CellPosition(x: 0, y: 0)
+        let target = CellPosition(x: 1, y: 0)
+        let world: [CellPosition: Material] = [target: .water]
+        let ice = MaterialBehavior.forMaterial(.ice)
+        let action = ice.resolve(source: source, current: .ice, destinations: [],
+                                 direction: 1, maximumY: 10, canVisit: { _ in true },
+                                 material: { world[$0] ?? .empty }, moved: [],
+                                 secondary: [], thermal: { _ in ThermalCellState(heat: 10) })
+        // heat > 0 blocks freezing: no write at target
+        XCTAssertFalse(action.writes.contains { $0.0 == target && $0.1 == .ice })
+    }
+
+    func testLavaWaterReactionConservation() throws {
+        var sim = Simulation(seed: 2)
+        try sim.enqueue(.init(tick: 1, position: p(0, 0), material: .lava))
+        try sim.enqueue(.init(tick: 1, position: p(1, 0), material: .water))
+        try sim.advance()
+        // Lava + water → rock + steam (2 cells → 2 cells, conservation preserved)
+        XCTAssertEqual(try sim.snapshot.material(at: p(0, 0)), .solid)
+        XCTAssertEqual(try sim.snapshot.material(at: p(1, 0)), .steam)
+    }
+
+    func testLavaWaterReactionDeterministicReplay() throws {
+        func run() throws -> UInt64 {
+            var sim = Simulation(seed: 2)
+            try sim.enqueue(.init(tick: 1, position: p(0, 0), material: .lava))
+            try sim.enqueue(.init(tick: 1, position: p(1, 0), material: .water))
+            try sim.advance()
+            return sim.snapshot.digest
+        }
+        XCTAssertEqual(try run(), try run())
     }
 
     func testGunpowderExplodes() throws {

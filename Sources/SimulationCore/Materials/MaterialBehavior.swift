@@ -62,6 +62,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder.acts
         case .gold: return gold.acts
         case .magicLiquid: return magicLiquid.acts
+        case .sanctuaryWall: return sanctuaryWall.acts
         }
     }
 
@@ -84,6 +85,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder.usesDirection
         case .gold: return gold.usesDirection
         case .magicLiquid: return magicLiquid.usesDirection
+        case .sanctuaryWall: return sanctuaryWall.usesDirection
         }
     }
 
@@ -112,6 +114,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder.destinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         case .gold: return gold.destinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         case .magicLiquid: return magicLiquid.destinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
+        case .sanctuaryWall: return sanctuaryWall.destinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         }
     }
 
@@ -140,6 +143,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder.secondaryDestinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         case .gold: return gold.secondaryDestinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         case .magicLiquid: return magicLiquid.secondaryDestinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
+        case .sanctuaryWall: return sanctuaryWall.secondaryDestinations(source: source, direction: direction, canVisit: canVisit, material: materialAt)
         }
     }
 
@@ -174,6 +178,7 @@ class MaterialBehavior: @unchecked Sendable {
         case .gunpowder: return gunpowder.resolve(source: source, current: current, destinations: destinations, direction: direction, maximumY: maximumY, canVisit: canVisit, material: materialAt, moved: moved, secondary: secondary, thermal: thermal)
         case .gold: return gold.resolve(source: source, current: current, destinations: destinations, direction: direction, maximumY: maximumY, canVisit: canVisit, material: materialAt, moved: moved, secondary: secondary, thermal: thermal)
         case .magicLiquid: return magicLiquid.resolve(source: source, current: current, destinations: destinations, direction: direction, maximumY: maximumY, canVisit: canVisit, material: materialAt, moved: moved, secondary: secondary, thermal: thermal)
+        case .sanctuaryWall: return sanctuaryWall.resolve(source: source, current: current, destinations: destinations, direction: direction, maximumY: maximumY, canVisit: canVisit, material: materialAt, moved: moved, secondary: secondary, thermal: thermal)
         }
     }
 

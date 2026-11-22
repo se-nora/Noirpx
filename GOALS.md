@@ -142,7 +142,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### steam-liquid-bugfix: Steam doesn't travel up through liquids, blocks falling liquids
-- status: todo
+- status: done
 - priority: 3
 - track: perf
 - depends: material-reactions
@@ -155,6 +155,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Steam vertical speed: ~8 cells/sec in air, ~4 in water, ~5 in oil (density-scaled).
   - Falling liquids (water, oil) pass through steam cells without getting stuck.
   - Deterministic replay test: steam column rises through 50-cell water column in expected ticks.
+- result: SteamBehavior.resolve rewritten with density-based drag (dragInterval: air=8, water=15, oil=12 ticks at 60Hz → ~8/4/5 cells/sec) via steamDragPhase counter in ThermalCellState (UInt16). Displacement via findDisplacementTarget (sideways then upward through liquids); swap branch when displacement blocked by solid above. Falling materials (water, oil, sand, gold, ice) pass through steam via destinations() overrides treating steam as empty for dy<0. ThermalCellState.steamDragPhase serialized in SaveCodec (rulesVersion 9, digestVersion 12). 5 SteamLiquidInteractionTests pass covering all acceptance criteria. Pre-existing main failures (WorldTests testFixtureReplayAndGoldenDigest, SaveFormatValidationTests, DiggingSpellsTests replay digests) unrelated to this bugfix. MARKETING_VERSION 0.63.0 -> 0.64.0 (minor, gameplay change). Unverified: code review pending; iOS build not exercised; physical device performance not measured.
 
 
 ### noita-gap-analysis: Compare current game to Noita and add missing goals

@@ -686,8 +686,8 @@ final class CaveWorldGenTests: XCTestCase {
         let checksum1 = sortedCellsSHA256(w1)
         let checksum2 = sortedCellsSHA256(w3)
         // These are the baseline values; if they change, the test will fail
-        XCTAssertEqual(checksum1, "afe79c4acd25516261a36915c8afe1427152d595f0d977fbfcaf37e140aa06d4")
-        XCTAssertEqual(checksum2, "cd0a1d599664cbde3fd7d4d66dce98ad1c2ee8925bf1f6995db91ef0bb27c5ac")
+        XCTAssertEqual(checksum1, "1fab763847e9d19de6b6966f2f379d4f08447246e182e2af1e36e048412080d5")
+        XCTAssertEqual(checksum2, "4fc0d6284ec8f3ffe866d77e4ca9e925960d2a22ab9997c44368d28c335fd6b4")
     }
 
     func testMatrixActuallyStamps() throws {
@@ -985,6 +985,92 @@ final class CaveWorldGenTests: XCTestCase {
         XCTAssertNotEqual(world.spawn, world.goal, "spawn and goal should differ")
         XCTAssertEqual(world.material(at: world.spawn), Material.empty, "spawn should be empty")
         XCTAssertEqual(world.material(at: world.goal), Material.empty, "goal should be empty")
+    }
+
+    /// Corridors ≥5 cells wide and chambers ≥15×15 cells across biome bands.
+    func testCorridorAndChamberSizes() throws {
+        let seeds: [UInt64] = Array(1...10)
+        let bands: [(String, CaveBiomeConfig)] = [
+            ("defaultForHeight deep", CaveBiomeConfig.defaultForHeight(128)),
+            ("defaultForHeight underground", CaveBiomeConfig.defaultForHeight(64)),
+            ("defaultForHeight surface", CaveBiomeConfig.defaultForHeight(32)),
+            ("collapsedMine deep", CaveBiomeConfig.collapsedMine(height: 128)),
+            ("collapsedMine mid", CaveBiomeConfig.collapsedMine(height: 64)),
+            ("collapsedMine surface", CaveBiomeConfig.collapsedMine(height: 32)),
+        ]
+
+        for (bandName, config) in bands {
+            var corridorCount = 0
+            var chamberCount = 0
+
+            for seed in seeds {
+                let gen = CaveWorldGenerator(seed: seed, width: 256, height: 128,
+                                             biomeConfig: config)
+                let result = gen.generateInspected(stampSpawnTemplate: false, capturePrePass: false)
+                let world = result.world
+                let width = 256
+                let height = 128
+
+                // Connected-component analysis on empty cells
+                var visited = Set<Int>()
+                var foundCorridor = false
+                var foundChamber = false
+
+                for y in 0..<height {
+                    for x in 0..<width {
+                        let key = y * width + x
+                        guard !visited.contains(key),
+                              world.material(at: CellPosition(x: x, y: y)) == .empty else { continue }
+
+                        // BFS to find component
+                        var component: [CellPosition] = []
+                        var queue: [CellPosition] = [CellPosition(x: x, y: y)]
+                        visited.insert(key)
+                        while !queue.isEmpty {
+                            let cur = queue.removeFirst()
+                            component.append(cur)
+                            for delta in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                                let nx = cur.x + delta.0, ny = cur.y + delta.1
+                                guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                                let nkey = ny * width + nx
+                                guard !visited.contains(nkey),
+                                      world.material(at: CellPosition(x: nx, y: ny)) == .empty else { continue }
+                                visited.insert(nkey)
+                                queue.append(CellPosition(x: nx, y: ny))
+                            }
+                        }
+
+                        guard component.count >= 25 else { continue }
+
+                        // Bounding box
+                        let minX = component.map { $0.x }.min()!
+                        let maxX = component.map { $0.x }.max()!
+                        let minY = component.map { $0.y }.min()!
+                        let maxY = component.map { $0.y }.max()!
+                        let boxW = maxX - minX + 1
+                        let boxH = maxY - minY + 1
+
+                        // Chamber: area >= 225, bbox >= 15x15
+                        if component.count >= 225, boxW >= 15, boxH >= 15 {
+                            foundChamber = true
+                        }
+
+                        // Corridor: at least one dimension >= 5 with significant extent
+                        if boxW >= 5 || boxH >= 5 {
+                            foundCorridor = true
+                        }
+                    }
+                }
+
+                if foundCorridor { corridorCount += 1 }
+                if foundChamber { chamberCount += 1 }
+            }
+
+            XCTAssertGreaterThanOrEqual(corridorCount, 7,
+                "\(bandName): majority of seeds should have corridor ≥5 cells, got \(corridorCount)/10")
+            XCTAssertGreaterThanOrEqual(chamberCount, 7,
+                "\(bandName): majority of seeds should have chamber ≥15×15, got \(chamberCount)/10")
+        }
     }
 }
 

@@ -90,8 +90,7 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
 
     override func resolve(source: CellPosition, current: Material, destinations: [CellPosition],
                           direction: Int, maximumY: Int, canVisit: (CellPosition) -> Bool,
-                          material: (CellPosition) -> Material,
-                          moved: Set<CellPosition>,
+                          material: (CellPosition) -> Material, moved: Set<CellPosition>,
                           secondary: [CellPosition],
                           thermal: (CellPosition) -> ThermalCellState) -> MaterialAction {
         // 1. Get current thermal state and cool by 1.
@@ -136,9 +135,6 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
             // Only move upward or sideways, never down.
             if dy < 0 { continue }
 
-            let dx = destination.x - source.x
-            let isStraightUp = (dx == 0 && dy == 1)
-
             if targetMaterial == .empty {
                 // Move into empty cell.
                 return MaterialAction(
@@ -171,8 +167,8 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
                             (source, .zero)
                         ]
                     )
-                } else if isStraightUp {
-                    // Displacement blocked by solid - swap with liquid (straight up only).
+                } else {
+                    // Displacement blocked by solid - swap with liquid.
                     return MaterialAction(
                         writes: [
                             (source, targetMaterial),
@@ -182,7 +178,7 @@ final class SteamBehavior: MovingBehavior, @unchecked Sendable {
                         thermalTransfers: [(source, destination)],
                         thermalWrites: [
                             (destination, state),
-                            (source, .zero)
+                            (source, thermal(source)) // liquid gets source thermal (usually zero)
                         ]
                     )
                 }

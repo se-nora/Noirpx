@@ -73,7 +73,6 @@ public struct SaveCodec: Sendable {
                 encoder.writeU8(thermal.isBurning ? 1 : 0)
                 encoder.writeU16(thermal.burnElapsed)
                 encoder.writeU16(thermal.fireElapsed)
-                encoder.writeU16(thermal.steamDragPhase)
             }
         }
 
@@ -334,9 +333,8 @@ public struct SaveCodec: Sendable {
                 let isBurning = burningRaw == 1
                 let burnElapsed = try readU16()
                 let fireElapsed = try readU16()
-                let steamDragPhase = try readU16()
 
-                let thermal = ThermalCellState(heat: heat, isBurning: isBurning, burnElapsed: burnElapsed, fireElapsed: fireElapsed, steamDragPhase: steamDragPhase)
+                let thermal = ThermalCellState(heat: heat, isBurning: isBurning, burnElapsed: burnElapsed, fireElapsed: fireElapsed)
                 cells[Int(localIndex)] = material
                 thermals[Int(localIndex)] = thermal
 

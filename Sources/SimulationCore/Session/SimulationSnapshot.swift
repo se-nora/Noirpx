@@ -11,7 +11,7 @@ public struct SimulationSnapshot: Equatable, Sendable {
     /// Presentation-only debris particles from the completed tick. Excluded from digest.
     public let debris: [DebrisParticleSnapshot]
 
-public static let digestVersion: UInt64 = 13
+    public static let digestVersion: UInt64 = 13
 
     public func material(at position: CellPosition) throws -> Material {
         try SimulationGrid.validate(position)
@@ -55,8 +55,6 @@ public static let digestVersion: UInt64 = 13
                 appendByte(UInt8(truncatingIfNeeded: state.burnElapsed >> 8))
                 appendByte(UInt8(truncatingIfNeeded: state.fireElapsed))
                 appendByte(UInt8(truncatingIfNeeded: state.fireElapsed >> 8))
-                appendByte(UInt8(truncatingIfNeeded: state.steamDragPhase))
-                appendByte(UInt8(truncatingIfNeeded: state.steamDragPhase >> 8))
             }
         }
         return hash

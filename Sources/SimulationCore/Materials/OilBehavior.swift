@@ -1,12 +1,5 @@
-private final class OilMovementBehavior: LiquidMovementBehavior, @unchecked Sendable {
-    override func canDisplace(_ material: Material, dy: Int) -> Bool {
-        // Oil displaces steam when moving down (steam rises through oil from below)
-        material == .steam && dy < 0
-    }
-}
-
 final class OilBehavior: FlammableBehavior, @unchecked Sendable {
-    private static let movement = OilMovementBehavior()
+    private static let movement = LiquidMovementBehavior()
     override var hardness: Int { 5 }
     override var ignitionThreshold: UInt16? { 80 }
     override var burnoutAge: UInt16 { 48 }

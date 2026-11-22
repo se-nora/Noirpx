@@ -1362,3 +1362,23 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - The old material picker and drawing selection list are removed.
   - Cave Run plays with the new HUD; no separate picker view remains (screenshot).
 - result: Merged in commit 79961de. All 450 tests pass (swift test --parallel -c release); macOS Debug xcodebuild build succeeds. Click test verified via synthesized mouse events on FocusRingView buttons.
+
+### displayed-world-scale-1-5x: Show 1.5x more of the world on screen
+- status: done
+- priority: 15
+- track: noita
+- depends: none
+- areas: host, renderer
+- why: The live app shows only 200 cells on the viewport's long edge. Noita
+  shows a much larger area around the player; zooming out by 1.5x makes more
+  of the cave visible and improves spatial awareness.
+- scope: In AppleHost, change the `longEdgeCells` passed to `FixtureViewport`
+  from 200 to 300 in MetalRenderer.draw, InputMetalView.cell(atX:y:), and
+  GameModel.updateActiveChunks. Keep a single shared constant so the three
+  call sites cannot drift. No simulation or presentation-core changes.
+- acceptance:
+  - macOS Debug build succeeds and the app launches with the wider view.
+  - GamePresentationTests still pass (viewport math unchanged for explicit
+    longEdgeCells values).
+  - MARKETING_VERSION bumped (minor, visual change).
+- result: Added LiveViewport.longEdgeCells = 300 in InputMetalView.swift; updated MetalRenderer.draw, InputMetalView.cell, GameModel.updateActiveChunks. All tests pass; macOS Debug xcodebuild BUILD SUCCEEDED; MARKETING_VERSION 0.64.0→0.65.0.

@@ -353,7 +353,7 @@ final class GameModel: ObservableObject {
         let extents = run.world.extents
         worldBounds = FixtureViewport.CellRange(x: extents.minX...extents.maxX, y: extents.minY...extents.maxY)
         guard let viewport = FixtureViewport(drawableWidth: drawableSize.width, drawableHeight: drawableSize.height,
-                                             center: run.character.cameraCenter, longEdgeCells: 200,
+                                             center: run.character.cameraCenter, longEdgeCells: LiveViewport.longEdgeCells,
                                              worldBounds: worldBounds) else {
             activeChunks = nil
             worldBounds = nil

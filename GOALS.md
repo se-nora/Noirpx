@@ -1381,3 +1381,4 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - GamePresentationTests still pass (viewport math unchanged for explicit
     longEdgeCells values).
   - MARKETING_VERSION bumped (minor, visual change).
+- result: Added LiveViewport.longEdgeCells = 300 in InputMetalView.swift; updated MetalRenderer.draw, InputMetalView.cell, GameModel.updateActiveChunks. All tests pass; macOS Debug xcodebuild BUILD SUCCEEDED; MARKETING_VERSION 0.64.0→0.65.0.

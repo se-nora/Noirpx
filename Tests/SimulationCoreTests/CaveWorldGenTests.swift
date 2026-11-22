@@ -485,6 +485,84 @@ final class CaveWorldGenTests: XCTestCase {
         XCTAssertEqual(comboCount, 64, "Expected 64 seeds")
     }
 
+    // MARK: - Vertical shaft placement (goal: vertical-shaft-generation)
+
+    /// Reads a grid-space cell from a generated world (world coordinates are
+    /// offset by `-size/2` in both axes).
+    private func gridMaterial(_ world: CaveWorld, gx: Int, gy: Int,
+                              width: Int, height: Int) -> Material {
+        world.material(at: CellPosition(x: -width / 2 + gx, y: -height / 2 + gy))
+    }
+
+    func testShaftPlacementCountAndFlankWalls() throws {
+        let width = 256, height = 128
+        for seed in [UInt64(1), 2, 7, 42] {
+            let gen = CaveWorldGenerator(seed: seed, width: width, height: height)
+            let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+            let shafts = result.shafts
+            XCTAssertGreaterThanOrEqual(shafts.count, 2, "seed \(seed): expected at least 2 shafts")
+            XCTAssertLessThanOrEqual(shafts.count, 4, "seed \(seed): expected at most 4 shafts")
+
+            for (i, shaft) in shafts.enumerated() {
+                XCTAssertGreaterThanOrEqual(shaft.width, 7, "seed \(seed) shaft \(i): width < 7")
+                XCTAssertLessThanOrEqual(shaft.width, 10, "seed \(seed) shaft \(i): width > 10")
+                XCTAssertGreaterThanOrEqual(shaft.depth, 32, "seed \(seed) shaft \(i): depth < 32")
+                XCTAssertLessThanOrEqual(shaft.depth, 48, "seed \(seed) shaft \(i): depth > 48")
+
+                for gy in shaft.interiorTop...shaft.interiorBottom {
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
+                        // Interior stays empty in the final world and in the pre-pass grid.
+                        XCTAssertEqual(
+                            gridMaterial(result.world, gx: gx, gy: gy, width: width, height: height), .empty,
+                            "seed \(seed) shaft \(i): interior (\(gx),\(gy)) not empty in world")
+                        if let prePass = result.prePass {
+                            XCTAssertEqual(prePass[gy][gx], .empty,
+                                           "seed \(seed) shaft \(i): interior (\(gx),\(gy)) not empty in pre-pass")
+                        }
+                    }
+                    // Two-cell solid flank walls on each side of the interior.
+                    for dx in [shaft.interiorLeft - 2, shaft.interiorLeft - 1,
+                               shaft.interiorRight + 1, shaft.interiorRight + 2] {
+                        XCTAssertEqual(
+                            gridMaterial(result.world, gx: dx, gy: gy, width: width, height: height), .solid,
+                            "seed \(seed) shaft \(i): flank (\(dx),\(gy)) not solid")
+                    }
+                }
+            }
+        }
+    }
+
+    func testShaftFeasibilityGate() throws {
+        // Every biome band must be >= 34 rows for a 32-deep shaft plus walls.
+        // Worlds whose bands are shorter (or worlds under 40 rows / 30 cols)
+        // must place no shafts.
+        for (width, height) in [(64, 48), (128, 64), (96, 96), (256, 64)] {
+            let gen = CaveWorldGenerator(seed: 5, width: width, height: height)
+            let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+            XCTAssertTrue(result.shafts.isEmpty, "Expected no shafts at \(width)×\(height)")
+        }
+        // 256×128 has 43-row bands, so the gate must open.
+        let gen = CaveWorldGenerator(seed: 5, width: 256, height: 128)
+        let result = gen.generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+        XCTAssertFalse(result.shafts.isEmpty, "Expected shafts at 256×128")
+    }
+
+    func testShaftDeterministicReplayAndDigestVersion() throws {
+        XCTAssertEqual(SimulationSnapshot.digestVersion, 13,
+                       "Digest version must be 13 after vertical shaft placement")
+
+        let gen1 = CaveWorldGenerator(seed: 9, width: 256, height: 128)
+        let gen2 = CaveWorldGenerator(seed: 9, width: 256, height: 128)
+        let r1 = gen1.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+        let r2 = gen2.generateWithShafts(stampSpawnTemplate: true, capturePrePass: true)
+        XCTAssertEqual(r1.world, r2.world, "Same-seed worlds differ")
+        XCTAssertEqual(r1.shafts, r2.shafts, "Same-seed shaft layouts differ")
+
+        let r3 = CaveWorldGenerator(seed: 10, width: 256, height: 128)
+            .generateWithShafts(stampSpawnTemplate: true, capturePrePass: false)
+        XCTAssertNotEqual(r1.shafts, r3.shafts, "Different seeds should produce different shaft layouts")
+    }
+
     func testFootprintContainmentMatrix() throws {
         try skipUnlessSlowTier()
         var comboCount = 0

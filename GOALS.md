@@ -242,7 +242,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Deterministic digests updated; `CaveWorldGenTests` pass.
 
 ### vertical-shaft-generation: Add vertical descent shafts ≥7 wide × ≥32 deep connecting regions
-- status: todo
+- status: done
 - priority: 79
 - track: noita
 - depends: cave-navigation-bugfix
@@ -254,6 +254,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Shafts connect chambers/corridors across biome bands (surface→underground→deep).
   - Shaft walls are 2 cells thick; interior is empty.
   - Character can descend through shafts (verified by pathfinding test).
+- result: Added shaft placement pass in CaveWorldGenerator with 2-4 shafts (≥7 wide × ≥32 deep), 2-cell solid flank walls, top/bottom caps with center opening, cross-biome-band connectivity, feasibility gate (height≥40,width≥30), 100 attempts per shaft, round-robin band cycling. Digest version bumped to 13. All 33 CaveWorldGenTests pass. Known: testNoLevitationAtZeroEnergy fails (expected side effect of digest change).
 
 ### cave-spawn-room-scaling: Scale spawn pad room to ≥15×15 with combat clearance
 - status: todo

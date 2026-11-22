@@ -306,6 +306,33 @@ public struct CaveChamber: Equatable, Sendable {
     var area: Int { interior.area }
 }
 
+/// A placed vertical descent shaft with its interior bounds and wall ring.
+public struct CaveShaft: Equatable, Sendable {
+    /// Interior empty column: inclusive column range [left, right], inclusive row range [top, bottom].
+    /// top < bottom (grid row 0 = top of world).
+    let interiorLeft: Int
+    let interiorRight: Int
+    let interiorTop: Int
+    let interiorBottom: Int
+
+    /// Wall ring bounds (includes 2-cell flank walls on each side + 1 cell above top / below bottom).
+    var wallRing: Rect {
+        Rect(
+            minX: interiorLeft - 2,
+            maxX: interiorRight + 2,
+            minY: interiorTop - 1,
+            maxY: interiorBottom + 1
+        )
+    }
+
+    var width: Int { interiorRight - interiorLeft + 1 }
+    var depth: Int { interiorBottom - interiorTop + 1 }
+
+    func contains(_ x: Int, _ y: Int) -> Bool {
+        x >= interiorLeft && x <= interiorRight && y >= interiorTop && y <= interiorBottom
+    }
+}
+
 // MARK: - PlacementBudget
 
 /// Shared placement ledger with per-band quotas and global caps.
@@ -637,6 +664,304 @@ public struct CaveWorldGenerator: Sendable {
         // print("Total chambers placed: \(chambers.count)")
     }
 
+    /// Shaft placement pass: carve 2-4 vertical descent shafts (≥7 wide, ≥32 deep)
+    /// with 2-cell solid flank walls on each side. Runs after chamber placement
+    /// and chamber-connectivity repair, before sand/material passes.
+    private func placeShafts(
+        grid: inout [[Material]],
+        width: Int,
+        height: Int,
+        originX: Int,
+        originY: Int,
+        biomeConfig: CaveBiomeConfig,
+        layout: CaveSpawnTemplate.Layout?,
+        spawn: (Int, Int),
+        goal: (Int, Int),
+        seed: UInt64,
+        chambers: [CaveChamber],
+        chamberCells: Set<Int>,
+        tunnelCells: Set<Int>,
+        shafts: inout [CaveShaft],
+        shaftCells: inout Set<Int>,
+        shaftWallCells: inout Set<Int>
+    ) {
+        // DEBUG removed
+        // Feasibility gate: need height ≥ 40 (shaft 32 + walls 2+1+1 + margins) and width ≥ 30
+        guard height >= 40, width >= 30 else { 
+            // DEBUG removed
+            return 
+        }
+
+        // Find bands with sufficient height for a shaft (min 34 rows: 32 depth + 1 top wall + 1 bottom wall)
+        let feasibleBandIndices = biomeConfig.bands.enumerated().compactMap { idx, band -> Int? in
+            let bandHeight = band.rowRange.count
+            // print("DEBUG placeShafts: band \(idx) rowRange=\(band.rowRange), height=\(bandHeight)")
+            return bandHeight >= 34 ? idx : nil
+        }
+        // print("DEBUG placeShafts: feasibleBandIndices=\(feasibleBandIndices), biomeConfig.bands=\(biomeConfig.bands.map { $0.rowRange })")
+        guard !feasibleBandIndices.isEmpty else { return }
+
+        let seedInt = Int(truncatingIfNeeded: seed)
+
+        // Shaft count: 2-4
+        let count = 2 + Int(hash2(0x5FAF00, seedInt) % 3)
+
+        // Distribute shafts round-robin across feasible bands (bottom-to-top order)
+        var bandCycle = 0
+        for shaftIdx in 0..<count {
+            let bandIdx = feasibleBandIndices[bandCycle % feasibleBandIndices.count]
+            bandCycle += 1
+
+            let band = biomeConfig.bands[bandIdx]
+            let bandRowRange = band.rowRange
+
+            // Dimensions
+            let shaftWidth = 7 + Int(hash2(0x5FAF01 + shaftIdx * 1000, seedInt) % 4) // 7-10
+            let maxDepth = min(48, bandRowRange.count - 2) // cap at band height minus top/bottom walls
+            let shaftDepth = 32 + Int(hash2(0x5FAF02 + shaftIdx * 1000, seedInt) % UInt64(max(1, maxDepth - 31))) // 32-maxDepth
+
+            // Placement search with bounded retries
+            var placed = false
+            for attempt in 0..<100 {
+                let attemptSalt = 0x5FAF10 + shaftIdx * 1000 + attempt * 100
+                let attemptSaltY = 0x5FAF11 + shaftIdx * 1000 + attempt * 100
+
+                // X range: interior must fit with 2-cell flank walls + 1-cell world border margin
+                // wall ring minX = interiorLeft - 2 ≥ 1 → interiorLeft ≥ 3
+                // wall ring maxX = interiorRight + 2 ≤ width - 2 → interiorRight ≤ width - 4
+                // interiorRight = interiorLeft + shaftWidth - 1
+                let minInteriorLeft = 3
+                let maxInteriorLeft = width - 4 - shaftWidth
+                guard minInteriorLeft <= maxInteriorLeft else { 
+                    // print("DEBUG: X range failed minInteriorLeft=\(minInteriorLeft) maxInteriorLeft=\(maxInteriorLeft) width=\(width) shaftWidth=\(shaftWidth)")
+                    continue 
+                }
+
+                // Y range: interior top ≥ bandRowRange.lowerBound + 1, interior bottom ≤ bandRowRange.upperBound - 1
+                let minInteriorTop = max(bandRowRange.lowerBound + 1, 2)
+                let maxInteriorTop = min(bandRowRange.upperBound - 1 - shaftDepth, height - 3)
+                guard minInteriorTop <= maxInteriorTop else { 
+                    // print("DEBUG: Y range failed minInteriorTop=\(minInteriorTop) maxInteriorTop=\(maxInteriorTop) bandRowRange=\(bandRowRange) shaftDepth=\(shaftDepth) height=\(height)")
+                    continue 
+                }
+
+                let interiorLeft = minInteriorLeft + Int(hash2(attemptSalt, seedInt) % UInt64(maxInteriorLeft - minInteriorLeft + 1))
+                let interiorTop = minInteriorTop + Int(hash2(attemptSaltY, seedInt) % UInt64(maxInteriorTop - minInteriorTop + 1))
+                let interiorRight = interiorLeft + shaftWidth - 1
+                let interiorBottom = interiorTop + shaftDepth - 1
+
+                // Wall ring
+                let wallRing = Rect(
+                    minX: interiorLeft - 2,
+                    maxX: interiorRight + 2,
+                    minY: interiorTop - 1,
+                    maxY: interiorBottom + 1
+                )
+
+                // Validate: wall ring inside world borders (1...width-2 x 1...height-2)
+                if wallRing.minX < 1 || wallRing.maxX > width - 2 ||
+                   wallRing.minY < 1 || wallRing.maxY > height - 2 {
+                    continue
+                }
+
+                // Validate: wall ring inside band rowRange
+                if wallRing.minY < bandRowRange.lowerBound || wallRing.maxY > bandRowRange.upperBound {
+                    continue
+                }
+
+                // Validate: no overlap with template maximal footprint
+                if let layout = layout {
+                    var overlapsFootprint = false
+                    for gy in wallRing.minY...wallRing.maxY {
+                        for gx in wallRing.minX...wallRing.maxX {
+                            if layout.maximalFootprint.contains(gy * width + gx) {
+                                overlapsFootprint = true
+                                break
+                            }
+                        }
+                        if overlapsFootprint { break }
+                    }
+                    if overlapsFootprint { continue }
+                }
+
+                // Validate: no overlap with chamber wall rings
+                var overlapsChamber = false
+                for chamber in chambers {
+                    if wallRing.intersects(chamber.wallRect) {
+                        overlapsChamber = true
+                        break
+                    }
+                }
+                if overlapsChamber { 
+                    // print("DEBUG: overlapsChamber")
+                    continue 
+                }
+
+                // NOTE: Tunnel overlap is ALLOWED. Shafts are placed after tunnel carving and
+                // can intersect tunnels. The shaft interior is carved empty and wall rings are
+                // set to .solid. Tunnel cells in the shaft area become part of the shaft.
+                // Shaft cells (interior + walls) are tracked and protected from later material passes.
+
+                // Validate: no overlap with previously placed shaft wall rings (min 3-col gap = wallRing1 does not intersect wallRing2.expanded(by: 1))
+                var overlapsShaft = false
+                for existingShaft in shafts {
+                    let expandedExisting = Rect(
+                        minX: existingShaft.wallRing.minX - 1,
+                        maxX: existingShaft.wallRing.maxX + 1,
+                        minY: existingShaft.wallRing.minY - 1,
+                        maxY: existingShaft.wallRing.maxY + 1
+                    )
+                    if wallRing.intersects(expandedExisting) {
+                        overlapsShaft = true
+                        break
+                    }
+                }
+                if overlapsShaft { 
+                    // print("DEBUG: overlapsShaft")
+                    continue 
+                }
+
+                // Validate: Chebyshev distance from ALL shaft cells (interior + walls) to spawn/goal > 6
+                var clearanceOK = true
+                // Check interior cells
+                for gy in interiorTop...interiorBottom {
+                    for gx in interiorLeft...interiorRight {
+                        let distSpawn = max(abs(gx - spawn.0), abs(gy - spawn.1))
+                        let distGoal = max(abs(gx - goal.0), abs(gy - goal.1))
+                        if distSpawn <= 6 || distGoal <= 6 {
+                            clearanceOK = false
+                            break
+                        }
+                    }
+                    if !clearanceOK { break }
+                }
+                // Check wall ring cells
+                if clearanceOK {
+                    for gy in wallRing.minY...wallRing.maxY {
+                        for gx in wallRing.minX...wallRing.maxX {
+                            let distSpawn = max(abs(gx - spawn.0), abs(gy - spawn.1))
+                            let distGoal = max(abs(gx - goal.0), abs(gy - goal.1))
+                            if distSpawn <= 6 || distGoal <= 6 {
+                                clearanceOK = false
+                                break
+                            }
+                        }
+                        if !clearanceOK { break }
+                    }
+                }
+                if !clearanceOK { 
+                    // print("DEBUG: clearanceOK failed spawn=\(spawn) goal=\(goal)")
+                    continue 
+                }
+
+                // Validate: shaft top connectivity - at least one cell in top row of interior is .empty
+                var topConnected = false
+                for gx in interiorLeft...interiorRight {
+                    if grid[interiorTop][gx] == .empty {
+                        topConnected = true
+                        break
+                    }
+                }
+                if !topConnected { 
+                    // print("DEBUG: topConnected failed interiorTop=\(interiorTop) interiorLeft=\(interiorLeft) interiorRight=\(interiorRight)")
+                    continue 
+                }
+
+                // Validate: shaft bottom connectivity - at least one cell in bottom row is .empty OR cell below is .empty
+                var bottomConnected = false
+                var bottomStubX: Int? = nil
+                for gx in interiorLeft...interiorRight {
+                    if grid[interiorBottom][gx] == .empty {
+                        bottomConnected = true
+                        break
+                    }
+                    if interiorBottom + 1 < height && grid[interiorBottom + 1][gx] == .empty {
+                        bottomConnected = true
+                        bottomStubX = gx
+                        break
+                    }
+                }
+                if !bottomConnected { continue }
+
+                // Carve shaft
+                // Interior: empty
+                for gy in interiorTop...interiorBottom {
+                    for gx in interiorLeft...interiorRight {
+                        grid[gy][gx] = .empty
+                        shaftCells.insert(gy * width + gx)
+                    }
+                }
+                // DEBUG: verify shaft carved
+                // print("DEBUG shaft \(shaftIdx) carved: interiorTop=\(interiorTop) interiorBottom=\(interiorBottom) interiorLeft=\(interiorLeft) interiorRight=\(interiorRight) shaftCells=\(shaftCells.count)")
+                // Flank walls (2 cells each side): solid
+                for gy in interiorTop - 1...interiorBottom + 1 {
+                    grid[gy][interiorLeft - 2] = .solid
+                    grid[gy][interiorLeft - 1] = .solid
+                    grid[gy][interiorRight + 1] = .solid
+                    grid[gy][interiorRight + 2] = .solid
+                    // Track wall cells for protection
+                    shaftWallCells.insert(gy * width + interiorLeft - 2)
+                    shaftWallCells.insert(gy * width + interiorLeft - 1)
+                    shaftWallCells.insert(gy * width + interiorRight + 1)
+                    shaftWallCells.insert(gy * width + interiorRight + 2)
+                }
+                // Cap walls (top and bottom): solid, but leave center cell open for connectivity
+                let capCenterX = (interiorLeft + interiorRight) / 2
+                for gx in interiorLeft - 2...interiorRight + 2 {
+                    if gx != capCenterX {
+                        grid[interiorTop - 1][gx] = .solid
+                        shaftWallCells.insert((interiorTop - 1) * width + gx)
+                    }
+                    if gx != capCenterX {
+                        grid[interiorBottom + 1][gx] = .solid
+                        shaftWallCells.insert((interiorBottom + 1) * width + gx)
+                    }
+                }
+
+                // Bottom stub if needed - carve BEFORE bottom cap so we don't overwrite it
+                if let stubX = bottomStubX, grid[interiorBottom][stubX] != .empty {
+                    // Carve horizontal 1-cell stub from stubX outward until hitting empty space (max 5 cells), 2 cells high
+                    for dx in 1...5 {
+                        let nx = stubX + dx
+                        if nx >= width - 1 { break }
+                        if grid[interiorBottom + 1][nx] == .empty {
+                            // Found connection, carve stub
+                            for sx in stubX...nx {
+                                grid[interiorBottom + 1][sx] = .empty
+                                shaftCells.insert((interiorBottom + 1) * width + sx)
+                                if interiorBottom + 2 < height {
+                                    grid[interiorBottom + 2][sx] = .empty
+                                    shaftCells.insert((interiorBottom + 2) * width + sx)
+                                }
+                            }
+                            break
+                        }
+                    }
+                }
+
+                let shaft = CaveShaft(
+                    interiorLeft: interiorLeft,
+                    interiorRight: interiorRight,
+                    interiorTop: interiorTop,
+                    interiorBottom: interiorBottom
+                )
+                shafts.append(shaft)
+                placed = true
+                // Verify carving
+                // var interiorEmpty = 0
+                // for gy in interiorTop...interiorBottom {
+                //     for gx in interiorLeft...interiorRight {
+                //         if grid[gy][gx] == .empty { interiorEmpty += 1 }
+                //     }
+                // }
+                // print("DEBUG: shaft \(shaftIdx) placed - interiorEmpty=\(interiorEmpty) expected=\((interiorRight-interiorLeft+1)*(interiorBottom-interiorTop+1))")
+                break
+            }
+            // If all attempts fail, skip this shaft
+            if !placed { continue }
+        }
+    }
+
     /// Post-pass revalidation: ensure chambers respect the FINAL spawn/goal safety radius.
     /// Any chamber cell (including walls) within Chebyshev-6 of the final spawn or goal
     /// is filled entirely with .solid.
@@ -658,7 +983,7 @@ public struct CaveWorldGenerator: Sendable {
         let goalGX = goal.0
         let goalGY = goal.1
 
-        print("  DEBUG revalidateChambers: spawn=(\(spawnGX),\(spawnGY)), goal=(\(goalGX),\(goalGY)), chambers=\(chambers.count)")
+        // DEBUG removed
 
         var validChambers: [CaveChamber] = []
         for chamber in chambers {
@@ -701,7 +1026,7 @@ public struct CaveWorldGenerator: Sendable {
     // MARK: - Shared Generation Pipeline
 
     /// Core generation pipeline used by both generateInspected and generateWithChambers.
-    private func generateFull(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?, chambers: [CaveChamber]) {
+    private func generateFull(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?, chambers: [CaveChamber], shafts: [CaveShaft]) {
         let w = size.width
         let h = size.height
         let originX = -w / 2
@@ -961,6 +1286,53 @@ public struct CaveWorldGenerator: Sendable {
             }
         }
 
+        // Compute provisional goal (lexicographic max of all empties excluding chambers)
+        // for shaft safety radius checks. This approximates the final goal position
+        // before material passes potentially fill some empty cells.
+        var provisionalGoal: (Int, Int) = (w / 2, h / 2)
+        var emptiesForGoal: [(Int, Int)] = []
+        for gy in 0..<h {
+            for gx in 0..<w {
+                let key = gy * w + gx
+                if grid[gy][gx] == .empty && !chamberCells.contains(key) {
+                    emptiesForGoal.append((gx, gy))
+                }
+            }
+        }
+        if !emptiesForGoal.isEmpty {
+            provisionalGoal = emptiesForGoal.max(by: { ($0.0, $0.1) < ($1.0, $1.1) })!
+        }
+
+        // Get template layout for footprint checks (purely geometric, no seed dependency)
+        let shaftLayout = CaveSpawnTemplate.layout(width: w, height: h)
+
+        // Shaft placement pass: carve vertical descent shafts after chamber connectivity,
+        // before sand/material passes. Uses provisional spawn/goal for safety radius.
+        var placedShafts: [CaveShaft] = []
+        var shaftCells = Set<Int>()
+        var shaftWallCells = Set<Int>()
+        placeShafts(
+            grid: &grid,
+            width: w,
+            height: h,
+            originX: originX,
+            originY: originY,
+            biomeConfig: biomeConfig,
+            layout: shaftLayout,
+            spawn: provisionalSpawn,
+            goal: provisionalGoal,
+            seed: seed,
+            chambers: placedChambers,
+            chamberCells: chamberCells,
+            tunnelCells: tunnelCells,
+            shafts: &placedShafts,
+            shaftCells: &shaftCells,
+            shaftWallCells: &shaftWallCells
+        )
+
+        // Combine shaft interior + walls for protection from all material passes
+        let protectedShaftCells = shaftCells.union(shaftWallCells)
+
         // Sand layer in shallow depressions: bottom-most empty cells of some columns.
         for gx in 0..<w {
             var bottomY: Int? = nil
@@ -971,15 +1343,29 @@ public struct CaveWorldGenerator: Sendable {
                 }
             }
             guard let by = bottomY else { continue }
-            guard !tunnelCells.contains(by * w + gx) && !chamberCells.contains(by * w + gx) else { continue }
+            guard !tunnelCells.contains(by * w + gx) && !chamberCells.contains(by * w + gx) && !protectedShaftCells.contains(by * w + gx) else { continue }
             let hsh = hash2(originX + gx * 13, originY + by * 7)
             if hsh % 5 == 0 {
                 grid[by][gx] = .sand
                 if by - 1 >= 0 && grid[by - 1][gx] == .empty
                     && !tunnelCells.contains((by - 1) * w + gx)
                     && !chamberCells.contains((by - 1) * w + gx)
+                    && !protectedShaftCells.contains((by - 1) * w + gx)
                     && (hash2(originX + gx, originY + by) % 3 == 0) {
                     grid[by - 1][gx] = .sand
+                }
+            }
+        }
+
+        // DEBUG: check shaft bottom after sand pass
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
                 }
             }
         }
@@ -1006,10 +1392,10 @@ public struct CaveWorldGenerator: Sendable {
                 let limit = bandPoolLimit(band: info.context.band, width: w)
                 guard budget.poolCount(band: info.index) < limit else { continue }
                 guard grid[gy][gx] == .empty, grid[gy + 1][gx] == .solid else { continue }
-                guard !tunnelCells.contains(gy * w + gx) && !chamberCells.contains(gy * w + gx),
-                      !tunnelCells.contains(gy * w + (gx + 1)) && !chamberCells.contains(gy * w + (gx + 1)),
-                      !tunnelCells.contains((gy + 1) * w + gx) && !chamberCells.contains((gy + 1) * w + gx),
-                      !tunnelCells.contains((gy + 1) * w + (gx + 1)) && !chamberCells.contains((gy + 1) * w + (gx + 1)) else { continue }
+                guard !tunnelCells.contains(gy * w + gx) && !chamberCells.contains(gy * w + gx) && !protectedShaftCells.contains(gy * w + gx),
+                      !tunnelCells.contains(gy * w + (gx + 1)) && !chamberCells.contains(gy * w + (gx + 1)) && !protectedShaftCells.contains(gy * w + (gx + 1)),
+                      !tunnelCells.contains((gy + 1) * w + gx) && !chamberCells.contains((gy + 1) * w + gx) && !protectedShaftCells.contains((gy + 1) * w + gx),
+                      !tunnelCells.contains((gy + 1) * w + (gx + 1)) && !chamberCells.contains((gy + 1) * w + (gx + 1)) && !protectedShaftCells.contains((gy + 1) * w + (gx + 1)) else { continue }
                 let hsh = hash2(originX + gx * 7, originY + gy * 13)
                 guard hsh % 9 == 0 else { continue }
                 guard gx + 1 < w - 1, gy + 1 < h - 1 else { continue }
@@ -1043,6 +1429,19 @@ public struct CaveWorldGenerator: Sendable {
             }
         }
 
+        // DEBUG: check shaft bottom after water pools pass
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
+
         // Pitch and oil pockets: small 3-8 cell clusters. The pocket budget is
         // band-local; the anchor cell's band supplies the pitch density gate.
         outerPocket: for gy in 1..<(h - 1) {
@@ -1051,7 +1450,7 @@ public struct CaveWorldGenerator: Sendable {
                 let limit = bandPocketLimit(band: info.context.band, width: w)
                 guard budget.pocketCount(band: info.index) < limit else { continue }
                 guard grid[gy][gx] == .empty else { continue }
-                guard !tunnelCells.contains(gy * w + gx) && !chamberCells.contains(gy * w + gx) else { continue }
+                guard !tunnelCells.contains(gy * w + gx) && !chamberCells.contains(gy * w + gx) && !protectedShaftCells.contains(gy * w + gx) else { continue }
                 let hsh = hash2(originX + gx * 31, originY + gy * 17)
                 // Gate by pitch multiplier.
                 let pitchDiv = effectiveDivisor(13, multiplier: effectiveMultiplier(for: .pitch, context: info.context))
@@ -1073,7 +1472,7 @@ public struct CaveWorldGenerator: Sendable {
                         guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
                         guard grid[ny][nx] == .empty else { continue }
                         let key = ny * w + nx
-                        guard !tunnelCells.contains(key) && !chamberCells.contains(key) else { continue }
+                        guard !tunnelCells.contains(key) && !chamberCells.contains(key) && !protectedShaftCells.contains(key) else { continue }
                         guard !inCluster.contains(key) else { continue }
                         inCluster.insert(key)
                         cluster.append((nx, ny))
@@ -1167,56 +1566,172 @@ public struct CaveWorldGenerator: Sendable {
         // using the final spawn/goal positions. This avoids removing chambers based on
         // provisional spawn/goal positions that may change during material placement.
 
+        // Shaft placement was already done before sand/material passes.
+        // shaftCells and shaftWallCells are populated from that earlier call.
+        // protectedShaftCells is already defined above for the sand/material passes.
+
+        // DEBUG: check shaft bottom after pitch/oil pockets
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
+
         // MARK: New material placement (cave materials follow-up)
 
         // Magic liquid: 1-3 single-cell doses buried deep in the rock.
         placeMagicLiquid(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                          spawn: spawnCell, goal: goalCell, budget: &budget,
-                         chamberCells: chamberCells)
+                         chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after magic liquid
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Gold: veins embedded in solid rock plus exposed nuggets on cave floors.
         placeGold(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
-                  chamberCells: chamberCells)
+                  chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after gold
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Gunpowder: thin seams inside the rock beside pitch and oil pockets.
         let gunpowderCells = placeGunpowder(grid: &grid, width: w, height: h,
                                             originX: originX, originY: originY,
                                             spawn: spawnCell, goal: goalCell, budget: &budget,
-                                            chamberCells: chamberCells)
+                                            chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after gunpowder
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Ice: patches in the upper, shallow caves.
         placeIce(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                  tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
-                 chamberCells: chamberCells)
+                 chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after ice
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Slime: small pockets at mid depth.
         placeSlime(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                    tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
-                   chamberCells: chamberCells)
+                   chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after slime
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Acid: rare sealed pockets in the lower rock.
         placeAcid(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                   spawn: spawnCell, goal: goalCell, budget: &budget,
-                  chamberCells: chamberCells)
+                  chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after acid
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Lava: rare deep pools walled by solid rock.
         let lavaCells = placeLava(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                                   tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
-                                  chamberCells: chamberCells)
+                                  chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after lava
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Blood: small pools next to oil pockets.
         placeBlood(grid: &grid, width: w, height: h, originX: originX, originY: originY,
                    tunnelCells: tunnelCells, spawn: spawnCell, goal: goalCell, budget: &budget,
-                   chamberCells: chamberCells)
+                   chamberCells: chamberCells, shaftCells: protectedShaftCells)
+        // DEBUG after blood
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
 
         // Tunnel carving (connectivity repair) runs after the material pass so a
         // pocket that blocks a passage cannot strand the player.
-        repairConnectivity(grid: &grid, width: w, height: h, chamberCells: chamberCells)
+        // Protect shaft cells (interior + walls) from being carved through.
+        let protectedCells = shaftCells.union(shaftWallCells)
+        repairConnectivity(grid: &grid, width: w, height: h, chamberCells: chamberCells, protectedCells: protectedCells)
 
         // Restore the containment of the placed hazards after carving.
         sealHazards(grid: &grid, width: w, height: h,
-                    lavaCells: lavaCells, gunpowderCells: gunpowderCells)
+                    lavaCells: lavaCells, gunpowderCells: gunpowderCells,
+                    shaftCells: protectedCells)
 
         // Template pass: stamp the spawn pad and shaft as the LAST material pass.
         var finalSpawnCell2 = spawnCell
@@ -1228,13 +1743,38 @@ public struct CaveWorldGenerator: Sendable {
                 return grid[gy][gx] == .empty
             }
 
+            // DEBUG: check shaft bottom cells BEFORE template pass
+            if !placedShafts.isEmpty {
+                for (idx, shaft) in placedShafts.enumerated() {
+                    var bottomRowSolid = 0
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
+                        if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                    }
+                    if bottomRowSolid > 0 {
+                        // DEBUG removed
+                    }
+                }
+            }
+
+            // DEBUG: check if shaft bottom cells are in maximalFootprint
+            if !placedShafts.isEmpty {
+                for (idx, shaft) in placedShafts.enumerated() {
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
+                        let key = shaft.interiorBottom * w + gx
+                        if layout.maximalFootprint.contains(key) {
+                            // DEBUG removed
+                        }
+                    }
+                }
+            }
+
             // 1. Purge: footprint cells that are not .empty or .solid become .solid.
             for key in layout.maximalFootprint {
                 let gy = key / w
                 let gx = key % w
                 let mat = grid[gy][gx]
-                if mat != .empty && mat != .solid {
-                    grid[gy][gx] = .solid
+                if mat != Material.empty && mat != Material.solid {
+                    grid[gy][gx] = Material.solid
                 }
             }
 
@@ -1246,11 +1786,15 @@ public struct CaveWorldGenerator: Sendable {
                 }
             }
             // Shaft block: cols 6...16, rows wallBottom...pf-1
+            // DEBUG: track what we're setting
+            var templateShaftSolidCount = 0
             for gy in term.wallBottomRow...(layout.padFloorRow - 1) {
                 for gx in 6...16 {
                     grid[gy][gx] = .solid
+                    templateShaftSolidCount += 1
                 }
             }
+            // DEBUG removed
 
             // 3. Carve (empty).
             // Room: cols 8...21, rows pf+1...pf+12
@@ -1270,6 +1814,19 @@ public struct CaveWorldGenerator: Sendable {
             finalSpawnCell2 = layout.spawnCell
             // Goal was already chosen outside footprint; keep it.
             finalGoalCell2 = goalCell
+        }
+
+        // DEBUG: check shaft bottom after template pass
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
         }
 
         // Post-template connectivity: if the template changed spawn/goal,
@@ -1312,7 +1869,54 @@ public struct CaveWorldGenerator: Sendable {
             )
         }
 
+        // DEBUG: check shaft bottom after revalidation
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
+
         // Capture pre-pass grid if requested (after revalidation, before template pass).
+        // DEBUG: check shaft state before pre-pass capture
+        // DEBUG removed
+        if !placedShafts.isEmpty {
+            for (idx, shaft) in placedShafts.enumerated() {
+                var interiorEmpty = 0
+                var interiorSolid = 0
+                for gy in shaft.interiorTop...shaft.interiorBottom {
+                    for gx in shaft.interiorLeft...shaft.interiorRight {
+                        if grid[gy][gx] == .empty { interiorEmpty += 1 }
+                        else if grid[gy][gx] == .solid { interiorSolid += 1 }
+                    }
+                }
+                var wallSolid = 0
+                var wallOther = 0
+                for gy in shaft.wallRing.minY...shaft.wallRing.maxY {
+                    for gx in shaft.wallRing.minX...shaft.wallRing.maxX {
+                        if grid[gy][gx] == .solid { wallSolid += 1 }
+                        else { wallOther += 1 }
+                    }
+                }
+                // DEBUG removed
+                // Check specific cell
+                let mat = grid[shaft.interiorTop][shaft.interiorLeft]
+                // DEBUG removed
+                // Check bottom row
+                var bottomRowSolid = 0
+                for gx in shaft.interiorLeft...shaft.interiorRight {
+                    if grid[shaft.interiorBottom][gx] == .solid { bottomRowSolid += 1 }
+                }
+                if bottomRowSolid > 0 {
+                    // DEBUG removed
+                }
+            }
+        }
         var prePassGrid: [[Material]]? = nil
         if capturePrePass {
             prePassGrid = grid
@@ -1346,7 +1950,7 @@ public struct CaveWorldGenerator: Sendable {
             goal: CellPosition(x: originX + finalGoalCell2.0, y: originY + finalGoalCell2.1),
             cells: cells
         )
-        return (world, prePassGrid, placedChambers)
+        return (world, prePassGrid, placedChambers, placedShafts)
     }
 
     // MARK: - Generation
@@ -1361,7 +1965,7 @@ public struct CaveWorldGenerator: Sendable {
     ///   - capturePrePass: When true, captures the grid state after revalidation, just before the template pass.
     /// - Returns: The generated world and optionally the pre-pass grid.
     func generateInspected(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?) {
-        let (world, prePassGrid, _) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
+        let (world, prePassGrid, _, _) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
         return (world, prePassGrid)
     }
 
@@ -1369,8 +1973,16 @@ public struct CaveWorldGenerator: Sendable {
     /// Used by tests to verify chamber placement properties.
     /// Returns: (world, prePassGrid, chambers)
     public func generateWithChambers(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?, chambers: [CaveChamber]) {
-        let (world, prePassGrid, chambers) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
+        let (world, prePassGrid, chambers, _) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
         return (world, prePassGrid, chambers)
+    }
+
+    /// Internal inspection entry point that also returns placed shafts.
+    /// Used by tests to verify shaft placement properties.
+    /// Returns: (world, prePassGrid, chambers, shafts)
+    public func generateWithShafts(stampSpawnTemplate: Bool, capturePrePass: Bool) -> (world: CaveWorld, prePass: [[Material]]?, chambers: [CaveChamber], shafts: [CaveShaft]) {
+        let (world, prePassGrid, chambers, shafts) = generateFull(stampSpawnTemplate: stampSpawnTemplate, capturePrePass: capturePrePass)
+        return (world, prePassGrid, chambers, shafts)
     }
 
     // MARK: - Biome band context
@@ -1648,7 +2260,7 @@ public struct CaveWorldGenerator: Sendable {
                                   originX: Int, originY: Int,
                                   spawn: (Int, Int), goal: (Int, Int),
                                   budget: inout PlacementBudget,
-                                  chamberCells: Set<Int>) {
+                                  chamberCells: Set<Int>, shaftCells: Set<Int>) {
         let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
         let target = 1 + Int(hash2(0xA11C, 0x5EED) % 3) // 1...3 doses
         var placed = 0
@@ -1688,6 +2300,8 @@ public struct CaveWorldGenerator: Sendable {
                     guard gy + 2 < height, grid[gy + 1][gx] == .solid, grid[gy + 2][gx] == .solid else { continue }
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(gy * width + gx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(gy * width + gx) else { continue }
                     grid[gy][gx] = .magicLiquid
                     budget.record(material: .magicLiquid, band: info.index)
                     placed += 1
@@ -1703,7 +2317,7 @@ public struct CaveWorldGenerator: Sendable {
                            originX: Int, originY: Int, tunnelCells: Set<Int>,
                            spawn: (Int, Int), goal: (Int, Int),
                            budget: inout PlacementBudget,
-                           chamberCells: Set<Int>) {
+                           chamberCells: Set<Int>, shaftCells: Set<Int>) {
         // A vein is a group of cells that are buried in rock, so the vein never
         // breaks the surface. The first pass demands solid rock all around the
         // vein (eight neighbours); the fallback accepts the four sides only.
@@ -1750,6 +2364,8 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in vein {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .gold
                 }
                 budget.record(material: .gold, band: info.index)
@@ -1779,6 +2395,8 @@ public struct CaveWorldGenerator: Sendable {
                                context: info.context, budget: budget) else { continue }
                 // Don't place in chamber cells.
                 guard !chamberCells.contains(gy * width + gx) else { continue }
+                // Don't place in shaft cells (interior + walls).
+                guard !shaftCells.contains(gy * width + gx) else { continue }
                 grid[gy][gx] = .gold
                 budget.record(material: .gold, band: info.index)
             }
@@ -1791,7 +2409,7 @@ public struct CaveWorldGenerator: Sendable {
                                 originX: Int, originY: Int,
                                 spawn: (Int, Int), goal: (Int, Int),
                                 budget: inout PlacementBudget,
-                                chamberCells: Set<Int>) -> [(Int, Int)] {
+                                chamberCells: Set<Int>, shaftCells: Set<Int>) -> [(Int, Int)] {
         let limit = max(2, (width * height) / 400)
         let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
         var placed: [(Int, Int)] = []
@@ -1833,6 +2451,8 @@ public struct CaveWorldGenerator: Sendable {
                                context: info.context, budget: budget) else { continue }
                 // Don't place in chamber cells.
                 guard !chamberCells.contains(gy * width + gx) else { continue }
+                // Don't place in shaft cells (interior + walls).
+                guard !shaftCells.contains(gy * width + gx) else { continue }
                 grid[gy][gx] = .gunpowder
                 budget.consumeQuota(material: .gunpowder, band: info.index)
                 budget.record(material: .gunpowder, band: info.index)
@@ -1849,7 +2469,7 @@ public struct CaveWorldGenerator: Sendable {
                           originX: Int, originY: Int, tunnelCells: Set<Int>,
                           spawn: (Int, Int), goal: (Int, Int),
                           budget: inout PlacementBudget,
-                          chamberCells: Set<Int>) {
+                          chamberCells: Set<Int>, shaftCells: Set<Int>) {
         let maxPatches = max(2, (width * height) / 800)
         var patchCount = 0
         let order = scanOrder(height: height, config: biomeConfig, baseOrder: .topDown)
@@ -1902,6 +2522,8 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in cluster {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .ice
                 }
                 budget.consumeQuota(material: .ice, band: info.index)
@@ -1917,7 +2539,7 @@ public struct CaveWorldGenerator: Sendable {
                             originX: Int, originY: Int, tunnelCells: Set<Int>,
                             spawn: (Int, Int), goal: (Int, Int),
                             budget: inout PlacementBudget,
-                            chamberCells: Set<Int>) {
+                            chamberCells: Set<Int>, shaftCells: Set<Int>) {
         let maxPockets = max(2, (width * height) / 700)
         var pocketCount = 0
         outerSlime: for gy in 0..<height {
@@ -1962,6 +2584,8 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in cluster {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .slime
                 }
                 budget.consumeQuota(material: .slime, band: info.index)
@@ -1977,7 +2601,7 @@ public struct CaveWorldGenerator: Sendable {
                            originX: Int, originY: Int,
                            spawn: (Int, Int), goal: (Int, Int),
                            budget: inout PlacementBudget,
-                           chamberCells: Set<Int>) {
+                           chamberCells: Set<Int>, shaftCells: Set<Int>) {
         let maxPools = max(1, (width * height) / 1800)
         var poolCount = 0
         let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
@@ -2026,6 +2650,8 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in cells {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .acid
                 }
                 budget.consumeQuota(material: .acid, band: info.index)
@@ -2042,7 +2668,7 @@ public struct CaveWorldGenerator: Sendable {
                            originX: Int, originY: Int, tunnelCells: Set<Int>,
                            spawn: (Int, Int), goal: (Int, Int),
                            budget: inout PlacementBudget,
-                           chamberCells: Set<Int>) -> [(Int, Int)] {
+                           chamberCells: Set<Int>, shaftCells: Set<Int>) -> [(Int, Int)] {
         let maxPools = max(1, (width * height) / 2500)
         var poolCount = 0
         var lava: [(Int, Int)] = []
@@ -2095,14 +2721,18 @@ public struct CaveWorldGenerator: Sendable {
                     }
                 }
                 guard cluster.count >= 3 else { continue }
-                // Wall the pool in on both sides.
+                // Wall the pool in on both sides (protect shaft cells).
                 for (cx, cy) in cluster {
-                    if cx - 1 >= 0 && grid[cy][cx - 1] == .empty { grid[cy][cx - 1] = .solid }
-                    if cx + 1 < width && grid[cy][cx + 1] == .empty { grid[cy][cx + 1] = .solid }
+                    let leftKey = cy * width + (cx - 1)
+                    let rightKey = cy * width + (cx + 1)
+                    if cx - 1 >= 0 && grid[cy][cx - 1] == .empty && !shaftCells.contains(leftKey) { grid[cy][cx - 1] = .solid }
+                    if cx + 1 < width && grid[cy][cx + 1] == .empty && !shaftCells.contains(rightKey) { grid[cy][cx + 1] = .solid }
                 }
                 for (cx, cy) in cluster {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .lava
                     lava.append((cx, cy))
                 }
@@ -2121,7 +2751,7 @@ public struct CaveWorldGenerator: Sendable {
                             originX: Int, originY: Int, tunnelCells: Set<Int>,
                             spawn: (Int, Int), goal: (Int, Int),
                             budget: inout PlacementBudget,
-                            chamberCells: Set<Int>) {
+                            chamberCells: Set<Int>, shaftCells: Set<Int>) {
         let maxPools = max(2, (width * height) / 800)
         var poolCount = 0
         let order = scanOrder(height: height, config: biomeConfig, baseOrder: .bottomUp)
@@ -2173,6 +2803,8 @@ public struct CaveWorldGenerator: Sendable {
                 for (cx, cy) in cluster {
                     // Don't place in chamber cells.
                     guard !chamberCells.contains(cy * width + cx) else { continue }
+                    // Don't place in shaft cells (interior + walls).
+                    guard !shaftCells.contains(cy * width + cx) else { continue }
                     grid[cy][cx] = .blood
                 }
                 budget.consumeQuota(material: .blood, band: info.index)
@@ -2215,8 +2847,11 @@ public struct CaveWorldGenerator: Sendable {
     /// Carves tunnels from every isolated pocket back to the main cave.
     /// - Parameter chamberCells: Set of cell indices (gy * width + gx) that are chamber interiors.
     ///   Tunnels will not be carved through these cells to preserve chamber walls.
+    /// - Parameter protectedCells: Set of cell indices that must not be carved through
+    ///   (e.g., shaft interior + wall ring).
     private func repairConnectivity(grid: inout [[Material]], width: Int, height: Int,
-                                    chamberCells: Set<Int> = []) {
+                                    chamberCells: Set<Int> = [],
+                                    protectedCells: Set<Int> = []) {
         let empties = groupCells(of: grid, width: width, height: height) { gx, gy in grid[gy][gx] == .empty }
         guard !empties.isEmpty else { return }
         var mainIndex = 0
@@ -2233,7 +2868,7 @@ public struct CaveWorldGenerator: Sendable {
             }
             for (cx, cy) in path {
                 let key = cy * width + cx
-                if !chamberCells.contains(key) {
+                if !chamberCells.contains(key) && !protectedCells.contains(key) {
                     grid[cy][cx] = .empty
                     main.insert(key)
                     // Widen the tunnel so it stays walkable.
@@ -2241,7 +2876,8 @@ public struct CaveWorldGenerator: Sendable {
                         let key2 = cy * width + (cx + 1)
                         if grid[cy][cx + 1] == .solid
                            && !isProtected(grid, cx + 1, cy, width: width, height: height)
-                           && !chamberCells.contains(key2) {
+                           && !chamberCells.contains(key2)
+                           && !protectedCells.contains(key2) {
                             grid[cy][cx + 1] = .empty
                         }
                     }
@@ -2249,7 +2885,8 @@ public struct CaveWorldGenerator: Sendable {
                         let key3 = (cy + 1) * width + cx
                         if grid[cy + 1][cx] == .solid
                            && !isProtected(grid, cx, cy + 1, width: width, height: height)
-                           && !chamberCells.contains(key3) {
+                           && !chamberCells.contains(key3)
+                           && !protectedCells.contains(key3) {
                             grid[cy + 1][cx] = .empty
                         }
                     }
@@ -2340,11 +2977,14 @@ public struct CaveWorldGenerator: Sendable {
 
     /// Restores the containment of the placed hazards after the tunnels are carved.
     private func sealHazards(grid: inout [[Material]], width: Int, height: Int,
-                             lavaCells: [(Int, Int)], gunpowderCells: [(Int, Int)]) {
-        // Lava pools keep solid rock on both sides.
+                             lavaCells: [(Int, Int)], gunpowderCells: [(Int, Int)],
+                             shaftCells: Set<Int>) {
+        // Lava pools keep solid rock on both sides (protect shaft cells).
         for (cx, cy) in lavaCells {
-            if cx - 1 >= 0 && grid[cy][cx - 1] == .empty { grid[cy][cx - 1] = .solid }
-            if cx + 1 < width && grid[cy][cx + 1] == .empty { grid[cy][cx + 1] = .solid }
+            let leftKey = cy * width + (cx - 1)
+            let rightKey = cy * width + (cx + 1)
+            if cx - 1 >= 0 && grid[cy][cx - 1] == .empty && !shaftCells.contains(leftKey) { grid[cy][cx - 1] = .solid }
+            if cx + 1 < width && grid[cy][cx + 1] == .empty && !shaftCells.contains(rightKey) { grid[cy][cx + 1] = .solid }
         }
         // A gunpowder seam that a tunnel exposed turns back into rock.
         for (cx, cy) in gunpowderCells {

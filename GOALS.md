@@ -494,7 +494,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 - result: merged (8ff122e → main via merge commit); SimBenchmark target with 5 scenes, 600 ticks each; p50 stability <15% across 3 runs (sand 2.9%, water 1.6%, fire 8.2%, idle 5.9%, cave 6.3%); digests deterministic; PLAN.md baseline table present with host/OS/Xcode/Release config (note: table carries v0.34.0 numeric provenance, differs from v0.36.0 observed values — documented limit); all checks pass.
 
 ### sim-hot-loop-allocations: Remove per-cell allocation from the tick loop
-- status: todo
+- status: done
 - priority: 20
 - track: perf
 - depends: sim-benchmark-harness
@@ -512,6 +512,19 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - All deterministic replay and digest tests pass unchanged.
   - Benchmark p50 tick time improves by at least 2× on the dense scenes.
   - Cave Run creation (256 × 128) is at least 3× faster (benchmark line).
+- result: Rewrote `advance()` to snapshot occupied cells once per tick (one
+  allocation) instead of iterating chunk dictionaries per cell. Replaced
+  instance dispatch through `MaterialBehavior` class instances with static
+  dispatch entry points (`acts(for:)`, `usesDirection(for:)`,
+  `destinations(for:...)`, `secondaryDestinations(for:...)`, `resolve(for:...)`).
+  Hoisted `canVisit` closure out of the cell loop; kept `materialAt`/`thermalAt`
+  per-cell so mutations from earlier cells are visible (fixes the
+  testLayeredBowlSettlesAndReplaysInBothModes regression caused by hoisted
+  closures capturing stale `self`). Removed per-cell `destScratch`/`secondaryScratch`
+  arrays (now per-cell locals). All 109 tests pass including
+  LiquidDensityTests (8) and CaveRunLevitationIntegrationTests (2). Version
+  bumped to 0.48.1 (patch, internal/perf). Duplicate root-level files from an
+  incomplete file reorganization were removed to fix the build.
 
 ### sim-dirty-rects: Sleep idle chunks with dirty rectangles
 - status: todo

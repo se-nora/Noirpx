@@ -217,7 +217,7 @@ final class LiquidDensityTests: XCTestCase {
         }
         func run() throws -> (SimulationSnapshot, ResidentSnapshot) {
             var (s, r) = try setup(entries)
-            for _ in 0..<90 {
+            for tick in 0..<90 {
                 try s.advance()
                 try r.advance(focus: p(0, 0), batchSize: 8) { true }
             }
@@ -226,7 +226,7 @@ final class LiquidDensityTests: XCTestCase {
         let (s, r) = try run()
         let (s2, r2) = try run()
         XCTAssertEqual(s, s2); XCTAssertEqual(r, r2)
-        for material in [s.material, r.material] {
+        for (idx, material) in [s.material, r.material].enumerated() {
             var waterY = 0, oilY = 0, waterCount = 0, oilCount = 0
             for x in -4...4 {
                 for y in 0...8 {

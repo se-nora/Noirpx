@@ -1,3 +1,5 @@
+import Darwin
+
 private func ordered(_ left: ChunkPosition, _ right: ChunkPosition) -> Bool {
     left.y == right.y ? left.x < right.x : left.y < right.y
 }
@@ -128,9 +130,14 @@ public struct Simulation {
             set(command.material, at: command.position)
         }
 
+        // Snapshot occupied cells at start of tick in global y-then-x order.
+        // This matches the legacy positions.sort() order exactly, preserving the
+        // settle cascade and moved-set semantics. One allocation per tick, not
+        // per cell.
         var positions: [CellPosition] = []
+        positions.reserveCapacity(chunks.reduce(0) { $0 + $1.value.occupiedCount })
         for (chunk, contents) in chunks where activeChunks?.contains(chunk) ?? true {
-            for (index, material) in contents.cells.enumerated() where material != .empty {
+            for (index, cell) in contents.cells.enumerated() where cell != .empty {
                 positions.append(CellPosition(
                     x: chunk.x * Self.chunkWidth + index % Self.chunkWidth,
                     y: chunk.y * Self.chunkWidth + index / Self.chunkWidth
@@ -138,44 +145,75 @@ public struct Simulation {
             }
         }
         positions.sort { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+
         var moved: Set<CellPosition> = []
+        moved.reserveCapacity(positions.count)
 
         // Reset explosion damage for this tick.
         lastExplosionDamage = nil
         // Reset projectile paths for this tick.
         lastProjectilePaths.removeAll(keepingCapacity: true)
 
+        // Per-tick closures (created once, reused for all cells). These capture
+        // only tick-invariant values (self, activeChunks), so no per-cell allocation.
+        let canVisit: (CellPosition) -> Bool = { pos in
+            Self.coordinateBounds.contains(pos.x) && Self.coordinateBounds.contains(pos.y)
+                && (activeChunks?.contains(SimulationGrid.locate(pos).0) ?? true)
+        }
+
         for position in positions where !moved.contains(position) {
-            let current = material(at: position)
-            let behavior = MaterialBehavior.forMaterial(current)
-            guard behavior.acts else { continue }
-            let direction = behavior.usesDirection ? (nextRandom() & 1 == 0 ? -1 : 1) : 0
-            let canVisit: (CellPosition) -> Bool = {
-                Self.coordinateBounds.contains($0.x) && Self.coordinateBounds.contains($0.y)
-                    && (activeChunks?.contains(SimulationGrid.locate($0).0) ?? true)
-            }
-            let destinations = behavior.destinations(
-                source: position, direction: direction, canVisit: canVisit, material: { material(at: $0) }
+            let cellMaterial = material(at: position)
+            guard cellMaterial != .empty else { continue }
+
+            guard MaterialBehavior.acts(for: cellMaterial) else { continue }
+            let usesDir = MaterialBehavior.usesDirection(for: cellMaterial)
+            let direction = usesDir ? (nextRandom() & 1 == 0 ? -1 : 1) : 0
+
+            // Per-cell closures capturing live self (struct value) so material reads
+            // reflect mutations from earlier cells this tick. canVisit is hoisted
+            // above since it has no state dependency.
+            let materialAt = { material(at: $0) }
+            let thermalAt = { thermalUnchecked(at: $0) }
+
+            let destinations = MaterialBehavior.destinations(
+                for: cellMaterial,
+                source: position,
+                direction: direction,
+                canVisit: canVisit,
+                materialAt: materialAt
             )
-            let secondary = behavior.secondaryDestinations(
-                source: position, direction: direction, canVisit: canVisit, material: { material(at: $0) }
+
+            let secondary = MaterialBehavior.secondaryDestinations(
+                for: cellMaterial,
+                source: position,
+                direction: direction,
+                canVisit: canVisit,
+                materialAt: materialAt
             )
-            let action = behavior.resolve(
-                source: position, current: current, destinations: destinations,
-                direction: direction, maximumY: Self.coordinateBounds.upperBound,
-                canVisit: canVisit, material: { material(at: $0) }, moved: moved,
+
+            let action = MaterialBehavior.resolve(
+                for: cellMaterial,
+                source: position,
+                current: cellMaterial,
+                destinations: destinations,
+                direction: direction,
+                maximumY: Self.coordinateBounds.upperBound,
+                canVisit: canVisit,
+                materialAt: materialAt,
+                moved: moved,
                 secondary: secondary,
-                thermal: { thermalUnchecked(at: $0) }
+                thermal: thermalAt
             )
+
             let transfers = Dictionary(uniqueKeysWithValues: action.thermalTransfers.map {
                 ($0.destination, thermalUnchecked(at: $0.source))
             })
-            for (position, material) in action.writes {
-                let state = transfers[position] ?? thermalUnchecked(at: position)
-                set(material, at: position, thermal: state)
+            for (writePos, writeMat) in action.writes {
+                let state = transfers[writePos] ?? thermalUnchecked(at: writePos)
+                set(writeMat, at: writePos, thermal: state)
             }
-            for (position, state) in action.thermalWrites {
-                set(material(at: position), at: position, thermal: state)
+            for (writePos, state) in action.thermalWrites {
+                set(material(at: writePos), at: writePos, thermal: state)
             }
             moved.formUnion(action.moved)
             pendingExplosions.append(contentsOf: action.explosions)

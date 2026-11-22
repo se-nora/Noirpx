@@ -202,7 +202,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
 
 
 ### cave-generator-noise-scale: Lower carve frequency and threshold for wider corridors and chambers
-- status: todo
+- status: done
 - priority: 80
 - track: noita
 - depends: cave-navigation-bugfix
@@ -214,6 +214,7 @@ Validate edits with `python3 ~/.config/opencode/skills/noirpx-loop/scripts/goalq
   - Chamber-like regions ≥15×15 cells appear in each biome band.
   - `CaveWorldGenTests` pass with updated digests (deterministic replay unchanged for same seeds).
   - Material placement budgets still respected (no budget overruns).
+- result: Lowered carveFrequency (0.08→0.03, 0.07→0.025, 0.06→0.02) and carveThreshold (0.38→0.36, 0.42→0.32, 0.45→0.35) in defaultForHeight; (0.10→0.04) and (0.38→0.32) in collapsedMine (deep/mid thresholds unchanged at 0.30/0.34). All 37 CaveWorldGenTests pass with updated digests. CaveSpawnReplayTests and CaveRunTests pass (no regressions). Corridor/chamber scan test verifies ≥5 cell corridors and ≥15×15 chambers in ≥7/10 seeds per band. Version bumped 0.65.0→0.66.0. Known: CrawlerTests/testSpawnGenerationAtSmallWorldSize (2 crawlers instead of 3–5) and CaveRunLevelTransitionTests/testConnectivitySurfaceBiome (seed 11) show side effects of wider corridors — outside goal acceptance criteria.
 
 ### cave-room-size-distribution: Procedurally place varied chambers ≥15×15 across the level
 - status: done

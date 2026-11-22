@@ -112,8 +112,8 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .pitch: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
                 .oil: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
             ],
-            carveThreshold: 0.38,
-            carveFrequency: 0.08,
+            carveThreshold: 0.36,
+            carveFrequency: 0.03,
             maxPools: 4,
             maxPockets: 4,
             maxVeins: 4
@@ -134,8 +134,8 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .gunpowder: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
                 .magicLiquid: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
             ],
-            carveThreshold: 0.42,
-            carveFrequency: 0.07,
+            carveThreshold: 0.32,
+            carveFrequency: 0.025,
             maxPools: 3,
             maxPockets: 5,
             maxVeins: 3
@@ -156,8 +156,8 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .pitch: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
                 .oil: CaveBiomeDensity(multiplier: 0.8, maxPlacements: nil, edgeMargin: 1),
             ],
-            carveThreshold: 0.45,
-            carveFrequency: 0.06,
+            carveThreshold: 0.35,
+            carveFrequency: 0.02,
             maxPools: 2,
             maxPockets: 3,
             maxVeins: 2
@@ -205,7 +205,7 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .ice: CaveBiomeDensity(multiplier: 0.05, maxPlacements: 0, edgeMargin: 2),
             ],
             carveThreshold: 0.30,
-            carveFrequency: 0.10,
+            carveFrequency: 0.04,
             maxPools: 6,
             maxPockets: 8,
             maxVeins: 6
@@ -224,7 +224,7 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .gold: CaveBiomeDensity(multiplier: 1.0, maxPlacements: nil, edgeMargin: 1),
             ],
             carveThreshold: 0.34,
-            carveFrequency: 0.08,
+            carveFrequency: 0.03,
             maxPools: 5,
             maxPockets: 6,
             maxVeins: 4
@@ -242,8 +242,8 @@ public struct CaveBiomeConfig: Equatable, Sendable {
                 .pitch: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
                 .oil: CaveBiomeDensity(multiplier: 0.5, maxPlacements: nil, edgeMargin: 1),
             ],
-            carveThreshold: 0.38,
-            carveFrequency: 0.06,
+            carveThreshold: 0.32,
+            carveFrequency: 0.025,
             maxPools: 3,
             maxPockets: 4,
             maxVeins: 3
